@@ -17,14 +17,16 @@ Bước 3 và bước 4 chạy song song được: MCA làm việc trong lúc b�
 
 Script này cài lõi cad-guard vào một môi trường riêng (`packages\core\.venv`), chạy 31 test, quét 5 bản vẽ DXF tổng hợp và ghi `report.html`. Nó **không** đụng tới bản vẽ thật và không đưa gì lên mạng ngoài việc tải thư viện Python.
 
-### 1.1 Kiểm Python (cần 3.10 trở lên)
+### 1.1 Kiểm Python (cần bản **ổn định 3.10 đến 3.14**, khuyên dùng 3.13)
 
 ```powershell
 python --version
+py --list
 ```
 
-- Thấy `Python 3.10.x` trở lên: sang 1.2.
-- Báo "Python was not found" hoặc **mở Microsoft Store**: cài Python từ `python.org/downloads`, **tick "Add python.exe to PATH"** ở màn hình cài, rồi đóng PowerShell, mở lại, gõ lại lệnh trên. Nếu vẫn mở Store: Settings → Apps → Advanced app settings → App execution aliases → tắt `python.exe` và `python3.exe`.
+- Thấy `Python 3.13.x` (hoặc 3.12, 3.11, 3.14): sang 1.2.
+- Thấy `Python 3.15...` (bản thử nghiệm, chưa phát hành chính thức): **không dùng được**. Thư viện PyYAML chưa có gói cài sẵn cho 3.15 nên pip phải tự biên dịch và đòi Visual C++ Build Tools (lỗi `Microsoft Visual C++ 14.0 or greater is required`). Cài thêm Python 3.13 bên cạnh (không cần gỡ 3.15): `winget install Python.Python.3.13`, hoặc `py install 3.13`, hoặc tải ở `python.org/downloads` và tick **"Add python.exe to PATH"**. Đóng PowerShell, mở lại. Từ bản 03/11/2026, `bootstrap.ps1` tự chọn 3.13 nếu có.
+- Báo "Python was not found" hoặc **mở Microsoft Store**: cài Python như trên. Nếu vẫn mở Store: Settings → Apps → Advanced app settings → App execution aliases → tắt `python.exe` và `python3.exe`.
 
 ### 1.2 Chạy
 
@@ -51,7 +53,9 @@ Mở `D:\Projects\cad-guard\report.html` bằng trình duyệt: bạn sẽ thấ
 
 | Thông báo | Nghĩa là | Cách xử |
 | --- | --- | --- |
-| `Chưa có Python...` / `Cần Python 3.10 trở lên.` | Xem 1.1 | Cài/nâng Python |
+| `Không tìm thấy Python 3.10–3.14` | Chưa có Python phù hợp (hoặc chỉ có bản 3.15 thử nghiệm) | Xem 1.1: cài Python 3.13 |
+| `Microsoft Visual C++ 14.0 or greater is required` (khi `Building wheel for pyyaml`) | Python quá mới (3.15) nên phải biên dịch thư viện | Cài Python 3.13, chạy lại script (nó tự đổi tên `.venv` cũ) |
+| `No module named pytest` | `pip install` đã thất bại trước đó | Sửa lỗi cài đặt phía trên cùng, không phải lỗi pytest |
 | `SSL: CERTIFICATE_VERIFY_FAILED` hoặc `Could not fetch URL` lúc `pip install` | Mạng công ty chặn hoặc chèn chứng chỉ | Thử mạng khác (4G); không tắt kiểm chứng chứng chỉ |
 | `Test không qua` | Có test trượt | Copy phần cuối của kết quả và hỏi |
 | `running scripts is disabled` | Chính sách chạy script | Dùng đúng lệnh có `-ExecutionPolicy Bypass` ở 1.2 |
