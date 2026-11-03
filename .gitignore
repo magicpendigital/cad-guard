@@ -1,0 +1,22 @@
+# Bản vẽ khách và bí mật KHÔNG BAO GIỜ vào repo (xem docs/samples-intake.md)
+*.dwg
+*.dxf
+!fixtures/synthetic/*.dxf
+*.bak
+telemetry.db
+telemetry.jsonl
+.env
+.env.*
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+
+# Báo cáo sinh ra
+report.html
+report.json
+
+# Công cụ
+.mca/

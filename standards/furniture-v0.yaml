@@ -1,0 +1,629 @@
+# standards/furniture-v0.yaml — luật + tham số của chuẩn trình bày v0.
+# Sửa luật/ngưỡng = tạo PHIÊN BẢN CHUẨN MỚI (furniture-v0.1...), không sửa đè. Giá trị mặc định ở `globals` là đề xuất, công ty quyết (xem furniture-v0.md mục 6).
+# `implemented: true` chỉ khi có hàm luật trong packages/core/cadguard/rules và có test (tests/test_rules.py kiểm điều này).
+name: furniture-v0
+version: 0.1.0
+description: 'Chuẩn trình bày bản vẽ nội thất bản v0 (đề xuất, chưa phải chuẩn của công ty nào cho tới khi CEO + trưởng phòng kỹ thuật duyệt). Nội dung đầy đủ: standards/furniture-v0.md.'
+globals:
+  expected_units: 4
+  layer_pattern: ^FN-[A-Z0-9]+-[A-Z0-9]+(-[NEDT])?$
+  layer_extra_patterns:
+  - ^FN-CNC-[A-Z0-9_]+$
+  - ^FN-VPRT$
+  layer_reserved:
+  - '0'
+  - DEFPOINTS
+  not_plotted_layers:
+  - FN-VPRT
+  allowed_text_styles:
+  - STD
+  - TITLE
+  title_block_names:
+  - FN_TTLB
+  title_block_required_attribs:
+  - DWG_NO
+  - TITLE
+  - PROJECT
+  - SHEET
+  - SCALE
+  - DRAWN_BY
+  - CHECKED_BY
+  - DATE
+  - REV
+  - STATUS
+  - STD_VER
+  part_tag_attrib: PART_ID
+  preferred_scales:
+  - 1
+  - 0.5
+  - 0.2
+  - 0.1
+  - 0.05
+  - 0.02
+  - 0.01
+  - 2
+  - 5
+  - 10
+  scale_tolerance: 0.005
+  zero_tolerance: 1.0e-06
+rules:
+- id: SH-01
+  title: Mỗi layout có khung khổ A-series nhận diện được
+  reads: khổ giấy layout, polyline khung
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: TCVN 7285
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: SH-02
+  title: Lề khung 20 mm trái, 10 mm các cạnh còn lại
+  reads: đỉnh polyline khung
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: TCVN 7285
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: SH-03
+  title: Nét khung 0,7 mm
+  reads: độ dày nét
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: TCVN 7285
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: SH-04
+  title: Có đúng một khối khung tên chuẩn trên mỗi layout đã dùng (bỏ qua layout trống mặc định của CAD)
+  reads: INSERT, tên khối
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: ISO 7200
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: SH-05
+  title: Mọi thuộc tính bắt buộc đều có giá trị
+  reads: ATTRIB
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: ISO 7200
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: SH-06
+  title: Mã bản vẽ đúng mẫu công ty
+  reads: giá trị ATTRIB, regex
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: SH-07
+  title: Số tờ n/N nhất quán trong file
+  reads: ATTRIB nhiều layout
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: SH-08
+  title: Revision trong khung tên = dòng mới nhất bảng phiên bản
+  reads: ATTRIB, bảng
+  kind: deterministic
+  severity: E
+  false_positive_risk: medium
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: SH-09
+  title: Không để "WIP" trên tờ đã đánh dấu xuống xưởng
+  reads: ATTRIB
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: SH-10
+  title: Tỉ lệ khung tên khớp tỉ lệ viewport chính
+  reads: ATTRIB, VIEWPORT
+  kind: heuristic
+  severity: W
+  false_positive_risk: medium
+  source: TCVN 7286
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: LY-01
+  title: Tên layer đúng sơ đồ đặt tên
+  reads: bảng LAYER
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: LY-02
+  title: Màu/kiểu đường/độ dày layer khớp bảng chuẩn
+  reads: thuộc tính layer
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: DWS
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: LY-03
+  title: Không có đối tượng nằm trên layer 0 (trừ định nghĩa khối)
+  reads: layer đối tượng
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: LY-04
+  title: Không có đối tượng trên layer chưa định nghĩa hoặc đang đóng băng
+  reads: layer, cờ
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: LY-05
+  title: Không ghi đè màu/kiểu đường/độ dày khi yêu cầu ByLayer
+  reads: mã nhóm 62/6/370
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: LY-06
+  title: Kiểu đường nằm trong bộ chuẩn
+  reads: bảng LTYPE
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: DWS
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: LY-07
+  title: Layer khuất dùng nét đứt, layer tâm dùng nét chấm gạch
+  reads: LAYER, LTYPE
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: ISO 128
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: LY-08
+  title: Layer `FN-VPRT` đặt không in
+  reads: cờ in (mã 290)
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: LY-09
+  title: Layer rỗng (không có đối tượng)
+  reads: LAYER, đối tượng
+  kind: deterministic
+  severity: I
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TX-01
+  title: Kiểu chữ thuộc tập cho phép
+  reads: bảng STYLE
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: DWS
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TX-02
+  title: Chiều cao chữ = giá trị chuẩn × tỉ lệ viewport
+  reads: TEXT/MTEXT, tỉ lệ
+  kind: heuristic
+  severity: W
+  false_positive_risk: medium
+  source: ISO 3098
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: TX-03
+  title: Không có chữ dưới 1,8 mm trên giấy
+  reads: TEXT/MTEXT
+  kind: heuristic
+  severity: E
+  false_positive_risk: medium
+  source: ISO 3098
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: TX-04
+  title: Font có trên máy hoặc có font thay thế
+  reads: font của STYLE
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: TX-05
+  title: Chữ không bị lật/ngược
+  reads: góc xoay, cờ
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: TX-06
+  title: Kiểu kích thước thuộc tập cho phép
+  reads: bảng DIMSTYLE
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: DWS
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: TX-07
+  title: Biến kích thước khớp chuẩn (chữ, mũi tên, khe)
+  reads: giá trị DIMSTYLE
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: DWS
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: TX-08
+  title: Kích thước không bị sửa chữ bằng tay
+  reads: DIMENSION (mã 1)
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: ISO 129-1
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TX-09
+  title: Giá trị kích thước = số đo hình học
+  reads: DIMENSION, hình học
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: ISO 129-1
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: TX-10
+  title: Không có kích thước trùng/chồng
+  reads: điểm định nghĩa DIMENSION
+  kind: heuristic
+  severity: W
+  false_positive_risk: medium
+  source: ISO 129-1
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: VW-01
+  title: Tỉ lệ viewport nằm trong danh sách ưu tiên
+  reads: VIEWPORT
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: TCVN 7286
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: VW-02
+  title: Tỉ lệ viewport đã khoá và viewport nằm trong khung
+  reads: cờ, biên
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: VW-03
+  title: Model vẽ đúng 1:1 (không co giãn hình học)
+  reads: kích thước đo vs danh nghĩa
+  kind: heuristic
+  severity: W
+  false_positive_risk: medium
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: VW-04
+  title: Mỗi viewport có tên hình kèm tỉ lệ
+  reads: chữ gần viewport
+  kind: heuristic
+  severity: W
+  false_positive_risk: high
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: VW-05
+  title: Mỗi ký hiệu cắt có hình cắt tương ứng
+  reads: cặp thuộc tính khối
+  kind: heuristic
+  severity: W
+  false_positive_risk: medium
+  source: ISO 128-40
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: VW-06
+  title: Kích thước tổng ở mặt bằng và mặt đứng khớp nhau
+  reads: giá trị kích thước
+  kind: heuristic
+  severity: E
+  false_positive_risk: high
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: FN-01
+  title: Mọi tấm có vật liệu và độ dày
+  reads: thẻ vị trí
+  kind: heuristic
+  severity: E
+  false_positive_risk: medium
+  source: AWS
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: FN-02
+  title: Độ dày ghi chú = độ dày trong mặt cắt
+  reads: ghi chú vs hình cắt
+  kind: heuristic
+  severity: W
+  false_positive_risk: high
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: FN-03
+  title: Có mũi tên vân trên tấm nhạy vân
+  reads: '`FN-GRAIN-ARRW` theo tấm'
+  kind: heuristic
+  severity: W
+  false_positive_risk: medium
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: FN-04
+  title: Có mã dán cạnh cho mọi cạnh (hoặc ghi chú chung)
+  reads: chữ, ATTRIB
+  kind: heuristic
+  severity: W
+  false_positive_risk: high
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: FN-05
+  title: Mã phụ kiện có trong bảng phụ kiện
+  reads: nhãn vs bảng
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: AWS
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: FN-06
+  title: Có kích thước khe hở bản lề/ray trong mặt cắt liên quan
+  reads: kích thước gần khối phụ kiện
+  kind: heuristic
+  severity: W
+  false_positive_risk: high
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: FN-07
+  title: Có kích thước tổng R × C × S trên mặt đứng
+  reads: chuỗi kích thước
+  kind: heuristic
+  severity: W
+  false_positive_risk: medium
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: DH-01
+  title: Không có đối tượng chồng trùng
+  reads: hình học
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: DH-02
+  title: Không có đoạn dài 0 hoặc polyline diện tích 0
+  reads: LINE, LWPOLYLINE
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: DH-03
+  title: Đường bao tấm khép kín và nối liền
+  reads: cờ khép, khe hở đầu mút
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: Mozaik
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: DH-04
+  title: Hatch không có biên hở
+  reads: HATCH
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: DH-05
+  title: Không có khối/kiểu chữ/kiểu đường không dùng
+  reads: bảng vs sử dụng
+  kind: deterministic
+  severity: I
+  false_positive_risk: low
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: DH-06
+  title: Không có xref mất đường dẫn hoặc đường dẫn tuyệt đối
+  reads: đường dẫn XREF
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: DH-07
+  title: Không có đối tượng proxy/không xác định
+  reads: loại đối tượng
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: DH-08
+  title: Định nghĩa khối nằm layer 0 và ByBlock
+  reads: BLOCK
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: DH-09
+  title: Đơn vị vẽ là mm
+  reads: '`INSUNITS`'
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: DH-10
+  title: Đối tượng nằm trên mặt phẳng z = 0
+  reads: toạ độ z
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: Mozaik
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: PR-01
+  title: Mỗi thẻ vị trí có trong bảng kê và ngược lại
+  reads: ATTRIB vs bảng
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: TCVN 3824
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: PR-02
+  title: Thẻ vị trí không trùng
+  reads: ATTRIB
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: PR-03
+  title: Số lượng bảng kê khớp số thẻ trên bản vẽ
+  reads: đếm ATTRIB
+  kind: heuristic
+  severity: W
+  false_positive_risk: medium
+  source: TCVN 3824
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: PR-04
+  title: Kích thước tấm trong bảng kê = hình học
+  reads: bảng vs đường bao
+  kind: heuristic
+  severity: E
+  false_positive_risk: high
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: PR-05
+  title: Layer CNC dùng đúng tên phần mềm đích, tham số hợp lệ
+  reads: tên layer
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: WoodWOP/Mozaik
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: PR-06
+  title: Bản vẽ đánh dấu xuống xưởng có revision, người kiểm, người duyệt
+  reads: ATTRIB
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: CT
+  implemented: false
+  enabled: true
+  realtime_ok: false
