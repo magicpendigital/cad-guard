@@ -32,6 +32,7 @@ Lệnh khác: `python -m cadguard rules` (danh sách luật), `python -m cadguar
 | Việc cần người làm trước (khảo sát, thu mẫu) | `docs/discovery.md`, `docs/samples-intake.md` |
 | Đăng ký dự án vào MCA, nối `report_signal` | `docs/guides/cad-guard-bootstrap.md` |
 | **Mới dùng GitHub: commit, push từng bước** | `docs/guides/github-tu-dau.md` |
+| **Các bước tiếp theo: chạy bootstrap, đăng ký MCA, P0, giao brief** | `docs/guides/buoc-tiep-theo.md` |
 | Giấy phép các thành phần | `docs/licenses.md` |
 | Quy tắc cho agent làm việc trong repo | `AGENTS.md` |
 
