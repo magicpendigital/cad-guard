@@ -23,6 +23,19 @@ cd packages\core
 
 Lệnh khác: `python -m cadguard rules` (danh sách luật), `python -m cadguard stats --json` (số tổng hợp cho MCA).
 
+### Máy chủ MCP chỉ đọc cho trợ lý AI
+
+Cài SDK (extras `[agent]`): `pip install cadguard[agent]`, hoặc trong repo `python scripts/test.py --extras agent`. Chạy:
+
+```powershell
+python -m cadguard mcp --workspace D:\CadGuardData\phien-01
+```
+
+- Máy chủ nói MCP qua stdio (stdout chỉ có JSON-RPC, thông báo ra stderr), có đúng 5 công cụ chỉ đọc: `list_drawings`, `audit`, `explain_rule`, `get_model_summary`, `query_model`.
+- `--workspace` **bắt buộc** (không mặc định thư mục hiện tại): chỉ đọc tệp `.dxf` nằm trong thư mục này; đường dẫn `..`, tuyệt đối, UNC hay trỏ ra ngoài đều bị từ chối. Nên dùng một thư mục phiên chỉ chứa bản vẽ cần kiểm.
+- Mặc định ẩn danh Bậc 1 (tên tệp/layer/khối/kiểu chữ thành mã phiên). `--no-anonymize` tắt ẩn danh, chỉ dùng khi khách đã đồng ý; `--standard` chọn chuẩn mặc định. Xem `python -m cadguard mcp --help`.
+- Mẫu cấu hình cho từng CLI agent: làm ở hạng mục riêng.
+
 ## Đọc gì
 
 | Cần | Đọc |
