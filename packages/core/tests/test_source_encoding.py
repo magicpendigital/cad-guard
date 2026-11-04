@@ -6,7 +6,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[3]
 # The patterns below intentionally contain examples of the corruption being detected.
 ALLOWED = {"packages/core/tests/test_source_encoding.py": "Contains the detector patterns themselves."}
-PATTERN = re.compile(r"[A-Za-z?-?]\?[a-z?-?]|[A-Za-z?-?]\?\?[A-Za-z?-?]|?")
+PATTERN = re.compile(r"[A-Za-z\u00c0-\u1ef9]\?[a-z\u00e0-\u1ef9]|[A-Za-z\u00c0-\u1ef9]\?\?[A-Za-z\u00c0-\u1ef9]|\ufffd")
 FILES = sorted(path for name in ("packages/core/cadguard", "packages/core/tests", "standards", "docs", "knowledge", "bench") for path in (ROOT / name).rglob("*") if path.is_file() and path.suffix in {".py", ".md", ".yaml"})
 
 

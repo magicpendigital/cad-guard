@@ -36,6 +36,7 @@ macOS/Linux: thay `.venv\Scripts\` bằng `.venv/bin/`.
 
 ## Quy tắc không được vi phạm
 
+- Chỉ ghi tệp bằng công cụ sửa tệp của agent hoặc Python `Path.write_text(..., encoding="utf-8")`; không dùng PowerShell `Set-Content`, `Out-File` hay `>` để ghi mã nguồn hoặc tài liệu. `tests/test_source_encoding.py` sẽ chặn chữ hỏng mã hoá.
 - Phát hiện lỗi bằng code tất định. LLM chỉ giải thích/đề xuất, không ra quyết định đúng sai.
 - Test chỉ dùng DXF tổng hợp tạo bằng ezdxf. **Không đọc, không sao chép bản vẽ thật của khách vào repo, vào prompt hay vào worktree của agent.** Bản vẽ thật để ở thư mục ngoài repo (xem `docs/samples-intake.md`).
 - Mọi luật có id ổn định, nguồn, mức độ; sửa luật hoặc ngưỡng = tạo phiên bản chuẩn mới (`furniture-v0.1`…), không sửa đè.
