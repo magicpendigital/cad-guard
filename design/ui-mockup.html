@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cad-guard — bản mẫu giao diện</title>
+<!--
+  BẢN MẪU GIAO DIỆN (không phải sản phẩm). Toàn bộ dữ liệu là TỔNG HỢP/minh hoạ: không có bản vẽ hay số liệu của khách.
+  Trợ lý trong bản mẫu là kịch bản có sẵn, chưa nối mô hình nào.
+  Mục đích: hình dung người dùng (thợ vẽ, trưởng phòng kỹ thuật, quản trị) sẽ dùng bộ công cụ ra sao.
+  Gắn với plans/cad-guard-agent.md (mục 3–5).
+-->
+<style>
+:root{
+  --font: "Segoe UI", system-ui, -apple-system, "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", monospace;
+  --r: 10px;
+  --bg:#F6F5F2; --surface:#FFFFFF; --surface2:#EFEDE8; --border:#DEDAD2; --border-strong:#C9C4B9;
+  --text:#1F2421; --text2:#555C57; --text3:#6B726D;
+  --primary:#0F6B62; --primary-hover:#0B554E; --primary-soft:#DDF0EC; --on-primary:#FFFFFF; --primary-text:#0B4F48;
+  --ok-bg:#DFF3E4; --ok-fg:#14532D; --err-bg:#FBE3E1; --err-fg:#8E1B13; --warn-bg:#FCEFCB; --warn-fg:#7A4B00;
+  --neu-bg:#E9E7E2; --neu-fg:#4A504B; --info-bg:#DEEBFA; --info-fg:#1E4C84;
+  --err:#C0392B; --warn:#B7791F; --ok:#2E7D4F;
+  --cv-bg:#FFFFFF; --cv-line:#2B3330; --cv-fill:#F3F1EC; --cv-dim:#0E7490; --cv-l0:#8A918C; --cv-grid:#EEECE6;
+  --shadow:0 1px 2px rgba(20,25,22,.06),0 4px 14px rgba(20,25,22,.06);
+}
+html[data-theme="dark"]{
+  --bg:#121513; --surface:#1A1E1C; --surface2:#232826; --border:#323935; --border-strong:#46504A;
+  --text:#E9ECEA; --text2:#A8B0AA; --text3:#8E968F;
+  --primary:#3FBFAE; --primary-hover:#63D0C1; --primary-soft:#173A35; --on-primary:#06201C; --primary-text:#9FE3D9;
+  --ok-bg:#163A24; --ok-fg:#8EDCA6; --err-bg:#46201D; --err-fg:#FFB4AC; --warn-bg:#44330A; --warn-fg:#F3CF7A;
+  --neu-bg:#2C312E; --neu-fg:#B8BFBA; --info-bg:#1C3350; --info-fg:#A9CBF4;
+  --err:#F0766A; --warn:#E0B04A; --ok:#5CC98A;
+  --cv-bg:#0F1211; --cv-line:#C8D0CB; --cv-fill:#171B19; --cv-dim:#5CC8DD; --cv-l0:#7E8781; --cv-grid:#1B201E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--font);font-size:15px;line-height:1.5;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:6px}
+.app{display:grid;grid-template-rows:56px 1fr;height:100vh;min-width:980px}
+
+/* ===== top bar ===== */
+.topbar{display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:.2px}
+.brand .logo{width:28px;height:28px;border-radius:8px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center}
+.sample-tag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--warn-bg);color:var(--warn-fg);white-space:nowrap}
+.nav{display:flex;gap:4px;margin-left:10px}
+.nav button{border:0;background:transparent;padding:8px 13px;border-radius:8px;color:var(--text2);font-weight:600;display:flex;gap:7px;align-items:center}
+.nav button:hover{background:var(--surface2);color:var(--text)}
+.nav button[aria-selected="true"]{background:var(--primary-soft);color:var(--primary-text)}
+.nav small{font-weight:500;color:var(--text3);font-size:12px}
+.spacer{flex:1}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--border);border-radius:99px;background:var(--surface);font-size:13.5px;color:var(--text2);white-space:nowrap}
+.chip b{color:var(--text);font-weight:600}
+.chip.btn{cursor:pointer}
+.chip.btn:hover{border-color:var(--border-strong);background:var(--surface2)}
+.iconbtn{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface);border-radius:8px;color:var(--text2)}
+.iconbtn:hover{background:var(--surface2);color:var(--text)}
+svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.menu{position:absolute;z-index:30;top:50px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:6px;min-width:330px}
+.menu button{display:flex;width:100%;gap:10px;align-items:flex-start;text-align:left;border:0;background:transparent;padding:9px 10px;border-radius:8px}
+.menu button:hover{background:var(--surface2)}
+.menu button[aria-checked="true"]{background:var(--primary-soft)}
+.menu .t{font-weight:600}.menu .d{font-size:13px;color:var(--text2)}
+
+/* ===== pills ===== */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:99px;font-size:13px;font-weight:600;line-height:1.5;white-space:nowrap}
+.pill svg.i{width:14px;height:14px}
+.pill.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.pill.err{background:var(--err-bg);color:var(--err-fg)}
+.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.pill.neu{background:var(--neu-bg);color:var(--neu-fg)}
+.pill.info{background:var(--info-bg);color:var(--info-fg)}
+
+/* ===== buttons ===== */
+.btn-p,.btn-s,.btn-d{border-radius:8px;padding:8px 14px;font-weight:600;border:1px solid transparent;display:inline-flex;gap:7px;align-items:center;justify-content:center}
+.btn-p{background:var(--primary);color:var(--on-primary)}
+.btn-p:hover{background:var(--primary-hover)}
+.btn-s{background:var(--surface);border-color:var(--border-strong);color:var(--text)}
+.btn-s:hover{background:var(--surface2)}
+.btn-d{background:var(--err);color:#fff}
+html[data-theme="dark"] .btn-d{color:#2A0906}
+.btn-p[disabled],.btn-s[disabled]{opacity:.45;cursor:not-allowed}
+.btn-sm{padding:5px 10px;font-size:14px}
+
+/* ===== screens ===== */
+.screen{display:none;min-height:0}
+.screen.on{display:grid}
+#s-work{grid-template-columns:272px minmax(0,1fr) 420px}
+.col{min-height:0;display:flex;flex-direction:column;background:var(--surface)}
+.col.left{border-right:1px solid var(--border)}
+.col.right{border-left:1px solid var(--border)}
+.col-h{padding:14px 16px 8px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+
+/* file list */
+.files{padding:0 8px;overflow:auto;flex:1}
+.file{display:block;width:100%;text-align:left;border:1px solid transparent;background:transparent;padding:10px;border-radius:9px;margin-bottom:2px}
+.file:hover{background:var(--surface2)}
+.file[aria-current="true"]{background:var(--primary-soft);border-color:color-mix(in srgb,var(--primary) 35%,transparent)}
+.file .n{display:flex;align-items:center;gap:8px;font-weight:600;word-break:break-all}
+.file .n svg{color:var(--text3)}
+.file .m{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;padding-left:26px}
+.file.child{margin-left:18px;width:calc(100% - 18px)}
+.std-box{margin:8px 12px 12px;padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);font-size:14px}
+.std-box .k{color:var(--text3);font-size:12.5px}
+.std-box .v{font-weight:600}
+
+/* canvas */
+.center{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.cv-tools{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border)}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:6px 13px;font-weight:600;color:var(--text2)}
+.seg button+button{border-left:1px solid var(--border-strong)}
+.seg button[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-text)}
+.seg button[disabled]{opacity:.45;cursor:not-allowed}
+.cv-wrap{flex:1;min-height:0;padding:14px;overflow:auto;display:flex}
+.sheet{flex:1;background:var(--cv-bg);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);display:grid;place-items:center;padding:6px;min-height:340px}
+.sheet svg{width:100%;height:auto;max-height:100%}
+.cv-status{display:flex;gap:16px;align-items:center;padding:8px 14px;background:var(--surface);border-top:1px solid var(--border);font-size:13.5px;color:var(--text2);flex-wrap:wrap}
+.cv-status .lock{display:inline-flex;gap:6px;align-items:center;color:var(--ok-fg);background:var(--ok-bg);padding:2px 9px;border-radius:99px;font-weight:600}
+/* svg drawing */
+.ln{stroke:var(--cv-line);stroke-width:1.4;fill:none}
+.ln.thin{stroke-width:.9}
+.fillc{fill:var(--cv-fill)}
+.txt{fill:var(--cv-line);font-family:var(--font)}
+.dim-l{stroke:var(--cv-l0);fill:none;stroke-width:1.2}
+.dim-t{fill:var(--cv-l0);font-family:var(--font);font-size:13px}
+svg[data-fixed-dim="1"] .dim-l{stroke:var(--cv-dim)}
+svg[data-fixed-dim="1"] .dim-t{fill:var(--cv-dim)}
+.note-t{font-family:var(--font);fill:var(--cv-line);font-size:16px}
+svg[data-fixed-text="1"] .note-t{font-size:13px}
+.chg-box{fill:none;stroke:var(--ok);stroke-width:1.6;stroke-dasharray:5 4;display:none}
+svg[data-show-chg="1"][data-fixed-dim="1"] #chg-dim{display:block}
+svg[data-show-chg="1"][data-fixed-text="1"] #chg-text{display:block}
+.mk{display:none;cursor:pointer}
+svg[data-scanned="1"] .mk{display:block}
+.mk .ring{fill:none;stroke-width:2.2}
+.mk .dot{stroke:none}
+.mk .num{fill:#fff;font:700 13px var(--font);text-anchor:middle}
+.mk.sev-error .ring{stroke:var(--err)} .mk.sev-error .dot{fill:var(--err)}
+.mk.sev-warn .ring{stroke:var(--warn)} .mk.sev-warn .dot{fill:var(--warn)}
+.mk.sev-warn .num{fill:#1d1300}
+html[data-theme="dark"] .mk.sev-error .num{fill:#2A0906}
+.mk.fixed .ring{stroke:var(--ok)} .mk.fixed .dot{fill:var(--ok)} .mk.fixed .num{fill:#06210F}
+.mk.sel .ring{stroke-width:4}
+.mk .pulse{fill:none;stroke-width:2;opacity:0}
+.mk.sel .pulse{animation:pl 1.4s ease-out infinite;stroke:currentColor}
+.mk.sev-error{color:var(--err)} .mk.sev-warn{color:var(--warn)} .mk.fixed{color:var(--ok)}
+@keyframes pl{0%{opacity:.7;r:14}100%{opacity:0;r:34}}
+.missing{stroke:var(--err);stroke-dasharray:4 3;fill:none;stroke-width:1.5}
+
+/* right panel */
+.tabs{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--border)}
+.tabs button{border:0;background:transparent;padding:9px 12px;font-weight:600;color:var(--text2);border-bottom:3px solid transparent;display:flex;gap:7px;align-items:center}
+.tabs button[aria-selected="true"]{color:var(--primary-text);border-bottom-color:var(--primary)}
+.tabs .cnt{font-size:12px;background:var(--neu-bg);color:var(--neu-fg);padding:0 7px;border-radius:99px;font-weight:700}
+.tabs .cnt.hot{background:var(--err-bg);color:var(--err-fg)}
+.pane{display:none;min-height:0;flex:1;flex-direction:column}
+.pane.on{display:flex}
+.chat-head{display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:13.5px;color:var(--text2);border-bottom:1px dashed var(--border)}
+.chat-log{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:94%}
+.msg.me{align-self:flex-end;background:var(--primary);color:var(--on-primary);padding:9px 13px;border-radius:14px 14px 4px 14px}
+.msg.ai{align-self:flex-start;background:var(--surface2);padding:11px 14px;border-radius:14px 14px 14px 4px}
+.msg.ai p{margin:0 0 8px}.msg.ai p:last-child{margin:0}
+.msg .src{margin-top:8px;font-size:12.5px;color:var(--text3)}
+.tool{align-self:flex-start;width:94%;border:1px solid var(--border);border-radius:9px;background:var(--surface);font-size:13.5px}
+.tool summary{cursor:pointer;padding:7px 11px;display:flex;gap:8px;align-items:center;color:var(--text2);list-style:none}
+.tool summary::-webkit-details-marker{display:none}
+.tool summary .ok{color:var(--ok);display:inline-flex}
+.tool pre{margin:0;padding:8px 11px 10px;border-top:1px solid var(--border);font:12.5px/1.5 var(--mono);color:var(--text2);white-space:pre-wrap}
+.typing{align-self:flex-start;color:var(--text3);font-size:14px;display:flex;gap:6px;align-items:center}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--text3);animation:bl 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes bl{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.suggest{display:flex;flex-wrap:wrap;gap:7px;padding:8px 14px 0}
+.suggest button{border:1px solid var(--border-strong);background:var(--surface);border-radius:99px;padding:6px 12px;font-size:14px;font-weight:500}
+.suggest button:hover{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-text)}
+.suggest button.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:600}
+.composer{display:flex;gap:8px;padding:10px 14px 12px}
+.composer input{flex:1;padding:10px 12px;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface)}
+.composer input::placeholder{color:var(--text3)}
+.hint{padding:0 14px 10px;font-size:12.5px;color:var(--text3)}
+.note-card{margin-top:8px;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface);padding:10px 12px;font-size:14px}
+.note-card .lbl{font-size:12.5px;color:var(--text3);margin-bottom:6px;display:flex;gap:6px;align-items:center}
+.note-card ul{margin:0 0 8px 18px;padding:0}
+
+/* findings */
+.list{overflow:auto;flex:1;padding:12px 12px 16px;display:flex;flex-direction:column;gap:9px}
+.empty{padding:34px 20px;text-align:center;color:var(--text2)}
+.empty b{display:block;color:var(--text);font-size:16px;margin-bottom:4px}
+.f-card{border:1px solid var(--border);border-radius:var(--r);padding:12px;background:var(--surface);cursor:pointer;text-align:left;width:100%}
+.f-card:hover{border-color:var(--border-strong)}
+.f-card.sel{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 22%,transparent)}
+.f-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.f-no{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--neu-bg);color:var(--neu-fg)}
+.f-rule{font:600 13px var(--mono);color:var(--text2)}
+.f-title{font-weight:600;margin:7px 0 3px}
+.f-d{color:var(--text2);font-size:14px}
+.f-act{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.f-meta{margin-top:8px;font-size:13px;color:var(--text3);display:flex;gap:6px;align-items:center}
+
+/* changeset */
+.op{border:1px solid var(--border);border-radius:var(--r);padding:12px;background:var(--surface)}
+.op label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.op input{margin-top:4px;width:17px;height:17px;accent-color:var(--primary)}
+.diff{margin-top:9px;font:13px/1.55 var(--mono);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.diff div{padding:3px 10px}
+.diff .m{background:var(--err-bg);color:var(--err-fg)}
+.diff .p{background:var(--ok-bg);color:var(--ok-fg)}
+.cs-foot{border-top:1px solid var(--border);padding:12px 14px;background:var(--surface)}
+.checks{margin:0 0 10px;padding:0;list-style:none;font-size:14px}
+.checks li{display:flex;gap:8px;align-items:flex-start;padding:2px 0;color:var(--text2)}
+.checks li svg{color:var(--ok);margin-top:3px}
+.safe{display:flex;gap:8px;font-size:13.5px;color:var(--text2);margin-bottom:10px;align-items:flex-start}
+.safe svg{color:var(--ok);margin-top:2px}
+
+/* ===== settings screen ===== */
+.page{overflow:auto;padding:26px 32px 48px;background:var(--bg)}
+.page-in{max-width:1040px;margin:0 auto}
+h1{font-size:24px;margin:0 0 4px;line-height:1.25}
+h2{font-size:18px;margin:30px 0 4px}
+.lead{color:var(--text2);margin:0 0 18px;font-size:16px;max-width:760px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+.prov{display:flex;flex-direction:column;gap:10px}
+.prov .hd{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.prov .nm{font-weight:700;font-size:16px}
+.prov .ds{color:var(--text2);font-size:14px;margin:0}
+.prov .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.prov input[type=password],.prov input[type=text],.num-in{padding:8px 11px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);min-width:0;flex:1}
+.callout{display:flex;gap:11px;padding:13px 15px;border-radius:var(--r);background:var(--info-bg);color:var(--info-fg);font-size:14.5px;margin:0 0 18px;max-width:900px}
+.callout svg{margin-top:2px}
+.tier{display:grid;gap:8px}
+.tier label{display:flex;gap:11px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer;align-items:flex-start}
+.tier label:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
+.tier input{margin-top:4px;accent-color:var(--primary);width:17px;height:17px}
+.tier .t{font-weight:700}.tier .d{font-size:14px;color:var(--text2)}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);font-size:14.5px}
+th{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:700}
+.perm td:first-child{width:62%}
+.lockrow{display:inline-flex;gap:6px;align-items:center}
+
+/* manager */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi .v{font-size:30px;font-weight:700;line-height:1.1}
+.kpi .l{color:var(--text2);font-size:14px;margin-top:4px}
+.kpi .dlt{font-size:13px;margin-top:8px;color:var(--text3)}
+.bars{display:grid;gap:9px}
+.bar{display:grid;grid-template-columns:230px 1fr 40px;gap:12px;align-items:center;font-size:14.5px}
+.bar .tr{height:12px;border-radius:6px;background:var(--surface2);overflow:hidden}
+.bar .tr i{display:block;height:100%;background:var(--primary);border-radius:6px}
+.bar .nn{text-align:right;font-weight:600}
+.privacy{display:flex;gap:9px;align-items:center;color:var(--text2);font-size:14px;margin-top:12px}
+
+/* home (thợ vẽ) */
+.hero{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:18px}
+.hero h1{font-size:26px}
+.hero p{margin:4px 0 14px;color:var(--text2);font-size:16px}
+.ask{display:flex;gap:8px;max-width:720px}
+.ask input{flex:1;padding:11px 14px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);font-size:15px}
+.ask input::placeholder{color:var(--text3)}
+.home-grid{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:18px;align-items:start}
+.home-grid h2{margin-top:0;font-size:17px}
+.dwg{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.dwg-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dwg-h .nm{font-weight:700;font-size:16px;display:flex;gap:8px;align-items:center}
+.dwg-h .nm svg{color:var(--text3)}
+.dwg .stage{margin-left:auto}
+.ready{list-style:none;margin:12px 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:14.5px}
+.ready li{display:flex;gap:8px;align-items:flex-start;color:var(--text2)}
+.ready li svg{margin-top:3px}
+.ready li.done{color:var(--text)}
+.ready li.done svg{color:var(--ok)}
+.ready li.todo svg{color:var(--text3)}
+.dwg-f{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dwg-f .why{color:var(--text3);font-size:13.5px}
+.decide{background:var(--warn-bg);color:var(--warn-fg);border-radius:9px;padding:10px 12px;font-size:14.5px;margin:0 0 12px;display:flex;gap:9px;align-items:flex-start}
+.decide svg{margin-top:2px}
+.pack{margin-top:10px;border:1px dashed var(--border-strong);border-radius:9px;padding:10px 12px;font-size:14.5px;display:none}
+.pack.on{display:block}
+.pack ul{margin:4px 0 8px 18px;padding:0;color:var(--text2)}
+.mine{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.mine .lockline{display:flex;gap:7px;align-items:center;font-size:13.5px;color:var(--ok-fg);background:var(--ok-bg);padding:3px 10px;border-radius:99px;width:fit-content;font-weight:600;margin-bottom:10px}
+.mine h3{margin:0 0 8px;font-size:15px}
+.mine .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:14.5px}
+.mine .row:last-child{border-bottom:0}
+.mine .tip{font-size:14px;color:var(--text2);margin-top:8px;display:flex;gap:8px}
+.tl{list-style:none;margin:0;padding:0;font-size:14px}
+.tl li{display:flex;gap:10px;padding:5px 0;color:var(--text2)}
+.tl time{color:var(--text3);min-width:40px;font-variant-numeric:tabular-nums}
+
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(10,14,12,.5);display:none;place-items:center;z-index:50}
+.modal-bg.on{display:grid}
+.modal{background:var(--surface);border-radius:14px;padding:22px;width:min(460px,92vw);box-shadow:var(--shadow);border-top:5px solid var(--warn)}
+.modal h3{margin:0 0 6px;font-size:18px}
+.modal p{margin:0 0 16px;color:var(--text2)}
+.modal .ft{display:flex;justify-content:flex-end;gap:8px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:60;display:none;font-weight:600;box-shadow:var(--shadow)}
+.toast.on{display:block}
+@media (max-width:1180px){#s-work{grid-template-columns:minmax(0,1fr) 400px}.col.left{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand"><span class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>cad-guard</div>
+    <span class="sample-tag">Bản mẫu · dữ liệu minh hoạ</span>
+    <nav class="nav" role="tablist" aria-label="Màn hình">
+      <button role="tab" aria-selected="true" data-go="home"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></svg>Việc của tôi <small>thợ vẽ</small></button>
+      <button role="tab" aria-selected="false" data-go="work"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>Bản vẽ <small>làm việc</small></button>
+      <button role="tab" aria-selected="false" data-go="overview"><svg class="i" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Tổng quan <small>trưởng phòng</small></button>
+      <button role="tab" aria-selected="false" data-go="connect"><svg class="i" viewBox="0 0 24 24"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 01-10 0zM12 16v5"/></svg>Kết nối AI <small>quản trị</small></button>
+    </nav>
+    <div class="spacer"></div>
+    <span class="chip" title="Mức dữ liệu gửi cho AI"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Dữ liệu: <b>Bậc 1 · ẩn danh</b></span>
+    <div style="position:relative">
+      <button class="chip btn" id="engineBtn" aria-haspopup="true" aria-expanded="false"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01"/></svg>Trợ lý: <b id="engineName">Claude Code</b><svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="menu" id="engineMenu" hidden style="right:0"></div>
+    </div>
+    <button class="iconbtn" id="themeBtn" aria-label="Đổi giao diện sáng/tối" title="Sáng / tối"><svg class="i" id="themeIc" viewBox="0 0 24 24"></svg></button>
+  </header>
+
+  <!-- ============ VIỆC CỦA TÔI (thợ vẽ) ============ -->
+  <main class="screen on" id="s-home"><div class="page"><div class="page-in">
+    <section class="hero">
+      <h1 id="homeH">Chào buổi sáng</h1>
+      <p id="homeP"></p>
+      <form class="ask" id="askForm"><input id="askIn" placeholder="Hỏi nhanh trợ lý, ví dụ: bản nào sẵn sàng bàn giao xưởng?" aria-label="Hỏi nhanh trợ lý"><button class="btn-p" aria-label="Gửi câu hỏi">Hỏi</button></form>
+    </section>
+    <div class="home-grid">
+      <section aria-label="Bản vẽ của tôi">
+        <h2>Bản vẽ của tôi</h2>
+        <div id="homeList"></div>
+      </section>
+      <aside aria-label="Riêng tôi">
+        <div class="mine">
+          <div class="lockline"><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Chỉ mình bạn thấy · lưu trên máy này</div>
+          <h3>Lỗi tôi hay gặp (30 ngày)</h3>
+          <div class="row"><span><span class="f-rule">LY-04</span> Layer chưa định nghĩa</span><b>5 lần</b></div>
+          <div class="row"><span><span class="f-rule">TX-02</span> Chiều cao chữ</span><b>3 lần</b></div>
+          <div class="tip"><span>Gợi ý: đặt layer hiện hành sang <b>FN-DIM-N</b> trước khi ghi kích thước, sẽ không còn lỗi LY-04.</span></div>
+        </div>
+        <div class="mine">
+          <h3>Đề xuất của trợ lý</h3>
+          <div class="row"><span>Bạn đã chấp nhận</span><b>9 / 11</b></div>
+          <div class="row"><span>Cảnh báo bạn đã báo sai</span><b>1</b></div>
+          <p style="margin:8px 0 0;font-size:13.5px;color:var(--text3)">Báo sai giúp công ty chỉnh luật. Chỉ số lượng được gộp vào số tổng hợp, không kèm tên bạn.</p>
+        </div>
+        <div class="mine">
+          <h3>Gần đây</h3>
+          <ul class="tl">
+            <li><time>09:12</time><span>Quét <b>tu-bep-A.dxf</b>: 4 phát hiện</span></li>
+            <li><time>08:40</time><span>Tạo ghi chú bàn giao <b>ke-tivi-D.dxf</b></span></li>
+            <li><time>Hôm qua</time><span>Duyệt 3 thay đổi trên <b>tu-ao-B.dxf</b></span></li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div></div></main>
+
+  <!-- ============ LÀM VIỆC ============ -->
+  <main class="screen" id="s-work">
+    <aside class="col left" aria-label="Bản vẽ">
+      <div class="col-h">Dự án K1 · Tủ bếp</div>
+      <div class="files" id="files"></div>
+      <div class="std-box">
+        <div class="k">Chuẩn đang áp dụng</div><div class="v">furniture-v0.1.0</div>
+        <div class="k" style="margin-top:6px">Luật bật</div><div class="v">16 / 58 <span style="font-weight:500;color:var(--text3)">(đã cài)</span></div>
+      </div>
+      <div style="padding:0 12px 14px"><button class="btn-s" style="width:100%" id="scanAll"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Quét cả thư mục</button></div>
+    </aside>
+
+    <section class="center" aria-label="Bản vẽ đang mở">
+      <div class="cv-tools">
+        <strong id="cvTitle">tu-bep-A.dxf</strong>
+        <span class="pill neu">Mặt đứng · 1:20</span>
+        <div class="spacer"></div>
+        <span id="cmpLabel" style="color:var(--text2);font-size:14px;display:none">Xem trước thay đổi:</span>
+        <div class="seg" id="cmp" style="display:none" role="group" aria-label="So sánh trước sau">
+          <button data-v="before" aria-pressed="false">Trước</button>
+          <button data-v="after" aria-pressed="true">Sau</button>
+        </div>
+      </div>
+      <div class="cv-wrap"><div class="sheet" id="sheet"></div></div>
+      <div class="cv-status">
+        <span class="lock"><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Tệp gốc chỉ đọc</span>
+        <span>Mọi thay đổi được ghi ra <b>tệp mới</b>, có xem trước và hoàn tác.</span>
+        <span class="spacer"></span>
+        <span id="cvInfo">214 đối tượng · DXF R2018 · đơn vị mm</span>
+      </div>
+    </section>
+
+    <aside class="col right" aria-label="Trợ lý">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-p="chat" aria-selected="true"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-11.5 7.2L4 20l1-4.6A8 8 0 1121 12z"/></svg>Trợ lý</button>
+        <button role="tab" data-p="finds" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>Lỗi <span class="cnt" id="cntF">–</span></button>
+        <button role="tab" data-p="chg" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M7 4v12a3 3 0 003 3h7M17 4v8M14 7l3-3 3 3"/></svg>Thay đổi <span class="cnt" id="cntC">0</span></button>
+      </div>
+
+      <div class="pane on" id="p-chat">
+        <div class="chat-head"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4"/></svg><span>Đang dùng <b id="chatEng">Claude Code</b> · chỉ thấy kết quả công cụ đã ẩn danh</span></div>
+        <div class="chat-log" id="log" aria-live="polite"></div>
+        <div class="suggest" id="sug"></div>
+        <form class="composer" id="form"><input id="inp" placeholder="Hỏi hoặc ra lệnh, ví dụ: đổi hết chữ 3.0 sang 2.5" aria-label="Nhập câu hỏi hoặc lệnh"><button class="btn-p" aria-label="Gửi"><svg class="i" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7z"/></svg></button></form>
+        <div class="hint">Trợ lý giải thích và đề xuất. Việc đúng/sai do bộ luật kiểm tất định quyết định.</div>
+      </div>
+
+      <div class="pane" id="p-finds"><div class="list" id="finds"></div></div>
+
+      <div class="pane" id="p-chg">
+        <div class="list" id="chgList"></div>
+        <div class="cs-foot" id="chgFoot" style="display:none"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ============ TỔNG QUAN ============ -->
+  <main class="screen" id="s-overview"><div class="page"><div class="page-in">
+    <h1>Tổng quan tuần này</h1>
+    <p class="lead">Dành cho trưởng phòng kỹ thuật. Chỉ có số tổng hợp: không tên thợ vẽ, không tên khách, không đường dẫn tệp.</p>
+    <div class="kpis">
+      <div class="card kpi"><div class="v">41</div><div class="l">Bản vẽ đã quét</div><div class="dlt">7 ngày gần nhất</div></div>
+      <div class="card kpi"><div class="v">18</div><div class="l">Lỗi đã được xác nhận</div><div class="dlt">trước khi xuống xưởng</div></div>
+      <div class="card kpi"><div class="v">78%</div><div class="l">Đề xuất sửa được chấp nhận</div><div class="dlt">trên 23 đề xuất</div></div>
+      <div class="card kpi"><div class="v">6%</div><div class="l">Cảnh báo bị báo sai</div><div class="dlt">mục tiêu dưới 10%</div></div>
+    </div>
+    <h2>Luật bị vi phạm nhiều nhất</h2>
+    <p class="lead" style="margin-bottom:12px">Danh sách này quyết định luật nào nên ưu tiên đo độ chính xác và nên đưa vào mẫu bản vẽ chuẩn.</p>
+    <div class="card"><div class="bars" id="bars"></div>
+      <div class="privacy"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Số tổng hợp. Nhật ký chi tiết nằm trên máy từng người và không gửi lên đây.</div></div>
+    <h2>Độ tin cậy của luật</h2>
+    <div class="card" style="padding:0"><table>
+      <thead><tr><th>Luật</th><th>Nội dung</th><th>Số lần</th><th>Độ chính xác</th><th>Cảnh báo khi đang vẽ</th></tr></thead>
+      <tbody>
+      <tr><td class="f-rule">LY-04</td><td>Không có đối tượng trên layer chưa định nghĩa</td><td>7</td><td><span class="pill ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>96%</span></td><td><span class="pill ok">Được bật</span></td></tr>
+      <tr><td class="f-rule">TX-02</td><td>Chiều cao chữ đúng chuẩn</td><td>6</td><td><span class="pill ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>92%</span></td><td><span class="pill ok">Được bật</span></td></tr>
+      <tr><td class="f-rule">PR-01</td><td>Thẻ vị trí khớp bảng kê</td><td>4</td><td><span class="pill warn"><svg class="i" viewBox="0 0 24 24"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>81%</span></td><td><span class="pill neu">Chưa đạt ngưỡng</span></td></tr>
+      <tr><td class="f-rule">SH-05</td><td>Khung tên đủ thuộc tính</td><td>3</td><td><span class="pill neu">Đang đo</span></td><td><span class="pill neu">Chưa đo</span></td></tr>
+      </tbody></table></div>
+  </div></div></main>
+
+  <!-- ============ KẾT NỐI AI ============ -->
+  <main class="screen" id="s-connect"><div class="page"><div class="page-in">
+    <h1>Kết nối AI</h1>
+    <p class="lead">Chọn cách trợ lý "nghĩ". cad-guard luôn dùng cùng một bộ công cụ kiểm bản vẽ, dù bạn dùng trợ lý nào.</p>
+    <div class="callout"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><div><b>cad-guard không bao giờ đọc hay lưu mật khẩu/token đăng nhập của bạn.</b> Với CLI, cửa sổ đăng nhập là của chính CLI đó. Mỗi người dùng tài khoản của riêng mình hoặc khoá API của công ty.</div></div>
+
+    <h2 style="margin-top:6px">Dùng CLI có sẵn (đăng nhập của bạn)</h2>
+    <div class="grid2" style="margin-top:10px" id="cliCards"></div>
+
+    <h2>Dùng khoá API của công ty <span class="pill info" style="vertical-align:middle;margin-left:6px">Khuyến nghị</span></h2>
+    <p class="lead" style="margin-bottom:10px">Khuyến nghị cho cả phòng. Khoá lưu trong kho khoá của Windows, không ghi ra tệp.</p>
+    <div class="grid2" id="apiCards"></div>
+
+    <h2>Mức dữ liệu gửi cho AI</h2>
+    <div class="tier" style="margin-top:10px">
+      <label><input type="radio" name="tier"><span><span class="t">Bậc 0 · Không dùng AI</span><br><span class="d">Chỉ chạy bộ luật. Không có trợ lý hội thoại.</span></span></label>
+      <label><input type="radio" name="tier" checked><span><span class="t">Bậc 1 · Chỉ gửi kết quả đã ẩn danh <span class="pill info" style="margin-left:6px">Mặc định</span></span><br><span class="d">AI chỉ thấy tóm tắt do công cụ trả về: mã băm thay tên, bỏ chữ trong khung tên. Không thấy tệp bản vẽ.</span></span></label>
+      <label><input type="radio" name="tier"><span><span class="t">Bậc 2 · Cho phép gửi ảnh/đoạn thô</span><br><span class="d">Cần quản trị bật và có văn bản đồng ý của khách.</span></span></label>
+      <label><input type="radio" name="tier"><span><span class="t">Bậc L · Chỉ mô hình chạy trên máy</span><br><span class="d">Dữ liệu không rời máy. Chất lượng thấp hơn mô hình lớn.</span></span></label>
+    </div>
+
+    <h2>Trợ lý được và không được làm gì</h2>
+    <div class="card perm" style="padding:0;margin-top:10px"><table>
+      <tbody>
+      <tr><td>Đọc tệp ngoài thư mục của phiên làm việc</td><td><span class="pill err"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Tắt, khoá</span></td></tr>
+      <tr><td>Chạy lệnh shell / cài phần mềm</td><td><span class="pill err"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Tắt, khoá</span></td></tr>
+      <tr><td>Ghi đè hoặc xoá bản vẽ gốc</td><td><span class="pill err"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Tắt, khoá</span></td></tr>
+      <tr><td>Quét và đọc kết quả luật</td><td><span class="pill ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Bật</span></td></tr>
+      <tr><td>Ghi <b>tệp mới</b> sau khi người dùng duyệt thay đổi</td><td><span class="pill warn"><svg class="i" viewBox="0 0 24 24"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>Bật, luôn hỏi</span></td></tr>
+      </tbody></table></div>
+
+    <h2>Giới hạn chi phí</h2>
+    <div class="row" style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <label for="cap" style="color:var(--text2)">Tối đa mỗi người mỗi ngày</label>
+      <input id="cap" class="num-in" style="flex:none;width:130px" type="text" value="50.000 đ" aria-label="Giới hạn chi phí mỗi ngày">
+      <span class="pill neu">Hôm nay đã dùng 12.400 đ</span>
+    </div>
+  </div></div></main>
+</div>
+
+<div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal">
+    <h3 id="mTitle">Bỏ bản tu-bep-A_v2.dxf?</h3>
+    <p>Tệp mới này sẽ bị xoá. Bản gốc tu-bep-A.dxf không bị ảnh hưởng. Các thay đổi sẽ quay về trạng thái chưa áp dụng.</p>
+    <div class="ft"><button class="btn-s" id="mNo">Giữ lại</button><button class="btn-d" id="mYes">Bỏ bản v2</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const IC={
+  check:'<path d="M5 12l5 5 9-10"/>', x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  alert:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  file:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>', sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>',
+  moon:'<path d="M20 14A8 8 0 0110 4a8 8 0 1010 10z"/>', gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>',
+  copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 012-2h10"/>', undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>', hand:'<path d="M8 13V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v8a6 6 0 01-6 6h-1a5 5 0 01-4-2l-3-4a1.5 1.5 0 012.3-1.9L8 14"/>'
+};
+const ic=(n,s)=>`<svg class="i" viewBox="0 0 24 24"${s?` style="${s}"`:''}>${IC[n]}</svg>`;
+
+/* ---------- theme ---------- */
+function setTheme(t){document.documentElement.dataset.theme=t;$('#themeIc').innerHTML=t==='dark'?IC.sun:IC.moon}
+setTheme(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+const q=new URLSearchParams(location.search); if(q.get('theme'))setTheme(q.get('theme'));
+$('#themeBtn').onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+
+/* ---------- screens ---------- */
+$$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+function go(n){
+  $$('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+n));
+  $$('[data-go]').forEach(b=>b.setAttribute('aria-selected',b.dataset.go===n));
+}
+
+/* ---------- engines ---------- */
+const ENGINES=[
+ {id:'claude',n:'Claude Code',d:'CLI có sẵn · bạn tự đăng nhập hoặc dùng khoá API'},
+ {id:'codex',n:'Codex CLI',d:'CLI có sẵn · bạn tự đăng nhập'},
+ {id:'agy',n:'Antigravity CLI',d:'CLI có sẵn · bạn tự đăng nhập'},
+ {id:'opencode',n:'OpenCode + khoá API',d:'Anthropic · OpenAI · Gemini · OpenRouter · khoá của công ty'},
+ {id:'local',n:'Mô hình trên máy',d:'Dữ liệu không rời máy (Bậc L)'}
+];
+let engine=ENGINES[0];
+function renderEngineMenu(){
+  $('#engineMenu').innerHTML=ENGINES.map(e=>`<button role="menuitemradio" aria-checked="${e.id===engine.id}" data-e="${e.id}"><span style="width:18px;margin-top:2px">${e.id===engine.id?ic('check'):''}</span><span><span class="t">${e.n}</span><br><span class="d">${e.d}</span></span></button>`).join('');
+  $$('#engineMenu button').forEach(b=>b.onclick=()=>{engine=ENGINES.find(x=>x.id===b.dataset.e);$('#engineName').textContent=engine.n;$('#chatEng').textContent=engine.n;toggleMenu(false);renderEngineMenu()});
+}
+function toggleMenu(open){const m=$('#engineMenu');m.hidden=!open;$('#engineBtn').setAttribute('aria-expanded',open)}
+$('#engineBtn').onclick=e=>{e.stopPropagation();toggleMenu($('#engineMenu').hidden)};
+document.addEventListener('click',()=>toggleMenu(false));
+renderEngineMenu();
+
+/* ---------- drawing ---------- */
+function drawing(){
+ const doors=[70,230,390].map((x,i)=>`
+   <rect class="ln fillc" x="${x}" y="50" width="160" height="130"/><line class="ln thin" x1="${x+138}" y1="150" x2="${x+138}" y2="172"/>
+   <rect class="ln fillc" x="${x}" y="262" width="160" height="150"/><line class="ln thin" x1="${x+138}" y1="274" x2="${x+138}" y2="298"/>`).join('');
+ return `<svg id="svg" viewBox="0 0 820 540" role="img" aria-label="Bản vẽ mặt đứng tủ bếp trên và dưới" data-scanned="0" data-fixed-dim="0" data-fixed-text="0" data-show-chg="0">
+  <rect x="8" y="8" width="804" height="524" class="ln thin"/>
+  ${doors}
+  <rect class="ln fillc" x="60" y="250" width="500" height="12"/>
+  <rect class="ln fillc" x="70" y="412" width="480" height="20"/>
+  <text class="txt" x="150" y="34" font-size="13" text-anchor="middle">TỦ TRÊN</text>
+  <!-- thẻ vị trí -->
+  ${[['P1',150,340],['P2',310,340],['P3',470,340],['P4',310,422]].map(([t,x,y])=>`<circle class="ln thin" cx="${x}" cy="${y}" r="${t==='P4'?9:15}" fill="var(--cv-bg)"/><text class="txt" x="${x}" y="${y+(t==='P4'?4:5)}" font-size="${t==='P4'?10:13}" text-anchor="middle">${t}</text>`).join('')}
+  <!-- kích thước chiều cao (layer 0 → FN-DIM-N) -->
+  <g id="dim720">
+    <line class="dim-l" x1="596" y1="262" x2="596" y2="412"/><line class="dim-l" x1="590" y1="262" x2="604" y2="262"/><line class="dim-l" x1="590" y1="412" x2="604" y2="412"/>
+    <text class="dim-t" x="612" y="342" font-size="14">720</text>
+  </g>
+  <rect class="chg-box" id="chg-dim" x="582" y="252" width="56" height="170" rx="6"/>
+  <!-- kích thước chiều rộng (đúng layer) -->
+  <g><line class="ln thin" x1="70" y1="458" x2="550" y2="458" style="stroke:var(--cv-dim)"/><line class="ln thin" x1="70" y1="452" x2="70" y2="464" style="stroke:var(--cv-dim)"/><line class="ln thin" x1="550" y1="452" x2="550" y2="464" style="stroke:var(--cv-dim)"/><text x="310" y="452" text-anchor="middle" font-size="14" style="fill:var(--cv-dim);font-family:var(--font)">2400</text></g>
+  <!-- ghi chú -->
+  <text class="note-t" id="note" x="70" y="502">GHI CHÚ: DÁN CẠNH ABS 1mm CẠNH LỘ, VÂN DỌC</text>
+  <rect class="chg-box" id="chg-text" x="62" y="484" width="470" height="26" rx="5"/>
+  <!-- bảng kê -->
+  <g>
+    <rect class="ln thin" x="630" y="50" width="170" height="104"/>
+    <line class="ln thin" x1="630" y1="74" x2="800" y2="74"/><line class="ln thin" x1="630" y1="98" x2="800" y2="98"/><line class="ln thin" x1="630" y1="122" x2="800" y2="122"/><line class="ln thin" x1="670" y1="74" x2="670" y2="154"/>
+    <text class="txt" x="715" y="67" font-size="12" text-anchor="middle" font-weight="700">BẢNG KÊ</text>
+    <text class="txt" x="650" y="91" font-size="12" text-anchor="middle">P1</text><text class="txt" x="680" y="91" font-size="12">Cánh trái · 2</text>
+    <text class="txt" x="650" y="115" font-size="12" text-anchor="middle">P2</text><text class="txt" x="680" y="115" font-size="12">Cánh giữa · 2</text>
+    <text class="txt" x="650" y="139" font-size="12" text-anchor="middle">P3</text><text class="txt" x="680" y="139" font-size="12">Cánh phải · 2</text>
+  </g>
+  <!-- khung tên -->
+  <g>
+    <rect class="ln thin" x="630" y="410" width="170" height="112"/>
+    ${[['DWG_NO','TB-A-01'],['TITLE','Tủ bếp A'],['SCALE','1:20'],['DRAWN_BY','Thợ vẽ 01'],['CHECKED_BY','']].map(([k,v],i)=>`<line class="ln thin" x1="630" y1="${410+i*22.4}" x2="800" y2="${410+i*22.4}"/><text class="txt" x="636" y="${426+i*22.4}" font-size="10.5" opacity=".7">${k}</text><text class="txt" x="716" y="${426+i*22.4}" font-size="12">${v}</text>`).join('')}
+    <rect class="missing" x="712" y="495" width="84" height="20" rx="3"/>
+  </g>
+  <!-- đánh dấu lỗi -->
+  <g class="mk sev-error" data-f="1" tabindex="0" role="button" aria-label="Lỗi 1"><circle class="pulse" cx="596" cy="337" r="14"/><rect class="ring" x="582" y="252" width="56" height="170" rx="6"/><circle class="dot" cx="660" cy="262" r="11"/><text class="num" x="660" y="267">1</text><line x1="638" y1="266" x2="650" y2="264" stroke="var(--err)" stroke-width="1.5"/></g>
+  <g class="mk sev-warn" data-f="2" tabindex="0" role="button" aria-label="Cảnh báo 2"><circle class="pulse" cx="300" cy="497" r="14"/><rect class="ring" x="58" y="480" width="482" height="30" rx="6"/><circle class="dot" cx="552" cy="468" r="11"/><text class="num" x="552" y="473">2</text><line x1="540" y1="482" x2="548" y2="476" stroke="var(--warn)" stroke-width="1.5"/></g>
+  <g class="mk sev-error" data-f="3" tabindex="0" role="button" aria-label="Lỗi 3"><circle class="pulse" cx="310" cy="422" r="14"/><circle class="ring" cx="310" cy="422" r="16"/><circle class="dot" cx="384" cy="428" r="11"/><text class="num" x="384" y="433">3</text><line x1="326" y1="422" x2="373" y2="427" stroke="var(--err)" stroke-width="1.5"/></g>
+  <g class="mk sev-warn" data-f="4" tabindex="0" role="button" aria-label="Cảnh báo 4"><circle class="pulse" cx="754" cy="505" r="14"/><rect class="ring" x="708" y="492" width="92" height="26" rx="5"/><circle class="dot" cx="790" cy="480" r="10"/><text class="num" x="790" y="485">4</text><line x1="786" y1="490" x2="780" y2="492" stroke="var(--warn)" stroke-width="1.5"/></g>
+ </svg>`;
+}
+$('#sheet').innerHTML=drawing();
+const svg=$('#svg');
+
+/* ---------- state ---------- */
+const FIND=[
+ {id:1,rule:'LY-04',sev:'error',title:'Kích thước nằm trên layer “0”',d:'Kích thước 720 nằm trên layer 0, không thuộc nhóm FN-*. In và xuất CNC có thể bỏ sót hoặc sai nét.',fix:'dim',fixTxt:'Chuyển sang layer FN-DIM-N',st:'open',where:'Mặt đứng · kích thước dọc tủ dưới'},
+ {id:2,rule:'TX-02',sev:'warn',title:'Chữ ghi chú cao 3.0, chuẩn là 2.5',d:'Chuẩn furniture-v0 quy định chiều cao chữ ghi chú 2.5 × tỉ lệ viewport. Dòng ghi chú dán cạnh đang cao 3.0.',fix:'text',fixTxt:'Đặt chiều cao chữ = 2.5',st:'open',where:'Ghi chú dưới bản vẽ'},
+ {id:3,rule:'PR-01',sev:'error',title:'Thẻ P4 không có trong bảng kê',d:'Hình có thẻ vị trí P4 (thanh chân tủ) nhưng bảng kê chỉ có P1–P3. Xưởng sẽ không cắt chi tiết này.',fix:null,need:'Cần bạn quyết: thêm dòng P4 vào bảng kê hay xoá thẻ P4?',st:'open',where:'Chân tủ dưới'},
+ {id:4,rule:'SH-05',sev:'warn',title:'Khung tên thiếu CHECKED_BY',d:'Ô người kiểm đang trống. Bản xuống xưởng cần người kiểm ký theo mẫu công ty.',fix:null,need:'Cần người kiểm điền. Trợ lý không tự điền tên.',st:'open',where:'Khung tên'}
+];
+const S={scanned:false,proposed:false,accepted:false,view:'after',sel:null,ops:{dim:true,text:true},v2:false};
+
+/* ---------- files ---------- */
+function filesHTML(){
+  const open=S.scanned?FIND.filter(f=>f.st==='open'):[];
+  const e=open.filter(f=>f.sev==='error').length,w=open.filter(f=>f.sev==='warn').length;
+  let pills;
+  if(!S.scanned)pills=`<span class="pill neu">Chưa quét</span>`;
+  else if(!e&&!w)pills=`<span class="pill ok">${ic('check')}Sạch</span>`;
+  else pills=(e?`<span class="pill err">${ic('x')}${e} lỗi</span>`:'')+(w?`<span class="pill warn">${ic('alert')}${w} cảnh báo</span>`:'');
+  return `
+  <button class="file" aria-current="${!S.v2||S.cur!=='v2'}" data-f="A"><span class="n">${ic('file')}tu-bep-A.dxf</span><span class="m">${pills}</span></button>
+  ${S.v2?`<button class="file child" aria-current="${S.cur==='v2'}" data-f="v2"><span class="n">${ic('file')}tu-bep-A_v2.dxf</span><span class="m"><span class="pill info">Bản mới</span>${pills}</span></button>`:''}
+  <button class="file" data-f="B"><span class="n">${ic('file')}tu-ao-B.dxf</span><span class="m"><span class="pill ok">${ic('check')}Sạch</span></span></button>
+  <button class="file" data-f="C"><span class="n">${ic('file')}ban-lam-viec-C.dxf</span><span class="m"><span class="pill neu">Chưa quét</span></span></button>`;
+}
+function renderFiles(){
+  $('#files').innerHTML=filesHTML();
+  $$('#files .file').forEach(b=>b.onclick=()=>{
+    const k=b.dataset.f;
+    if(k==='B'||k==='C'){toast('Bản mẫu: chỉ mở được tu-bep-A.dxf');return}
+    S.cur=k;$('#cvTitle').textContent=k==='v2'?'tu-bep-A_v2.dxf':'tu-bep-A.dxf';renderFiles();
+  });
+}
+
+/* ---------- canvas sync ---------- */
+function syncCanvas(){
+  const applied=S.accepted?{dim:S.ops.dim,text:S.ops.text}:(S.proposed&&S.view==='after'?{dim:S.ops.dim,text:S.ops.text}:{dim:false,text:false});
+  const doneD=FIND[0].st==='fixed', doneT=FIND[1].st==='fixed';
+  svg.dataset.fixedDim=(applied.dim||doneD)?1:0;
+  svg.dataset.fixedText=(applied.text||doneT)?1:0;
+  svg.dataset.showChg=(S.proposed&&!S.accepted&&S.view==='after')?1:0;
+  svg.dataset.scanned=S.scanned?1:0;
+  $$('.mk').forEach(m=>{const f=FIND.find(x=>x.id==m.dataset.f);m.classList.toggle('fixed',f.st==='fixed');m.classList.toggle('sel',S.sel===f.id);
+    m.setAttribute('aria-label',`${f.sev==='error'?'Lỗi':'Cảnh báo'} ${f.id}: ${f.title}`)});
+  const showCmp=S.proposed&&!S.accepted;
+  $('#cmp').style.display=showCmp?'inline-flex':'none';$('#cmpLabel').style.display=showCmp?'inline':'none';
+  $$('#cmp button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===S.view));
+}
+$$('#cmp button').forEach(b=>b.onclick=()=>{S.view=b.dataset.v;syncCanvas()});
+$$('.mk').forEach(m=>{const f=()=>{select(+m.dataset.f,true)};m.onclick=f;m.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();f()}}});
+
+/* ---------- panels ---------- */
+function tab(p){
+  $$('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.p===p));
+  $$('.pane').forEach(x=>x.classList.toggle('on',x.id==='p-'+p));
+}
+$$('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.p));
+function select(id,openTab){S.sel=id;renderFinds();syncCanvas();if(openTab)tab('finds')}
+
+function renderFinds(){
+  const el=$('#finds');
+  if(!S.scanned){el.innerHTML=`<div class="empty"><b>Chưa quét bản vẽ này</b>Bấm “Quét bản vẽ này” ở tab Trợ lý hoặc nút bên dưới.<br><br><button class="btn-p" id="scanBtn2">${ic('search')}Quét bản vẽ này</button></div>`;$('#scanBtn2').onclick=doScan;$('#cntF').textContent='–';$('#cntF').className='cnt';return}
+  const open=FIND.filter(f=>f.st==='open').length;
+  $('#cntF').textContent=open;$('#cntF').className='cnt'+(open?' hot':'');
+  el.innerHTML=FIND.map(f=>{
+    const fixed=f.st==='fixed';
+    const sevPill=fixed?`<span class="pill ok">${ic('check')}Đã sửa</span>`:f.sev==='error'?`<span class="pill err">${ic('x')}Lỗi</span>`:`<span class="pill warn">${ic('alert')}Cảnh báo</span>`;
+    const proposedNow=S.proposed&&!S.accepted&&f.fix&&S.ops[f.fix];
+    return `<div class="f-card${S.sel===f.id?' sel':''}" data-id="${f.id}" tabindex="0" role="button" aria-label="Lỗi ${f.id}">
+      <div class="f-top"><span class="f-no">${f.id}</span>${sevPill}<span class="f-rule">${f.rule}</span></div>
+      <div class="f-title">${f.title}</div><div class="f-d">${f.d}</div>
+      ${fixed?`<div class="f-meta">${ic('check','color:var(--ok)')}${f.fixTxt}. Đã lưu trong tu-bep-A_v2.dxf</div>`
+       :f.fix?`<div class="f-meta">${ic('gear')}Có thể tự sửa: ${f.fixTxt}${proposedNow?' · <b>đang chờ duyệt</b>':''}</div>`
+       :`<div class="f-meta">${ic('hand','color:var(--warn)')}${f.need}</div>`}
+      <div class="f-meta">${ic('search')}${f.where}</div>
+    </div>`}).join('');
+  $$('.f-card').forEach(c=>{const go=()=>select(+c.dataset.id,false);c.onclick=go;c.onkeydown=e=>{if(e.key==='Enter'){go()}}});
+}
+
+function renderChg(){
+  const list=$('#chgList'),foot=$('#chgFoot');
+  const n=S.proposed&&!S.accepted?2:0;
+  $('#cntC').textContent=S.accepted?'✓':n;
+  if(!S.proposed){list.innerHTML=`<div class="empty"><b>Chưa có thay đổi nào</b>Khi trợ lý đề xuất sửa, từng thay đổi hiện ở đây để bạn xem trước và duyệt.<br>Bản vẽ gốc không bị chạm tới.</div>`;foot.style.display='none';return}
+  if(S.accepted){
+    list.innerHTML=`<div class="op"><div style="display:flex;gap:8px;align-items:center"><span class="pill ok">${ic('check')}Đã lưu</span><b>tu-bep-A_v2.dxf</b></div>
+      <p style="color:var(--text2);margin:8px 0 0;font-size:14.5px">Bản gốc <b>tu-bep-A.dxf</b> giữ nguyên. Bạn có thể bỏ bản mới nếu thấy chưa ổn.</p></div>
+      <div class="op"><b style="font-size:14.5px">Đã tự kiểm sau khi lưu</b><ul class="checks" style="margin-top:8px">
+        <li>${ic('check')}Mở lại tệp mới: không lỗi</li><li>${ic('check')}Số đối tượng: 214 → 214 (không mất đối tượng)</li>
+        <li>${ic('check')}Layer khung tên và phiên bản: không đổi</li><li>${ic('check')}Chạy lại luật: LY-04, TX-02 đã hết; 2 việc còn lại cần người</li></ul></div>`;
+    foot.style.display='block';
+    foot.innerHTML=`<button class="btn-s" id="undoBtn" style="width:100%">${ic('undo')}Bỏ bản v2 (quay về chưa áp dụng)</button>`;
+    $('#undoBtn').onclick=()=>$('#modal').classList.add('on');return}
+  const opCard=(k,f,from,to,what)=>`<div class="op"><label><input type="checkbox" data-op="${k}" ${S.ops[k]?'checked':''}><span><b>${f.title.split(' (')[0].length?what:what}</b><br><span style="font-size:13px;color:var(--text3)" class="f-rule">${f.rule}</span>
+    <span class="diff" style="display:block"><div class="m">− ${from}</div><div class="p">+ ${to}</div></span></span></label></div>`;
+  list.innerHTML=
+    opCard('dim',FIND[0],'DIMENSION “720” · layer: 0','DIMENSION “720” · layer: FN-DIM-N','Đổi layer của 1 kích thước')+
+    opCard('text',FIND[1],'TEXT “GHI CHÚ: DÁN CẠNH…” · cao 3.0','TEXT “GHI CHÚ: DÁN CẠNH…” · cao 2.5','Đổi chiều cao 1 dòng chữ');
+  $$('[data-op]').forEach(c=>c.onchange=()=>{S.ops[c.dataset.op]=c.checked;syncCanvas();renderChg();renderFinds()});
+  const cnt=Object.values(S.ops).filter(Boolean).length;
+  foot.style.display='block';
+  foot.innerHTML=`<div class="safe">${ic('check')}<span>Chưa ghi gì. Khi duyệt, kết quả được lưu thành <b>tệp mới</b>; bản gốc không bị sửa.</span></div>
+    <div style="display:flex;gap:8px"><button class="btn-p" id="okBtn" style="flex:1" ${cnt?'':'disabled'}>${ic('check')}Duyệt ${cnt} thay đổi &amp; lưu v2</button><button class="btn-s" id="noBtn">Bỏ đề xuất</button></div>`;
+  $('#okBtn').onclick=accept;
+  $('#noBtn').onclick=()=>{S.proposed=false;S.view='after';renderAll();say('ai','<p>Đã bỏ đề xuất. Bản vẽ không thay đổi gì.</p>')};
+}
+
+/* ---------- chat ---------- */
+const log=$('#log');
+function scroll(){log.scrollTop=log.scrollHeight}
+function say(who,html){const d=document.createElement('div');d.className='msg '+who;d.innerHTML=html;log.appendChild(d);scroll()}
+function tool(name,args,ms,out){const d=document.createElement('details');d.className='tool';d.innerHTML=`<summary><span class="ok">${ic('check')}</span><code style="font-family:var(--mono)">${name}</code><span style="margin-left:auto">${ms}</span></summary><pre>${args}\n→ ${out}</pre>`;log.appendChild(d);scroll()}
+function typing(){const d=document.createElement('div');d.className='typing';d.innerHTML='<i></i><i></i><i></i> Đang xử lý';log.appendChild(d);scroll();return d}
+function later(fn,ms){return new Promise(r=>setTimeout(()=>{fn();r()},ms))}
+let busy=false;
+async function step(ms,fn){const t=typing();await later(()=>{},ms);t.remove();fn()}
+
+function suggestions(){
+  const s=[];
+  if(!S.scanned)s.push(['Quét bản vẽ này',doScan,true],['Bản vẽ này có gì?',doAbout]);
+  else if(!S.proposed&&!S.accepted)s.push(['Sửa các lỗi tự sửa được',doPropose,true],['Giải thích lỗi TX-02',doExplain],['Soạn ghi chú bàn giao cho xưởng',doHandover]);
+  else if(S.proposed&&!S.accepted)s.push(['Mở tab Thay đổi',()=>tab('chg'),true],['Giải thích lỗi TX-02',doExplain]);
+  else s.push(['Soạn ghi chú bàn giao cho xưởng',doHandover,true],['Quét lại',doRescan],['Giải thích lỗi PR-01',doExplainPR]);
+  $('#sug').innerHTML=s.map(([t,,p])=>`<button class="${p?'primary':''}">${t}</button>`).join('');
+  $$('#sug button').forEach((b,i)=>b.onclick=()=>{ if(busy)return; say('me',s[i][0]); s[i][1]() });
+}
+async function run(fn){busy=true;await fn();busy=false;suggestions()}
+
+function doAbout(){return run(async()=>{
+  await step(500,()=>{tool('cadguard.get_model_summary','{ "file": "#a91f" }','0,3 giây','214 đối tượng · 9 layer · 1 khung tên · 3 cánh tủ dưới · 3 cánh tủ trên');
+    say('ai','<p>Đây là mặt đứng <b>tủ bếp trên và dưới</b>, 3 khoang mỗi tầng, tỉ lệ 1:20. Có bảng kê 3 dòng (P1–P3) và 1 khung tên.</p><p>Mình chưa quét lỗi. Bạn muốn mình quét theo chuẩn furniture-v0 không?</p>')})})}
+
+function doScan(){ if(busy)return; if(!$('#log .msg.me:last-child'))say('me','Quét bản vẽ này'); tab('chat'); return run(async()=>{
+  await step(700,()=>{
+    S.scanned=true;
+    tool('cadguard.audit','{ "file": "#a91f", "standard": "furniture-v0.1.0" }','1,2 giây','16 luật chạy · 4 phát hiện · 0 luật bị bỏ qua');
+    renderAll();
+    say('ai',`<p>Mình quét xong trong 1,2 giây. Có <b>4 phát hiện</b>: 2 lỗi và 2 cảnh báo. Đã đánh dấu số 1–4 trên bản vẽ.</p>
+      <p>Trong đó <b>2 việc mình sửa được</b> (1 và 2). 2 việc còn lại cần người quyết hoặc điền (3 và 4).</p>
+      <div class="src">Căn cứ: kết quả bộ luật LY-04, TX-02, PR-01, SH-05. Việc đúng/sai do luật quyết, không phải do mô hình.</div>`);
+    tab('chat')})})}
+
+function doPropose(){return run(async()=>{
+  await step(800,()=>{
+    S.proposed=true;S.view='after';S.ops={dim:true,text:true};
+    tool('cadguard.propose_changeset','{ "findings": [1, 2], "dry_run": true }','0,6 giây','2 thao tác · chưa ghi tệp nào');
+    renderAll();tab('chg');
+    say('ai',`<p>Mình đề xuất <b>2 thay đổi</b> và <b>chưa ghi gì</b>. Bản vẽ đang hiện chế độ “Sau” để bạn xem; bấm “Trước” để so sánh.</p>
+      <p>Hãy xem tab <b>Thay đổi</b>, bỏ tick việc nào bạn chưa muốn, rồi duyệt.</p>
+      <p>Hai việc còn lại mình <b>không tự làm</b>: thêm dòng P4 vào bảng kê (bạn quyết thêm hay xoá thẻ) và điền người kiểm.</p>`)})})}
+
+async function accept(){ if(busy)return; busy=true; $('#okBtn').disabled=true;
+  say('me','Duyệt và lưu');
+  await step(900,()=>{
+    S.accepted=true;S.v2=true;S.cur='v2';$('#cvTitle').textContent='tu-bep-A_v2.dxf';
+    if(S.ops.dim)FIND[0].st='fixed'; if(S.ops.text)FIND[1].st='fixed';
+    tool('cadguard.apply_changeset','{ "ops": '+Object.values(S.ops).filter(Boolean).length+', "out": "tu-bep-A_v2.dxf" }','0,9 giây','đã ghi tệp mới');
+    tool('cadguard.validate_output','{ "file": "tu-bep-A_v2.dxf" }','1,1 giây','mở lại OK · 214→214 đối tượng · layer bảo vệ không đổi · luật chạy lại');
+    renderAll();tab('chg');
+    const left=FIND.filter(f=>f.st==='open').length;
+    say('ai',`<p>Đã lưu <b>tu-bep-A_v2.dxf</b>. Mình mở lại tệp mới và chạy lại luật: không mất đối tượng nào. Còn <b>${left} việc cần người</b> (số 3 và 4).</p>`);
+    toast('Đã lưu tu-bep-A_v2.dxf · bản gốc không đổi')});
+  busy=false;suggestions()}
+
+function doExplain(){return run(async()=>{
+  await step(600,()=>{tool('cadguard.explain_rule','{ "rule": "TX-02" }','0,1 giây','đã lấy mô tả luật và tham số');
+    say('ai',`<p><b>TX-02 · Chiều cao chữ = giá trị chuẩn × tỉ lệ viewport.</b></p>
+      <p>Chữ ghi chú đang cao 3.0 trong khi chuẩn là 2.5. Khi in ra khổ giấy, chữ to hơn các bản khác trong cùng bộ, nhìn không đồng bộ và có thể đè lên đường nét.</p>
+      <p>Đây là lỗi mức <b>cảnh báo</b>, sửa được tự động và an toàn: chỉ đổi 1 thuộc tính.</p>
+      <div class="src">Căn cứ: standards/furniture-v0.yaml · TX-02</div>`)})})}
+
+function doExplainPR(){return run(async()=>{
+  await step(600,()=>{tool('cadguard.explain_rule','{ "rule": "PR-01" }','0,1 giây','đã lấy mô tả luật');
+    say('ai',`<p><b>PR-01 · Mỗi thẻ vị trí có trong bảng kê và ngược lại.</b></p>
+      <p>Thẻ <b>P4</b> (thanh chân tủ) có trên hình nhưng không có trong bảng kê. Có hai khả năng: thiếu dòng bảng kê, hoặc thẻ P4 thừa. Mình không đoán thay bạn vì sai một trong hai đều làm xưởng cắt sai.</p>`)})})}
+
+function doHandover(){return run(async()=>{
+  await step(800,()=>{S.handover=true;renderHome();tool('cadguard.get_handover_data','{ "file": "#a91f" }','0,4 giây','7 chi tiết · 1 quy cách dán cạnh · vân dọc');
+    say('ai',`<p>Đây là ghi chú bàn giao cho xưởng, tạo từ dữ liệu có cấu trúc của bản vẽ:</p>
+      <div class="note-card"><div class="lbl">${ic('info')}Sinh tự động từ dữ liệu, không phải văn bản tự do của mô hình</div>
+        <ul><li>Dán cạnh ABS <b>1 mm</b> ở cạnh lộ</li><li>Vân gỗ chạy <b>dọc</b> theo chiều cao tủ</li><li>6 cánh: 3 trên, 3 dưới (P1–P3, mỗi loại 2)</li><li style="color:var(--warn-fg);background:var(--warn-bg);border-radius:4px;padding:0 6px;list-style:none;margin-left:-14px">${ic('alert','width:14px;height:14px;vertical-align:-2px;margin-right:4px')}Chi tiết P4 chưa có trong bảng kê, cần xác nhận trước khi cắt</li></ul>
+        <button class="btn-s btn-sm" onclick="toast('Đã sao chép (bản mẫu)')">${ic('copy')}Sao chép</button></div>`)})})}
+
+function doRescan(){return run(async()=>{
+  await step(700,()=>{tool('cadguard.audit','{ "file": "tu-bep-A_v2.dxf" }','1,1 giây','16 luật · 2 phát hiện còn lại');
+    say('ai','<p>Quét lại <b>tu-bep-A_v2.dxf</b>: còn <b>2 phát hiện</b> (PR-01 và SH-05), cả hai cần người xử lý. LY-04 và TX-02 đã sạch.</p>')})})}
+
+$('#form').onsubmit=e=>{e.preventDefault();const v=$('#inp').value.trim();if(!v||busy)return;$('#inp').value='';say('me',v);
+  const t=v.toLowerCase();
+  if(/quét|kiểm|audit/.test(t)&&!S.scanned)doScan();
+  else if(/sửa|đổi|chữ|2\.5/.test(t)&&S.scanned&&!S.accepted)doPropose();
+  else if(/ghi chú|bàn giao|xưởng/.test(t))doHandover();
+  else if(/tx-02|giải thích/.test(t))doExplain();
+  else run(async()=>{await step(500,()=>say('ai','<p>Đây là bản mẫu giao diện nên trợ lý chỉ trả lời các gợi ý có sẵn bên dưới. Bản thật sẽ hiểu câu lệnh tự nhiên, rồi luôn đi qua bước xem trước và duyệt.</p>'))})};
+
+/* ---------- misc ---------- */
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2600)}
+$('#mNo').onclick=()=>$('#modal').classList.remove('on');
+$('#mYes').onclick=()=>{$('#modal').classList.remove('on');
+  S.accepted=false;S.proposed=false;S.v2=false;S.cur='A';FIND.forEach(f=>f.st='open');S.sel=null;$('#cvTitle').textContent='tu-bep-A.dxf';
+  renderAll();say('ai','<p>Đã bỏ <b>tu-bep-A_v2.dxf</b>. Mọi thứ quay về như lúc vừa quét; bản gốc không bị đụng tới.</p>');suggestions();toast('Đã bỏ bản v2')};
+$('#scanAll').onclick=()=>toast('Bản bản mẫu: quét hàng loạt sẽ chạy nền và cho báo cáo tổng hợp');
+function renderAll(){renderFiles();renderFinds();renderChg();syncCanvas();renderHome()}
+
+/* ---------- màn thợ vẽ: Việc của tôi ---------- */
+function ck(done,txt){return `<li class="${done?'done':'todo'}">${done?ic('check'):ic('x')}<span>${txt}${done?'':''}</span></li>`}
+function renderHome(){
+  const open=FIND.filter(f=>f.st==='open'), need=S.scanned?open.filter(f=>!f.fix):[];
+  const autoFix=S.scanned?open.filter(f=>f.fix).length:0;
+  const clean=S.scanned&&open.length===0;
+  $('#homeH').textContent='Chào buổi sáng, thợ vẽ';
+  $('#homeP').textContent=(need.length?`Bạn có ${need.length} việc cần quyết, `:'')+'1 bản sẵn sàng bàn giao xưởng'+(S.scanned?'':' và 2 bản chưa quét')+'.';
+  const aState=!S.scanned?['neu','Chưa quét']:clean?['ok','Sạch lỗi']:['warn',`${open.length} việc còn lại`];
+  const decide=need.length?`<div class="decide">${ic('hand')}<div><b>Cần bạn quyết:</b><br>${need.map(f=>`${f.rule} · ${f.title}`).join('<br>')}</div></div>`:'';
+  const A=`<article class="dwg"><div class="dwg-h"><span class="nm">${ic('file')}tu-bep-A.dxf</span><span class="stage pill ${aState[0]}">${aState[0]==='ok'?ic('check'):aState[0]==='warn'?ic('alert'):''}${aState[1]}</span></div>
+    ${decide}
+    <ul class="ready">${ck(clean,S.scanned?(clean?'Hết lỗi theo luật':`Còn ${open.length} lỗi/cảnh báo`+(autoFix?` (${autoFix} tự sửa được)`:'')):'Chưa quét lỗi')}${ck(!!S.handover,'Ghi chú bàn giao cho xưởng')}${ck(false,'Người kiểm đã ký')}${ck(false,'Gói bàn giao đã tạo')}</ul>
+    <div class="dwg-f"><button class="btn-p" data-open="work">${S.scanned?'Mở và xử lý':'Mở và quét'}</button><span class="why">Chưa thể bàn giao: ${S.scanned?'còn lỗi và thiếu người kiểm':'chưa quét'}.</span></div></article>`;
+  const B=`<article class="dwg"><div class="dwg-h"><span class="nm">${ic('file')}tu-ao-B.dxf</span><span class="stage pill info">Chờ người kiểm</span></div>
+    <ul class="ready">${ck(true,'Hết lỗi theo luật')}${ck(true,'Ghi chú bàn giao cho xưởng')}${ck(false,'Người kiểm đã ký')}${ck(false,'Gói bàn giao đã tạo')}</ul>
+    <div class="dwg-f"><button class="btn-s" disabled>Tạo gói bàn giao</button><span class="why">Chờ người kiểm ký trước khi xuống xưởng.</span></div></article>`;
+  const D=`<article class="dwg"><div class="dwg-h"><span class="nm">${ic('file')}ke-tivi-D.dxf</span><span class="stage pill ok">${ic('check')}Sẵn sàng bàn giao</span></div>
+    <ul class="ready">${ck(true,'Hết lỗi theo luật')}${ck(true,'Ghi chú bàn giao cho xưởng')}${ck(true,'Người kiểm đã ký')}${ck(!!S.packD,'Gói bàn giao đã tạo')}</ul>
+    <div class="dwg-f"><button class="btn-p" id="packBtn" ${S.packD?'disabled':''}>${S.packD?'Đã tạo gói':'Tạo gói bàn giao'}</button><span class="why">${S.packD?'Đã lưu thành tệp mới trong thư mục bàn giao.':'Chưa ghi gì cho tới khi bạn bấm.'}</span></div>
+    <div class="pack${S.packD?' on':''}"><b>Gói bàn giao gồm</b><ul><li>ke-tivi-D_xuong.dxf (bản chuẩn hoá, tệp mới)</li><li>ke-tivi-D_ghi-chu.pdf (ghi chú bàn giao)</li><li>ke-tivi-D_bao-cao.html (kết quả kiểm theo furniture-v0.1.0)</li></ul><span style="font-size:13.5px;color:var(--text3)">Bản gốc không bị sửa. Gói này là tệp mới có mã phiên bản.</span></div></article>`;
+  const C=`<article class="dwg"><div class="dwg-h"><span class="nm">${ic('file')}ban-lam-viec-C.dxf</span><span class="stage pill neu">Chưa quét</span></div>
+    <div class="dwg-f" style="margin-top:10px"><button class="btn-s" data-open="work">Mở và quét</button><span class="why">Bản đang vẽ, chưa có kết quả kiểm.</span></div></article>`;
+  $('#homeList').innerHTML=A+D+B+C;
+  $$('[data-open]').forEach(b=>b.onclick=()=>go(b.dataset.open));
+  const p=$('#packBtn'); if(p)p.onclick=()=>{S.packD=true;renderHome();toast('Đã tạo gói bàn giao ke-tivi-D (bản mẫu)')};
+}
+$('#askForm').onsubmit=e=>{e.preventDefault();const v=$('#askIn').value.trim();if(!v)return;$('#askIn').value='';go('work');tab('chat');$('#inp').value=v;$('#form').requestSubmit()};
+
+/* ---------- connect / overview content ---------- */
+const CLI=[
+ {n:'Claude Code',s:['ok','Đã đăng nhập'],d:'Dùng tài khoản của chính bạn (gói hoặc khoá API). cad-guard chỉ mở CLI; cửa sổ đăng nhập là của CLI.',b:'Kiểm tra lại'},
+ {n:'Codex CLI',s:['warn','Cần đăng nhập'],d:'Bấm để mở cửa sổ đăng nhập của Codex. Trên máy không có trình duyệt dùng mã thiết bị.',b:'Mở đăng nhập'},
+ {n:'Antigravity CLI',s:['neu','Chưa cài'],d:'Chưa tìm thấy lệnh agy trên máy này.',b:'Xem hướng dẫn cài'},
+ {n:'OpenCode',s:['ok','Đã cài'],d:'Cầu nối tới nhiều nhà cung cấp bằng khoá API. Dùng cho chế độ khoá của công ty.',b:'Mở cấu hình'}
+];
+$('#cliCards').innerHTML=CLI.map(c=>`<div class="card prov"><div class="hd"><span class="nm">${c.n}</span><span class="pill ${c.s[0]}">${c.s[0]==='ok'?ic('check'):c.s[0]==='warn'?ic('alert'):ic('x')}${c.s[1]}</span></div><p class="ds">${c.d}</p><div class="row"><button class="btn-s btn-sm">${c.b}</button></div></div>`).join('');
+const API=[['Anthropic','sk-ant-••••••••••••3f2a','ok','Đã kiểm tra'],['OpenAI','','neu','Chưa nhập khoá'],['Google Gemini','','neu','Chưa nhập khoá'],['OpenRouter','','neu','Chưa nhập khoá · bên trung gian, mặc định tắt']];
+$('#apiCards').innerHTML=API.map(([n,k,s,t])=>`<div class="card prov"><div class="hd"><span class="nm">${n}</span><span class="pill ${s}">${s==='ok'?ic('check'):ic('x')}${t}</span></div>
+  <div class="row"><input type="password" value="${k}" placeholder="Dán khoá API" aria-label="Khoá API ${n}"><button class="btn-s btn-sm">${k?'Đổi':'Lưu'}</button></div></div>`).join('');
+const BARS=[['LY-04 · Layer chưa định nghĩa',7],['TX-02 · Chiều cao chữ',6],['PR-01 · Thẻ vị trí – bảng kê',4],['SH-05 · Thuộc tính khung tên',3],['DH-03 · Đường bao tấm khép kín',2]];
+$('#bars').innerHTML=BARS.map(([n,v])=>`<div class="bar"><span>${n}</span><span class="tr"><i style="width:${v/7*100}%"></i></span><span class="nn">${v}</span></div>`).join('');
+
+/* ---------- init ---------- */
+S.cur='A';
+say('ai','<p>Xin chào. Mình đang xem <b>tu-bep-A.dxf</b> (214 đối tượng). Mình có thể quét lỗi theo chuẩn công ty, giải thích, và đề xuất sửa. Mọi sửa đổi đều ghi ra <b>tệp mới</b> sau khi bạn duyệt.</p>');
+renderAll();suggestions();
+if(q.get('demo')){
+  (async()=>{ const d=q.get('demo'); busy=false;
+    if(d==='scan'||d==='propose'||d==='accept'){S.scanned=true;FIND.forEach(f=>f.st='open');renderAll();}
+    if(d==='propose'||d==='accept'){S.proposed=true;S.view='after';renderAll();tab('chg')}
+    if(d==='accept'){S.accepted=true;S.v2=true;S.cur='v2';FIND[0].st='fixed';FIND[1].st='fixed';renderAll();$('#cvTitle').textContent='tu-bep-A_v2.dxf'}
+    if(d==='scan'){tab('finds');select(2,false)}
+    suggestions(); if(q.get('go'))go(q.get('go')); })();
+} else if(q.get('go')) go(q.get('go'));
+</script>
+</body>
+</html>

@@ -154,5 +154,10 @@ def read_dxf(path: str | Path) -> DrawingModel:
     p = Path(path)
     data = p.read_bytes()
     h = hashlib.sha256(data).hexdigest()[:16]
-    doc = ezdxf.readfile(p)
+    try:
+        doc = ezdxf.readfile(p)
+    except ezdxf.DXFError:  # DXF do bộ chuyển DWG sinh ra có thể lệch cấu trúc: thử đường khôi phục
+        from ezdxf import recover
+
+        doc, _auditor = recover.readfile(str(p))
     return build_model(doc, file_hash=h)

@@ -20,3 +20,6 @@ report.json
 
 # Công cụ
 .mca/
+
+# Dữ liệu mẫu thật của khách (NDA) — không bao giờ vào repo
+Data sample/

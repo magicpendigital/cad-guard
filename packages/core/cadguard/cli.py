@@ -6,6 +6,7 @@ Mã thoát của `audit`: 0 = không có lỗi mức E; 1 = có lỗi mức E; 2
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -93,6 +94,28 @@ def cmd_rules(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_profile(args: argparse.Namespace) -> int:
+    """Hồ sơ số liệu cho bản vẽ thật: chỉ số tổng hợp, khoá là mã băm, không tên tệp/layer/nội dung."""
+    from .profile import profile_dxf, profile_dxf_stream
+
+    out: dict[str, dict] = {}
+    for f in _collect(args.paths):
+        try:
+            prof = profile_dxf_stream(f) if args.stream else profile_dxf(f)
+        except Exception as exc:  # noqa: BLE001
+            print(f"Không lập được hồ sơ một tệp: {type(exc).__name__}", file=sys.stderr)
+            continue
+        key = prof.get("file_hash") or hashlib.sha256(Path(f).name.encode()).hexdigest()[:12]
+        out["d_" + key] = prof
+    text = json.dumps(out, ensure_ascii=False, indent=2)
+    if args.out:
+        Path(args.out).write_text(text, encoding="utf-8")
+        print(f"Đã ghi hồ sơ {len(out)} tệp: {args.out}")
+    else:
+        print(text)
+    return 0 if out else 2
+
+
 def cmd_fixtures(args: argparse.Namespace) -> int:
     paths = fixtures.make_all(Path(args.out_dir))
     for p in paths:
@@ -125,6 +148,12 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("rules", help="liệt kê luật và tình trạng cài đặt")
     common(r)
     r.set_defaults(fn=cmd_rules)
+
+    pr = sub.add_parser("profile", help="hồ sơ số liệu của DXF (chỉ số tổng hợp, ẩn danh)")
+    pr.add_argument("paths", nargs="+")
+    pr.add_argument("--out", help="ghi JSON ra tệp")
+    pr.add_argument("--stream", action="store_true", help="đọc theo dòng cho tệp rất lớn (ít bộ nhớ)")
+    pr.set_defaults(fn=cmd_profile)
 
     f = sub.add_parser("fixtures", help="sinh lại DXF tổng hợp")
     f.add_argument("out_dir", nargs="?", default="fixtures/synthetic")
