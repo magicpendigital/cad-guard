@@ -2,13 +2,13 @@ import pytest
 
 from cadguard.dxf_reader import read_dxf
 from cadguard.model import DrawingModel, EntityRec
-from cadguard.rules import REGISTRY, Ctx
+from cadguard.rules import REGISTRY, Ctx, Skip
 from cadguard.runner import audit_model
 
 # Mỗi tệp xấu phải gây ĐÚNG tập mã luật này (không hơn, không kém).
 EXPECTED = {
     "ok_sheet.dxf": set(),
-    "model_features.dxf": {"LY-01", "LY-03", "TX-08"},
+    "model_features.dxf": {"LY-01", "TX-08"},
     "bad_layers.dxf": {"LY-01", "LY-03", "LY-04", "LY-08", "LY-09"},
     "bad_titleblock.dxf": {"SH-04", "SH-05"},
     "bad_geometry.dxf": {"DH-01", "DH-02", "DH-09", "DH-10"},
@@ -56,3 +56,14 @@ def test_broken_rule_is_reported_not_fatal(standard, monkeypatch):
     monkeypatch.setitem(REGISTRY, "DH-09", boom)
     res = audit_model(DrawingModel(), standard)
     assert any(r == "DH-09" and "lỗi nội bộ" in why for r, why in res.skipped)
+    assert "DH-09" in res.internal_errors
+
+
+def test_skipped_rule_is_not_an_internal_error(standard, monkeypatch):
+    def skip(model, ctx):
+        raise Skip("thiếu dữ liệu")
+
+    monkeypatch.setitem(REGISTRY, "DH-09", skip)
+    res = audit_model(DrawingModel(), standard)
+    assert ("DH-09", "thiếu dữ liệu") in res.skipped
+    assert "DH-09" not in res.internal_errors

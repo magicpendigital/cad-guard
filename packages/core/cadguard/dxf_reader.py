@@ -109,7 +109,7 @@ def _viewport_scale(vp) -> float | None:
 
 
 def _count_entity(stats: SpaceStats, e) -> None:
-    """??m b?n ghi ch?nh, kh?ng bung n?i dung INSERT hay ??i t??ng con."""
+    """Đếm bản ghi chính, không bung nội dung INSERT hay đối tượng con."""
     t = e.dxftype()
     if t in {"ATTRIB", "VERTEX", "SEQEND"}:
         return
@@ -132,7 +132,7 @@ def _count_entity(stats: SpaceStats, e) -> None:
 
 
 def _block_depth(name: str, blocks: dict[str, BlockRec], visiting: set[str]) -> int:
-    # M?t c?nh d?n t?i kh?i ?? n?m tr?n ???ng ?i b? c?t, kh?ng t?nh c?nh ??.
+    # Một cạnh dẫn tới khối đã nằm trên đường đi bị cắt, không tính cạnh đó.
     block = blocks[name]
     visiting = visiting | {name}
     return max((1 + _block_depth(child, blocks, visiting)
@@ -218,7 +218,7 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
             continue
     m.block_layers = sorted(block_layers)
     lookup = {b.name.casefold(): b for b in m.blocks if not b.is_layout}
-    # T?n kh?i trong DXF kh?ng ph?n bi?t ch? hoa/th??ng.
+    # Tên khối trong DXF không phân biệt chữ hoa/thường.
     graph = {key: b.model_copy(update={"child_blocks": {n.casefold(): v for n, v in b.child_blocks.items()}}) for key, b in lookup.items()}
     for key, block in lookup.items():
         block.depth = _block_depth(key, graph, set())

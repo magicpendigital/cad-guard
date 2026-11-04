@@ -47,7 +47,7 @@ class EntityRec(BaseModel):
 
 
 class StyleRec(BaseModel):
-    """Ki?u ch? v? ph?n lo?i ph?ng theo ph?n m? r?ng."""
+    """Kiểu chữ và phân loại phông theo phần mở rộng."""
     name: str
     font: str = ""
     bigfont: str = ""
@@ -55,7 +55,7 @@ class StyleRec(BaseModel):
 
 
 class BlockRec(BaseModel):
-    """??nh ngh?a kh?i v? s? ??i t??ng tr?c ti?p trong kh?i."""
+    """Định nghĩa khối và số đối tượng trực tiếp trong khối."""
     name: str
     kind: Literal["named", "anon_U", "anon_D", "anon_X", "anon_A", "anon_other"]
     is_xref: bool = False
@@ -68,7 +68,7 @@ class BlockRec(BaseModel):
 
 
 class SpaceStats(BaseModel):
-    """S? li?u ??i t??ng tr?c ti?p trong m?t ph?m vi."""
+    """Số liệu đối tượng trực tiếp trong một phạm vi."""
     entities: int = 0
     by_type: dict[str, int] = Field(default_factory=dict)
     by_layer: dict[str, int] = Field(default_factory=dict)
@@ -84,7 +84,7 @@ class SpaceStats(BaseModel):
 
 
 class ModelStats(BaseModel):
-    """S? li?u t?ng h?p v? ngu?n c?a b? ??c."""
+    """Số liệu tổng hợp và nguồn của bộ đọc."""
     source: Literal["ezdxf", "stream"]
     modelspace: SpaceStats
     paperspace: SpaceStats

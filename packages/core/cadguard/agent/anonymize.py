@@ -1,4 +1,4 @@
-﻿"""Ẩn danh tên trong một phiên."""
+"""Ẩn danh tên trong một phiên."""
 import hashlib
 import secrets
 

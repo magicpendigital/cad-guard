@@ -118,7 +118,7 @@ def audit(ctx: ToolContext, file: str, standard: str = "furniture-v0") -> dict:
     anon = ctx.anonymizer
     findings = [{"rule_id": f.rule_id, "severity": f.severity, "message": anon.scrub_text(f.message, names), "layout": anon.token("layout", f.layout) if f.layout else None, "layer": anon.token("layer", f.layer) if f.layer else None, "count": f.count, "handles": f.handles} for f in result.findings[:max(0, ctx.max_findings)]]
     counts = {s: sum(f.severity == s for f in result.findings) for s in ("E", "W", "I")}
-    skipped = [{"rule_id": rule, "reason": ("L?i n?i b? c?a lu?t." if reason.startswith("l?i n?i b?") else anon.scrub_text(reason, names))} for rule, reason in result.skipped]
+    skipped = [{"rule_id": rule, "reason": ("Lỗi nội bộ của luật." if rule in result.internal_errors else anon.scrub_text(reason, names))} for rule, reason in result.skipped]
     return {"file": _file_id(ctx, path), "standard": std.name, "version": std.version, "counts": counts, "rules_run": result.rules_run, "skipped": skipped, "findings": findings, "truncated": len(result.findings) > max(0, ctx.max_findings)}
 
 

@@ -133,7 +133,7 @@ def make_bad_parts(path: Path) -> None:
 
 
 def make_model_features(path: Path) -> None:
-    """B?n t?ng h?p cho giao di?n th?ng k? v? ??nh ngh?a kh?i."""
+    """Synthetic drawing with model-space and block features."""
     doc = _base()
     msp = _good_geometry(doc)
     doc.layers.add("XR1|WALL")
@@ -149,7 +149,8 @@ def make_model_features(path: Path) -> None:
     doc.blocks.new_anonymous_block("U").add_line((0, 0), (1, 1), dxfattribs={"layer": "XR2$0$DOOR"})
     msp.add_blockref("FEATURE_A", (0, 0), dxfattribs={"layer": "FN-PART-OUTL"})
     msp.add_line((20, 20), (30, 30), dxfattribs={"layer": "FN-PART-OUTL", "color": 1, "lineweight": 50})
-    msp.add_wipeout([(0, 0), (5, 0), (5, 5), (0, 5)], dxfattribs={"layer": "FN-PART-OUTL"})
+    wipeout = msp.add_wipeout([(0, 0), (5, 0), (5, 5), (0, 5)])
+    wipeout.dxf.layer = "FN-PART-OUTL"
     image_def = doc.add_image_def(filename="synthetic.png", size_in_pixel=(10, 10))
     msp.add_image(image_def, insert=(40, 40), size_in_units=(10, 10), dxfattribs={"layer": "FN-PART-OUTL"})
     msp.add_linear_dim(base=(0, -400), p1=(0, 0), p2=(600, 0), text="999", dxfattribs={"layer": "FN-ANNO-DIMS"}).render()

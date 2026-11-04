@@ -1,4 +1,4 @@
-﻿import json
+import json
 from pathlib import Path
 import ezdxf
 import pytest
@@ -24,6 +24,19 @@ def test_audit(ctx):
     result = audit(ctx, "bad_layers.dxf")
     assert result["rules_run"] and result["findings"]
     assert sum(result["counts"].values()) == len(result["findings"])
+
+
+def test_audit_hides_internal_exception(ctx, monkeypatch):
+    from cadguard.rules import REGISTRY
+
+    def boom(model, rule_ctx):
+        raise RuntimeError(r"C:\secret\khach_A.dxf")
+
+    monkeypatch.setitem(REGISTRY, "DH-09", boom)
+    result = audit(ctx, "ok_sheet.dxf")
+    assert next(item for item in result["skipped"] if item["rule_id"] == "DH-09")["reason"] == "Lỗi nội bộ của luật."
+    encoded = json.dumps(result, ensure_ascii=False)
+    assert "secret" not in encoded and "khach_A" not in encoded
 
 
 def test_explain(ctx):
