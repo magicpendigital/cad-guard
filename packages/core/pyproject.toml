@@ -26,6 +26,10 @@ cadguard = "cadguard.cli:main"
 [tool.setuptools.packages.find]
 include = ["cadguard*"]
 
+[tool.setuptools.package-data]
+# Giao diện cục bộ `cadguard app`: tệp tĩnh + cấu hình phòng.
+"cadguard.app" = ["departments.json", "static/*.html", "static/*.css", "static/*.js"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Test "slow" (tệp DXF tổng hợp >= 100 MB) không chạy mặc định; chạy bằng: python scripts/test.py -m slow

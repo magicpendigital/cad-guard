@@ -23,6 +23,14 @@ cd packages\core
 
 Lệnh khác: `python -m cadguard rules` (danh sách luật), `python -m cadguard stats --json` (số tổng hợp cho MCA).
 
+### Giao diện cục bộ trong trình duyệt
+
+```powershell
+python -m cadguard app --workspace D:\CadGuardData\phien-01 [--profile ho-so.yaml]
+```
+
+Mở giao diện chỉ trên máy này (`127.0.0.1`, cổng ngẫu nhiên, mã phiên trong địa chỉ in ra): chọn phòng (Thiết kế / Kỹ thuật / Lập trình sản xuất), xem lỗi theo mức E/W/I, đề xuất sửa → xem trước → áp dụng ra **tệp mới** khi bạn bấm xác nhận → hoàn tác; tab Luật áp dụng (chỉ đọc); trò chuyện với trợ lý AI bằng hạn mức CLI đã đăng nhập hoặc khoá API của bạn (khoá đặt bằng `cadguard keys set …`, không nhập trong trình duyệt). Không cần phụ thuộc thêm. Chi tiết: `docs/app.md`.
+
 ### Máy chủ MCP chỉ đọc cho trợ lý AI
 
 Cài SDK (extras `[agent]`): `pip install cadguard[agent]`, hoặc trong repo `python scripts/test.py --extras agent`. Chạy:
@@ -48,6 +56,8 @@ python -m cadguard mcp --workspace D:\CadGuardData\phien-01
 | **Mới dùng GitHub: commit, push từng bước** | `docs/guides/github-tu-dau.md` |
 | **Các bước tiếp theo: chạy bootstrap, đăng ký MCA, P0, giao brief** | `docs/guides/buoc-tiep-theo.md` |
 | **Các bước tiếp theo bằng giao diện (Claude Code + mca HQ), không gõ lệnh** | `docs/guides/buoc-tiep-theo-giao-dien.md` |
+| Giao diện cục bộ `cadguard app` | `docs/app.md` |
+| Trợ lý AI (CLI theo hạn mức, API bằng khoá của bạn) | `docs/assistant.md` |
 | Giấy phép các thành phần | `docs/licenses.md` |
 | Quy tắc cho agent làm việc trong repo | `AGENTS.md` |
 

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cad-guard</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<svg id="svgns" hidden aria-hidden="true"></svg>
+<a class="skip" href="#main">Bỏ qua tới nội dung chính</a>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand"><span class="logo" data-icon="shield"></span>cad-guard</div>
+    <nav class="nav" role="tablist" aria-label="Màn hình">
+      <button role="tab" id="tab-work" aria-selected="true" aria-controls="s-work" data-go="work"><span data-icon="pen"></span>Bản vẽ</button>
+      <button role="tab" id="tab-rules" aria-selected="false" aria-controls="s-rules" data-go="rules" tabindex="-1"><span data-icon="list"></span>Luật áp dụng</button>
+      <button role="tab" id="tab-connect" aria-selected="false" aria-controls="s-connect" data-go="connect" tabindex="-1"><span data-icon="plug"></span>Kết nối AI</button>
+    </nav>
+    <div class="spacer"></div>
+    <span class="chip" id="dataChip" title="Trợ lý thấy gì"><span data-icon="lock"></span>Dữ liệu: <b id="dataMode">…</b></span>
+    <span class="chip" id="profileChip" title="Hồ sơ công ty đang áp"><span data-icon="doc"></span>Hồ sơ: <b id="profileName">…</b></span>
+    <label class="chip sel-chip" for="deptSel"><span data-icon="building"></span>Phòng:
+      <select id="deptSel" aria-label="Chọn phòng"></select>
+    </label>
+    <button class="iconbtn" id="themeBtn" type="button" aria-label="Đổi giao diện sáng/tối" title="Sáng / tối"><span data-icon="moon"></span></button>
+  </header>
+
+  <div class="banner warn" id="anonBanner" hidden role="alert"></div>
+  <div class="banner err" id="tokenBanner" hidden role="alert">Thiếu hoặc sai mã phiên. Mở đúng địa chỉ (có <code>?t=…</code>) mà lệnh <code>cadguard app</code> in ra trong terminal.</div>
+
+  <!-- ============ BẢN VẼ ============ -->
+  <main class="screen on" id="s-work" role="tabpanel" aria-labelledby="tab-work">
+    <aside class="col left" aria-label="Danh sách bản vẽ">
+      <div class="col-h" id="wsName">Thư mục làm việc</div>
+      <div class="files" id="files" role="list"></div>
+      <div class="std-box">
+        <div class="k">Chuẩn của phòng</div><div class="v" id="stdName">–</div>
+        <div class="k mt6">Hồ sơ công ty</div><div class="v" id="stdProfile">–</div>
+        <div class="mt8"><button class="f-link" type="button" id="stdLink">Xem luật áp dụng</button></div>
+      </div>
+      <div class="handoff" id="handoff" hidden></div>
+      <div class="pad12"><button class="btn-s wfull" type="button" id="scanAll"><span data-icon="search"></span>Quét cả thư mục</button></div>
+    </aside>
+
+    <section class="center" id="main" aria-label="Bản vẽ đang mở" tabindex="-1">
+      <div class="cv-tools">
+        <strong id="cvTitle">Chọn một bản vẽ ở cột trái</strong>
+        <span class="pill neu" id="cvInfo" hidden></span>
+        <div class="spacer"></div>
+        <div class="seg" role="tablist" aria-label="Phần của bản vẽ" id="centerTabs">
+          <button role="tab" type="button" data-p="finds" aria-selected="true" aria-controls="p-finds">Lỗi <span class="cnt" id="cntF">–</span></button>
+          <button role="tab" type="button" data-p="chg" aria-selected="false" aria-controls="p-chg" tabindex="-1">Đề xuất sửa</button>
+          <button role="tab" type="button" data-p="hist" aria-selected="false" aria-controls="p-hist" tabindex="-1">Thay đổi <span class="cnt" id="cntC">0</span></button>
+          <button role="tab" type="button" data-p="sum" aria-selected="false" aria-controls="p-sum" tabindex="-1">Tóm tắt</button>
+        </div>
+      </div>
+      <div class="pane on" id="p-finds" role="tabpanel"><div class="list" id="finds" aria-live="polite"></div></div>
+      <div class="pane" id="p-chg" role="tabpanel"><div class="list" id="chgList"></div><div class="cs-foot" id="chgFoot" hidden></div></div>
+      <div class="pane" id="p-hist" role="tabpanel"><div class="list" id="histList"></div></div>
+      <div class="pane" id="p-sum" role="tabpanel"><div class="list" id="sumList"></div></div>
+      <div class="cv-status">
+        <span class="lock"><span data-icon="lock"></span>Tệp gốc chỉ đọc</span>
+        <span>Mọi thay đổi ghi ra <b>tệp mới</b>, có xem trước, xác nhận và hoàn tác.</span>
+      </div>
+    </section>
+
+    <aside class="col right" aria-label="Trợ lý">
+      <div class="chat-top">
+        <label class="lbl" for="engineSel">Trợ lý</label>
+        <select id="engineSel" class="sel wfull"></select>
+        <div class="eng-card" id="engCard"></div>
+        <div class="row-model" id="modelRow" hidden>
+          <label class="lbl" for="modelIn">Mô hình</label>
+          <input id="modelIn" class="num-in" type="text" autocomplete="off" spellcheck="false" placeholder="tên mô hình">
+        </div>
+        <label class="sw"><input type="checkbox" id="allowPropose"><span>Cho phép trợ lý đề xuất sửa <small>(chỉ đề xuất; áp dụng do bạn bấm)</small></span></label>
+      </div>
+      <div class="chat-head" id="chatHead"></div>
+      <div class="chat-log" id="log" aria-live="polite"></div>
+      <div class="cost" id="costLine" aria-live="polite"></div>
+      <form class="composer" id="form">
+        <textarea id="inp" rows="2" placeholder="Hỏi về bản vẽ, ví dụ: bản này có lỗi E nào, sửa thế nào?" aria-label="Nhập câu hỏi cho trợ lý"></textarea>
+        <div class="composer-act">
+          <button class="btn-p" type="submit" id="sendBtn"><span data-icon="send"></span>Gửi</button>
+          <button class="btn-s" type="button" id="stopBtn" hidden><span data-icon="stop"></span>Dừng</button>
+          <button class="btn-s btn-sm" type="button" id="clearBtn" title="Xoá lịch sử trò chuyện trong trang">Mới</button>
+        </div>
+      </form>
+      <div class="hint">Trợ lý giải thích và đề xuất. Đúng/sai do bộ luật kiểm tất định quyết định. Enter để gửi, Shift+Enter xuống dòng.</div>
+    </aside>
+  </main>
+
+  <!-- ============ LUẬT ÁP DỤNG ============ -->
+  <main class="screen" id="s-rules" role="tabpanel" aria-labelledby="tab-rules"><div class="page"><div class="page-in wide">
+    <div class="rh">
+      <div><h1>Luật áp dụng</h1>
+        <p class="lead">Danh sách luật của chuẩn đang chọn, tham số mặc định của chuẩn và tham số đang áp theo hồ sơ công ty. Màn này <b>chỉ đọc</b>: đổi luật hoặc ngưỡng là tạo phiên bản chuẩn mới hoặc sửa hồ sơ công ty (YAML), không sửa trong trình duyệt.</p></div>
+      <div class="rh-act">
+        <label for="ruleStd">Chuẩn</label>
+        <select class="sel" id="ruleStd"></select>
+      </div>
+    </div>
+    <div class="srcline" id="srcline"></div>
+    <div class="covs" id="covs"></div>
+    <div class="tb">
+      <div class="grow"><input type="search" id="rq" placeholder="Tìm mã hoặc nội dung luật…" aria-label="Tìm luật"></div>
+      <label class="tbp"><span class="lbl">Tình trạng</span><select class="sel" id="fKind" aria-label="Lọc theo tình trạng">
+        <option value="">Tất cả</option><option value="run">Đang chạy</option><option value="off">Tắt bởi hồ sơ</option><option value="changed">Tham số đã chỉnh</option><option value="todo">Chưa cài code</option></select></label>
+    </div>
+    <div class="card flush">
+      <table class="rt"><thead><tr><th class="w-code">Mã</th><th>Luật</th><th class="w-sev">Mức</th><th class="w-state">Tình trạng</th><th class="w-params">Tham số (mặc định → đang áp)</th></tr></thead><tbody id="rbody"></tbody></table>
+      <div class="tfoot" id="rfoot"></div>
+    </div>
+  </div></div></main>
+
+  <!-- ============ KẾT NỐI AI ============ -->
+  <main class="screen" id="s-connect" role="tabpanel" aria-labelledby="tab-connect"><div class="page"><div class="page-in">
+    <h1>Kết nối AI</h1>
+    <p class="lead">Hai cách dùng trợ lý trong cad-guard. Cả hai dùng cùng bộ công cụ kiểm bản vẽ; trợ lý không có công cụ đọc tệp, shell hay web, và không có công cụ áp dụng sửa.</p>
+    <div class="callout"><span data-icon="info"></span><div><b>Khoá API không bao giờ nhập trong trình duyệt.</b> Đặt khoá trong terminal bằng <code>cadguard keys set &lt;nhà cung cấp&gt;</code> (lưu trong kho khoá của hệ điều hành) hoặc biến môi trường, rồi bấm <b>Kiểm lại</b>. Với CLI, đăng nhập là của chính CLI đó; cad-guard không đọc, không lưu token.</div></div>
+    <div class="rowflex"><button class="btn-s" type="button" id="refreshEngines"><span data-icon="refresh"></span>Kiểm lại</button><span class="muted" id="refreshNote"></span></div>
+    <h2>Dùng hạn mức tài khoản (CLI)</h2>
+    <p class="lead small">CLI bạn đã cài và tự đăng nhập. Chi phí tính vào gói/tài khoản của bạn; số tiền cad-guard hiện là <b>ước tính</b>, với gói thuê bao không phải tiền bị trừ.</p>
+    <div class="grid2" id="cliCards"></div>
+    <h2>Dùng API (khoá của bạn)</h2>
+    <p class="lead small">Gọi thẳng nhà cung cấp bằng khoá của bạn; tính cước theo token. Ollama chạy trên máy, dữ liệu không rời máy.</p>
+    <div class="grid2" id="apiCards"></div>
+    <h2>Dữ liệu đi đâu</h2>
+    <div class="card" id="dataCard"></div>
+    <h2>Trợ lý được và không được làm gì</h2>
+    <div class="card perm flush"><table><tbody>
+      <tr><td>Đọc tệp ngoài thư mục làm việc, chạy lệnh shell, truy cập web</td><td><span class="pill err">Không có công cụ</span></td></tr>
+      <tr><td>Ghi đè hoặc xoá bản vẽ gốc</td><td><span class="pill err">Không bao giờ</span></td></tr>
+      <tr><td>Quét, đọc kết quả luật, giải thích luật</td><td><span class="pill ok">Có</span></td></tr>
+      <tr><td>Đề xuất changeset (chạy khô, không ghi bản vẽ)</td><td><span class="pill warn">Chỉ khi bạn bật công tắc</span></td></tr>
+      <tr><td>Áp dụng changeset ra tệp mới</td><td><span class="pill warn">Chỉ bạn, bấm xác nhận</span></td></tr>
+    </tbody></table></div>
+  </div></div></main>
+</div>
+
+<div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle" aria-describedby="mText">
+  <div class="modal">
+    <h3 id="mTitle"></h3>
+    <div id="mText"></div>
+    <div class="ft"><button class="btn-s" type="button" id="mNo">Huỷ</button><button class="btn-p" type="button" id="mYes">Đồng ý</button></div>
+  </div>
+</div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drTitle">
+  <div class="dr-h"><h2 id="drTitle"></h2><span class="spacer"></span><button class="iconbtn" type="button" id="drClose" aria-label="Đóng"><span data-icon="x"></span></button></div>
+  <div class="dr-b" id="drBody"></div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>
