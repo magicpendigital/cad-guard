@@ -14,7 +14,8 @@ Tác vụ: `bench/tasks/*.yaml`. Mỗi tác vụ chạy trong một thư mục l
 Giao diện người trả lời: `ham(task: dict, workspace: Path) -> dict`.
 - `task` là bản CÔNG KHAI của tác vụ (không có `kiem_tra`): id, mo_ta, dang, fixture, cau_hoi, moi_truong, tham_so, tra_loi.
 - Kết quả là một dict JSON theo `tra_loi`. Có thể kèm khoá `_chi_phi` = {"tokens": int, "usd": float}; khoá này
-  được tách ra để ghi vào cột chi phí, không đem chấm.
+  được tách ra để ghi vào cột chi phí, không đem chấm. Khoá `_cong_cu` = danh sách TÊN công cụ đã gọi (không tham
+  số) cũng được tách ra, ghi vào `--out` (trường `tools` mỗi tác vụ, `tools_seen` cả lượt) để QC đối chiếu.
 - Ném ngoại lệ = tác vụ trượt (ghi lý do), không làm dừng cả lượt chấm.
 
 Không có venv có ezdxf thì script tự chạy lại trong venv dùng chung của `scripts/test.py` (biến CADGUARD_VENV).
@@ -54,8 +55,18 @@ CHECK_TYPES = {
 }
 ANSWER_TYPES = {"so_nguyen", "chuoi", "dung_sai", "danh_sach", "doi_tuong"}
 PRIVATE_COST_KEY = "_chi_phi"
+PRIVATE_TOOLS_KEY = "_cong_cu"  # danh sách tên công cụ engine đã gọi (không tham số); tách ra, không đem chấm
 
 Answerer = Callable[[dict, Path], dict]
+
+
+def _utf8_console() -> None:
+    """In tiếng Việt không sập trên console Windows (cp1252…): ép UTF-8, ký tự không mã hoá được thì thay thế."""
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
+        except Exception:  # noqa: BLE001 — luồng không hỗ trợ reconfigure (vd. capsys): giữ nguyên
+            pass
 
 
 @dataclass
@@ -66,6 +77,7 @@ class TaskResult:
     tokens: int = 0
     usd: float = 0.0
     reasons: list[str] = field(default_factory=list)
+    tools: list[str] | None = None  # None = người trả lời không báo lời gọi công cụ
 
 
 # ---------- nạp và kiểm tác vụ ----------
@@ -241,12 +253,15 @@ def run_task(task: dict, answerer: Answerer) -> TaskResult:
         except Exception as exc:  # noqa: BLE001 — người trả lời hỏng thì tác vụ trượt
             answer, error = None, f"người trả lời lỗi: {type(exc).__name__}: {exc}"
         seconds = time.perf_counter() - start
-    tokens, usd = 0, 0.0
+    tokens, usd, tools = 0, 0.0, None
     if isinstance(answer, dict) and PRIVATE_COST_KEY in answer:
         cost = answer.pop(PRIVATE_COST_KEY) or {}
         tokens, usd = int(cost.get("tokens", 0)), float(cost.get("usd", 0.0))
+    if isinstance(answer, dict) and PRIVATE_TOOLS_KEY in answer:
+        raw = answer.pop(PRIVATE_TOOLS_KEY)
+        tools = [str(n) for n in raw] if isinstance(raw, list) else None
     reasons = [error] if error else grade(task, answer)
-    return TaskResult(task["id"], not reasons, seconds, tokens, usd, reasons)
+    return TaskResult(task["id"], not reasons, seconds, tokens, usd, reasons, tools)
 
 
 def run_bench(answerer: Answerer, tasks: list[dict]) -> list[TaskResult]:
@@ -274,7 +289,12 @@ def format_table(results: list[TaskResult], answerer: str) -> str:
 
 
 def write_summary(path: Path, results: list[TaskResult], args, pct: float) -> None:
-    """Kết quả tổng hợp: mã tác vụ, đúng/sai, thời gian, token, USD, lý do trượt. Không đường dẫn, không tên tệp khách."""
+    """Kết quả tổng hợp: mã tác vụ, đúng/sai, thời gian, token, USD, lý do trượt, tên công cụ đã gọi (nếu engine báo).
+
+    Không đường dẫn, không tên tệp khách, không tham số lời gọi công cụ. `tools_seen` = tập tên công cụ của cả lượt
+    (null nếu không tác vụ nào báo) để QC đối chiếu với bộ công cụ cad-guard.
+    """
+    reported = [r.tools for r in results if r.tools is not None]
     data = {
         "answerer": args.answerer,
         "engine": args.engine,
@@ -284,6 +304,7 @@ def write_summary(path: Path, results: list[TaskResult], args, pct: float) -> No
         "totals": {"tasks": len(results), "ok": sum(r.ok for r in results),
                    "seconds": round(sum(r.seconds for r in results), 3), "tokens": sum(r.tokens for r in results),
                    "usd": round(sum(r.usd for r in results), 6)},
+        "tools_seen": sorted({n for names in reported for n in names}) if reported else None,
         "results": [asdict(r) for r in results],
         "date": time.strftime("%Y-%m-%d"),
     }
@@ -311,6 +332,7 @@ def _ensure_deps(argv: list[str]) -> int | None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    _utf8_console()  # trước argparse: `--help` cũng in tiếng Việt
     argv = list(sys.argv[1:] if argv is None else argv)
     p = argparse.ArgumentParser(description="Bộ chấm cad-guard trên DXF tổng hợp (tất định).")
     p.add_argument("--answerer", default=DEFAULT_ANSWERER, metavar="MO_DUN:HAM",
@@ -346,8 +368,6 @@ def main(argv: list[str] | None = None) -> int:
     rerun = _ensure_deps(argv)
     if rerun is not None:
         return rerun
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
     _prepare_sys_path()
 
     tasks = load_tasks(Path(args.tasks_dir))

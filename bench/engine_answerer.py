@@ -9,7 +9,9 @@ Biến môi trường: CADGUARD_BENCH_ENGINE (bắt buộc khi dùng `answer`), 
 
 Mỗi tác vụ: engine được nối với công cụ cad-guard trên thư mục làm việc tạm của tác vụ (đúng các cờ `moi_truong`:
 ẩn danh, ngưỡng đọc theo dòng, trần bản ghi, hồ sơ công ty — kèm một bộ công cụ KHÔNG hồ sơ để so trước/sau),
-nhận `cau_hoi` + yêu cầu trả JSON theo `tra_loi`, rồi trích JSON từ câu trả lời. `_chi_phi` = token, USD, giây.
+nhận `cau_hoi` + yêu cầu trả JSON theo `tra_loi`, rồi trích JSON từ câu trả lời. `_chi_phi` = token, USD, giây;
+`_cong_cu` = tên các công cụ engine đã gọi (từ sự kiện `tool_call`, không tham số) để QC xác nhận chỉ có công cụ
+cad-guard.
 """
 from __future__ import annotations
 
@@ -92,12 +94,14 @@ def make_answerer(engine_factory: Callable[[], object]) -> Callable[[dict, Path]
         profile = ws / PROFILE_FILE if env.get("ho_so") else None
         std = (task.get("tham_so") or {}).get("chuan")
         start = time.perf_counter()
-        total, text, errors = Usage(cost_usd=None), "", []
+        total, text, errors, tools = Usage(cost_usd=None), "", [], []
         for e in engine.run([{"role": "user", "content": build_prompt(task)}], workspace=ws, standard=std,
                             profile=profile, compare_without_profile=profile is not None,
                             server_options=_server_options(env)):
             if e.type == "usage":
                 total.add(e.data["usage"])
+            elif e.type == "tool_call":
+                tools.append(str(e.data.get("name") or "?"))  # chỉ tên, không tham số
             elif e.type == "error":
                 errors.append(e.data["message"])
             elif e.type == "done":
@@ -110,6 +114,7 @@ def make_answerer(engine_factory: Callable[[], object]) -> Callable[[dict, Path]
             raise RuntimeError("; ".join(errors) or "câu trả lời không có JSON") from None
         result = dict(result)
         result["_chi_phi"] = cost
+        result["_cong_cu"] = tools  # theo thứ tự gọi; rỗng = không thấy sự kiện tool_call nào
         return result
 
     return answer

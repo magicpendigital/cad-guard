@@ -24,9 +24,10 @@ DEFAULT_STANDARD = "furniture-v0"
 
 
 def _utf8() -> None:
+    """In tiếng Việt không sập trên console Windows (cp1252…): ép UTF-8, ký tự không mã hoá được thì thay thế."""
     for s in (sys.stdout, sys.stderr):
         try:
-            s.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+            s.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[attr-defined]
         except Exception:  # noqa: BLE001
             pass
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -97,6 +98,46 @@ def test_extract_json_variants():
     assert engine_answerer.extract_json('Trả lời: {"so": 3, "ds": ["A"]} hết') == {"so": 3, "ds": ["A"]}
     with pytest.raises(ValueError):
         engine_answerer.extract_json("không có JSON")
+
+
+def test_out_records_tool_names_without_arguments(tmp_path, capsys):
+    secret_arg = "D:/bi-mat/khach/ban-ve.dxf"
+
+    class Calling(FakeEngine):
+        def run(self, messages, **kw):
+            yield Event("tool_call", {"id": "1", "name": "mcp__cad-guard__audit", "arguments": {"path": secret_arg}})
+            yield Event("tool_result", {"id": "1", "name": "mcp__cad-guard__audit", "content": "{}", "is_error": False})
+            yield Event("tool_call", {"id": "2", "name": "Bash", "arguments": {"command": "dir " + secret_arg}})
+            yield from super().run(messages, **kw)
+
+    tasks = TASKS[:2]
+    results = bench.run_bench(engine_answerer.make_answerer(Calling), tasks)
+    assert all(r.ok for r in results)  # khoá _cong_cu không đem chấm
+    assert all(r.tools == ["mcp__cad-guard__audit", "Bash"] for r in results)
+    out = tmp_path / "kq.json"
+    args = types.SimpleNamespace(answerer="bench.engine_answerer:answer", engine="gia", model=None, threshold=100.0)
+    bench.write_summary(out, results, args, bench.score(results))
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["tools_seen"] == ["Bash", "mcp__cad-guard__audit"]
+    assert data["results"][0]["tools"] == ["mcp__cad-guard__audit", "Bash"]
+    assert secret_arg not in out.read_text(encoding="utf-8")
+    capsys.readouterr()
+
+
+def test_tools_absent_for_reference_answerer(tmp_path, capsys):
+    results = bench.run_bench(reference_answer, TASKS[:1])
+    assert results[0].tools is None
+    out = tmp_path / "kq.json"
+    args = types.SimpleNamespace(answerer=bench.DEFAULT_ANSWERER, engine=None, model=None, threshold=100.0)
+    bench.write_summary(out, results, args, 100.0)
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["tools_seen"] is None and data["results"][0]["tools"] is None
+    capsys.readouterr()
+
+
+def test_engine_without_tool_calls_records_empty_list():
+    res = bench.run_task(TASKS[0], engine_answerer.make_answerer(FakeEngine))
+    assert res.ok and res.tools == []
 
 
 def test_bench_out_writes_summary_without_paths(tmp_path, capsys):

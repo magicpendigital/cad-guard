@@ -223,6 +223,25 @@ Các quy ước đã đặt trong bản mẫu (cần CEO/trưởng phòng xác n
 
 Cần quyết trước khi làm thật: (1) danh sách vị trí và task thật của công ty (bản mẫu tự đặt 8 vị trí, 8 task); (2) ai phụ trách từng nhóm luật; (3) có cho dự án nới luật bằng ngoại lệ không; (4) bộ luật `design-hygiene-v0` có tên chính thức chưa (mã `VS-*`, `PJ-K1-*` trong mẫu chỉ là minh hoạ). Việc kỹ thuật theo sau: `cadguard rules --json` xuất thêm phòng/vị trí/task; bước bàn giao đọc tập luật của task; `stats` tính theo phòng.
 
+## 9c. Tình trạng triển khai (05/11/2026)
+
+| Bước | Tình trạng | Ghi chú |
+| --- | --- | --- |
+| A0 | **Xong** | `cadguard mcp` (công cụ chỉ đọc: `list_drawings`, `audit`, `explain_rule`, `get_model_summary`, `query_model`, `diff`), lớp ẩn danh và thư mục phiên (`cadguard/agent/`), gói làm việc `knowledge/` (`AGENTS.md`, 4 skills tiếng Việt, mẫu cấu hình MCP cho 4 CLI), bộ chấm 12 tác vụ trên DXF tổng hợp (`scripts/bench.py`) |
+| A2 | **Xong** | Changeset `cg.changeset/1`, diff, `validate_output` (`cadguard/changeset/`, `docs/changeset.md`); mô hình chỉ **đề xuất** changeset, áp dụng chỉ qua người duyệt, luôn ghi ra tệp mới |
+| A1 | **Một phần** | Bench thật lần đầu: 12/12 đúng (B01 qua `claude-cli`, B02–B12 qua `codex-cli`), kết quả ở `docs/bench-results/2026-11-05.md`. Còn thiếu: chạy **cùng** tác vụ trên các engine để so sánh; kiểm vết lời gọi công cụ trong phiên thật (bench đã ghi được tên công cụ vào `--out`); hỏi điều khoản 3 nhà cung cấp bằng văn bản |
+| Tích hợp 4 CLI | **Xong** | Claude Code, Codex, Antigravity, OpenCode: điều khoản, cách chặn công cụ, cấu hình (`docs/integrations/`) |
+| Trợ lý trong cad-guard | **Bản đầu** | Hai chế độ: CLI theo hạn mức tài khoản người dùng (`claude-cli`, `codex-cli`, `agy-cli`) và API trực tiếp bằng khoá của khách (`anthropic`, `openai`, `gemini`, `openrouter`, `ollama`); giao diện cục bộ `cadguard app`. Bảng điều khoản theo engine: `docs/assistant.md` mục 2 |
+
+**Lệch so với mục 4.1:** BYOK không đi qua OpenCode mà do cad-guard tự gọi API, chỉ với đúng công cụ của mình. Lý do: bộ công cụ chỉ có 6 công cụ chỉ đọc nên vòng gọi tối thiểu là đủ; bảo đảm mô hình không có công cụ nào khác (đọc tệp, chạy lệnh); không phải kèm tệp chạy OpenCode 212 MB. OpenCode vẫn dùng được ở cách A (gói làm việc).
+
+Việc còn chờ CEO:
+
+- Luật VS-06 ở mức E (lỗi) hay hạ mức.
+- Chấp nhận phụ thuộc `certifi` (giấy phép MPL-2.0).
+- Cho phép gửi thư hỏi điều khoản bằng văn bản tới OpenAI (Codex với đăng nhập ChatGPT) và Google (Antigravity).
+- A3: thử với 2–3 người dùng thật.
+
 ## 10. Chưa xác định / chưa kiểm
 
 - Điều khoản chính thức của OpenAI và Google về việc bên thứ ba dùng đăng nhập thuê bao; việc áp dụng của Anthropic cho adapter ACP chạy trên Agent SDK.

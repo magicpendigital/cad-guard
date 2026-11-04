@@ -42,6 +42,8 @@ Bảng in: tác vụ, ĐÚNG/SAI, thời gian, token, USD, lý do trượt. `--o
 
 (Số trong ví dụ là minh hoạ, chưa đo.) Tệp không có đường dẫn, không tên tệp khách; lý do trượt có thể chứa giá trị mô hình trả (trên DXF tổng hợp).
 
+Với `--engine`, mỗi kết quả có thêm `tools` = tên các công cụ engine đã gọi theo thứ tự (lấy từ sự kiện `tool_call`, **không** ghi tham số; `[]` = không thấy lời gọi nào), và `tools_seen` = tập tên công cụ của cả lượt. QC đối chiếu `tools_seen` với bộ công cụ cad-guard để xác nhận CLI không dùng công cụ ngoài. Người trả lời không báo lời gọi công cụ (vd. tham chiếu) → `null`. Kết quả thật đã ghi: `docs/bench-results/`.
+
 So sánh mô hình: chạy cùng lệnh cho từng engine/mô hình, gom các tệp `--out` vào một bảng: tỉ lệ đúng, USD/tác vụ, giây/tác vụ. Chọn mô hình mặc định = rẻ nhất trong nhóm đạt ngưỡng (đề xuất ≥ 11/12, B09 ẩn danh bắt buộc đúng). Chi phí của `claude-cli` là `total_cost_usd` ước tính phía máy khách; với gói thuê bao không phải tiền bị trừ. `codex-cli`, `agy-cli` không báo USD (cột = 0), chỉ token.
 
 ## Lưu ý

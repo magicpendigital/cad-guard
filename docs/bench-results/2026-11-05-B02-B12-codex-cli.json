@@ -1,0 +1,105 @@
+{
+  "answerer": "bench.engine_answerer:answer",
+  "engine": "codex-cli",
+  "model": null,
+  "score_pct": 100.0,
+  "threshold_pct": 0.0,
+  "totals": {
+    "tasks": 11,
+    "ok": 11,
+    "seconds": 469.762,
+    "tokens": 1310531,
+    "usd": 0.0
+  },
+  "results": [
+    {
+      "id": "B02-vs-hygiene-bad",
+      "ok": true,
+      "seconds": 77.69920520001324,
+      "tokens": 123616,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B03-layer-du-xref",
+      "ok": true,
+      "seconds": 41.73730480001541,
+      "tokens": 118666,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B04-kich-thuoc-ghi-de",
+      "ok": true,
+      "seconds": 33.93741799995769,
+      "tokens": 119112,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B05-hygiene-ok-sach",
+      "ok": true,
+      "seconds": 36.549739100039005,
+      "tokens": 117550,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B06-ho-so-cong-ty",
+      "ok": true,
+      "seconds": 44.020455999998376,
+      "tokens": 128614,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B07-records-capped",
+      "ok": true,
+      "seconds": 38.278351599990856,
+      "tokens": 125139,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B08-ghi-chu-ban-giao",
+      "ok": true,
+      "seconds": 43.260249999992084,
+      "tokens": 126873,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B09-an-danh-khong-lo-ten",
+      "ok": true,
+      "seconds": 66.25071819999721,
+      "tokens": 123575,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B10-luat-bo-qua",
+      "ok": true,
+      "seconds": 32.09270249999827,
+      "tokens": 122833,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B11-giai-thich-vs06",
+      "ok": true,
+      "seconds": 29.159973700006958,
+      "tokens": 87165,
+      "usd": 0.0,
+      "reasons": []
+    },
+    {
+      "id": "B12-tom-tat-mo-hinh",
+      "ok": true,
+      "seconds": 26.775537999987137,
+      "tokens": 117388,
+      "usd": 0.0,
+      "reasons": []
+    }
+  ],
+  "date": "2026-11-05"
+}
