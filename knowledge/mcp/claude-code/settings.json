@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__cad-guard__list_drawings",
+      "mcp__cad-guard__audit",
+      "mcp__cad-guard__explain_rule",
+      "mcp__cad-guard__get_model_summary",
+      "mcp__cad-guard__query_model"
+    ],
+    "deny": [
+      "Bash",
+      "Read",
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "Glob",
+      "Grep",
+      "WebFetch",
+      "WebSearch"
+    ]
+  },
+  "enableAllProjectMcpServers": false,
+  "enabledMcpjsonServers": ["cad-guard"]
+}

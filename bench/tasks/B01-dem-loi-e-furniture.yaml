@@ -1,0 +1,26 @@
+id: B01-dem-loi-e-furniture
+mo_ta: Đếm lỗi mức E theo chuẩn furniture-v0 trên bản vẽ đặt layer sai quy ước, và nêu tập mã luật gây lỗi E.
+dang: dem_loi
+fixture: bad_layers.dxf
+moi_truong:
+  an_danh: true
+tham_so:
+  chuan: furniture-v0
+cau_hoi: >-
+  Kiểm bản vẽ duy nhất trong thư mục làm việc theo chuẩn furniture-v0.
+  Có bao nhiêu phát hiện mức lỗi (E)? Những mã luật nào gây lỗi E?
+  Trả lời JSON với các trường so_loi_e, ma_luat_e (danh sách mã luật), records_capped.
+tra_loi:
+  so_loi_e: so_nguyen
+  ma_luat_e: danh_sach
+  records_capped: dung_sai
+kiem_tra:
+- loai: bang
+  truong: so_loi_e
+  gia_tri: 3
+- loai: tap
+  truong: ma_luat_e
+  gia_tri: [LY-01, LY-04, LY-08]
+- loai: bang
+  truong: records_capped
+  gia_tri: false

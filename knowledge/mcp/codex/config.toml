@@ -1,0 +1,7 @@
+# Mẫu cho Codex CLI: thêm khối này vào tệp cấu hình của Codex (thường là ~/.codex/config.toml).
+# Thay <PYTHON> và <THU_MUC_LAM_VIEC>. Không đặt khoá API hay token vào tệp này.
+# Các khoá chặn công cụ shell/đọc tệp của Codex KHÔNG có ở đây: xem knowledge/mcp/README.md (cần kiểm lại với tài liệu chính thức).
+
+[mcp_servers.cad-guard]
+command = "<PYTHON>"
+args = ["-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>"]

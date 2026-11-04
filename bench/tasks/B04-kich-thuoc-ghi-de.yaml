@@ -1,0 +1,22 @@
+id: B04-kich-thuoc-ghi-de
+mo_ta: Đếm tổng số kích thước và số kích thước bị ghi đè chữ bằng truy vấn mô hình.
+dang: kich_thuoc_ghi_de
+fixture: hygiene_bad.dxf
+cau_hoi: >-
+  Bản vẽ có bao nhiêu đối tượng kích thước (DIMENSION) đặt trực tiếp trong không gian mô hình và giấy,
+  và bao nhiêu cái bị ghi đè chữ (số hiển thị không phải số đo tự động)?
+  Trả lời JSON với các trường tong_kich_thuoc, so_ghi_de, records_capped.
+tra_loi:
+  tong_kich_thuoc: so_nguyen
+  so_ghi_de: so_nguyen
+  records_capped: dung_sai
+kiem_tra:
+- loai: bang
+  truong: tong_kich_thuoc
+  gia_tri: 2
+- loai: bang
+  truong: so_ghi_de
+  gia_tri: 1
+- loai: bang
+  truong: records_capped
+  gia_tri: false

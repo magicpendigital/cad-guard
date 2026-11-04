@@ -1,0 +1,32 @@
+id: B11-giai-thich-vs06
+mo_ta: Giải thích luật VS-06 bằng explain_rule (mức độ, loại, nguồn), không tự bịa.
+dang: giai_thich_luat
+fixture: hygiene_bad.dxf
+tham_so:
+  chuan: design-hygiene-v0
+  ma_luat: VS-06
+cau_hoi: >-
+  Luật VS-06 của chuẩn design-hygiene-v0 kiểm gì, ở mức nào, có phải luật tất định không, căn cứ từ đâu?
+  Trả lời JSON với các trường ma_luat, muc_do (E/W/I), loai, tieu_de, nguon, da_cai (đúng/sai).
+tra_loi:
+  ma_luat: chuoi
+  muc_do: chuoi
+  loai: chuoi
+  tieu_de: chuoi
+  nguon: chuoi
+  da_cai: dung_sai
+kiem_tra:
+- loai: bang
+  truong: ma_luat
+  gia_tri: VS-06
+- loai: bang
+  truong: muc_do
+  gia_tri: E
+- loai: bang
+  truong: loai
+  gia_tri: deterministic
+- loai: bang
+  truong: da_cai
+  gia_tri: true
+- loai: co_truong
+  truong: [tieu_de, nguon]

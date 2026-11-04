@@ -1,0 +1,30 @@
+id: B06-ho-so-cong-ty
+mo_ta: Áp hồ sơ công ty (nới VS-02, tắt VS-05) làm đổi tập luật có phát hiện trên bản vẽ thiết kế bẩn.
+dang: ho_so_cong_ty
+fixture: hygiene_bad.dxf
+moi_truong:
+  ho_so: bench/ho-so/cong-ty-bench.yaml
+tham_so:
+  chuan: design-hygiene-v0
+cau_hoi: >-
+  Thư mục làm việc có hồ sơ công ty ho-so.yaml: VS-02 nới thành tối đa 30 kiểu chữ và 12 kiểu kích thước,
+  VS-05 bị tắt. So với chuẩn design-hygiene-v0 mặc định, tập mã luật có phát hiện trên bản vẽ đổi thế nào?
+  Trả lời JSON với các trường truoc, sau, mat_di, them_moi (đều là danh sách mã luật).
+tra_loi:
+  truoc: danh_sach
+  sau: danh_sach
+  mat_di: danh_sach
+  them_moi: danh_sach
+kiem_tra:
+- loai: tap
+  truong: truoc
+  gia_tri: [VS-01, VS-02, VS-03, VS-04, VS-05, VS-06, VS-07]
+- loai: tap
+  truong: sau
+  gia_tri: [VS-01, VS-03, VS-04, VS-06, VS-07]
+- loai: tap
+  truong: mat_di
+  gia_tri: [VS-02, VS-05]
+- loai: tap
+  truong: them_moi
+  gia_tri: []
