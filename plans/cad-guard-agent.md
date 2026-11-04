@@ -191,6 +191,12 @@ A0–A1 không cần bản vẽ khách và không phụ thuộc P0, nên có th�
 | 5 | Cho phép agent viết kịch bản (B) sau A2, trong sandbox | Hoãn đến A5, quyết sau khi có số liệu |
 | 6 | Ngân sách thử: chi phí token cho bộ chấm A1 (khoảng nhỏ, do đội đặt trần) | Cần CEO đặt trần |
 
+## 9a. Quyết định đã chốt
+
+| Ngày | Quyết định | Hệ quả |
+| --- | --- | --- |
+| 04/11/2026 | **Người dùng đích đầu tiên là đơn vị thiết kế** (CEO chọn sau khi xem `docs/real-sample-profile.md`). Xưởng sản xuất là bước sau, cần đợt mẫu riêng | Ưu tiên: đọc bản vẽ lớn, khảo sát/hỏi đáp trên bản vẽ, "dọn bản vẽ" (luật vệ sinh), chuẩn theo công ty và học quy ước. Hoãn: bóc tách, bảng kê, dán cạnh, CNC (gói G2–G3 ở mục 7). `furniture-v0` giữ nguyên làm chuẩn cho xưởng; đơn vị thiết kế dùng chuẩn mới `design-hygiene-v0`. Bản mẫu giao diện (`design/ui-mockup.html`) hiện vẽ theo bối cảnh xưởng và cần sửa lại theo bối cảnh thiết kế trước khi đưa người dùng xem |
+
 ## 10. Chưa xác định / chưa kiểm
 
 - Điều khoản chính thức của OpenAI và Google về việc bên thứ ba dùng đăng nhập thuê bao; việc áp dụng của Anthropic cho adapter ACP chạy trên Agent SDK.
