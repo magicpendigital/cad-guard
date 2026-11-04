@@ -24,4 +24,6 @@ include = ["cadguard*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+# Test "slow" (tệp DXF tổng hợp >= 100 MB) không chạy mặc định; chạy bằng: python scripts/test.py -m slow
+addopts = "-q -m \"not slow\""
+markers = ["slow: test hiệu năng tệp rất lớn, chỉ chạy khi gọi -m slow"]
