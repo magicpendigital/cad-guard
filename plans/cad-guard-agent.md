@@ -200,6 +200,29 @@ A0–A1 không cần bản vẽ khách và không phụ thuộc P0, nên có th�
 
 Giao diện mẫu (`design/ui-mockup.html`) đã cập nhật theo chuỗi ba phòng (chọn phòng ở góc trên; mỗi phòng có bản vẽ, lỗi và gói bàn giao riêng; mã luật VS-/CN- là minh hoạ). Dữ liệu trong mẫu hoàn toàn minh hoạ, chưa qua người dùng thật.
 
+## 9b. Danh mục luật áp dụng (màn hình mới trong bản mẫu, 04/11/2026)
+
+Yêu cầu: người dùng tự kiểm chứng được luật nào đang áp dụng, cập nhật khi luật công ty đổi, và thêm luật riêng cho từng dự án; mỗi luật gắn với phòng, vị trí, task. Bản mẫu `design/ui-mockup.html` có tab **Luật áp dụng**. **Đề xuất, chưa có code, chưa qua người dùng thật.**
+
+Mô hình ba lớp (tệp là nguồn sự thật, giao diện chỉ đọc/ghi bản nháp):
+
+| Lớp | Tệp (đề xuất) | Nội dung | Sửa thế nào |
+| --- | --- | --- | --- |
+| Chuẩn công ty | `standards/furniture-v0.yaml` (đã có) | Luật, ngưỡng, mức độ, nguồn | Sửa = phiên bản chuẩn mới, không sửa đè (đúng `AGENTS.md`) |
+| Gắn kết | `standards/assignments.yaml` | Mỗi mã luật: phòng áp dụng, vị trí tuân theo, **người phụ trách**, task liên quan | Tách khỏi chuẩn để đổi người/task không phải đổi phiên bản luật |
+| Overlay dự án | `standards/projects/<mã>.yaml` | Luật riêng của dự án, ngoại lệ có hạn và người duyệt | Có phiên bản riêng |
+
+Các quy ước đã đặt trong bản mẫu (cần CEO/trưởng phòng xác nhận):
+
+- **Luật riêng phải kiểm được, AI không chấm đúng/sai.** Thêm luật dự án chỉ có ba cách: chỉnh tham số một mẫu luật có sẵn; mục **kiểm tay** (người kiểm tick ở bước ký duyệt); hoặc gửi yêu cầu cho lập trình viên viết luật mới (chưa chạy tới khi có code và ca thử). Không có kiểu "gõ câu tự do rồi để mô hình phán".
+- **Dự án chỉ thêm luật, không âm thầm nới luật công ty.** Muốn nới thì tạo **ngoại lệ** có người duyệt và ngày hết hạn; hết hạn thì luật gốc chạy lại.
+- **Mọi chỉnh sửa vào bản nháp**, xem diff + ảnh hưởng (số cảnh báo mới trên bản vẽ tổng hợp), rồi qua duyệt mới thành phiên bản mới. Đổi chỉ phòng/vị trí/task thì không đổi kết quả quét, giao diện nói rõ điều đó.
+- **Ba vai trò** xem màn này: thợ vẽ (chỉ xem, được "báo luật sai"), trưởng phòng (sửa luật mình phụ trách và luật dự án), quản trị tiêu chuẩn (duyệt và công bố).
+- **Task có thể là bước chặn bàn giao** (Thiết kế→Kỹ thuật, Kỹ thuật→Lập trình sản xuất, xuất cho máy): các luật gắn với task đó phải sạch mới được bàn giao. Màn "Việc của tôi" và thẻ lỗi liên kết ngược về danh mục.
+- Luật chưa gắn đủ phòng/vị trí/task được đếm thành một thẻ riêng (bản mẫu: 34 trên 58), vì lỗi của chúng không có người nhận.
+
+Cần quyết trước khi làm thật: (1) danh sách vị trí và task thật của công ty (bản mẫu tự đặt 8 vị trí, 8 task); (2) ai phụ trách từng nhóm luật; (3) có cho dự án nới luật bằng ngoại lệ không; (4) bộ luật `design-hygiene-v0` có tên chính thức chưa (mã `VS-*`, `PJ-K1-*` trong mẫu chỉ là minh hoạ). Việc kỹ thuật theo sau: `cadguard rules --json` xuất thêm phòng/vị trí/task; bước bàn giao đọc tập luật của task; `stats` tính theo phòng.
+
 ## 10. Chưa xác định / chưa kiểm
 
 - Điều khoản chính thức của OpenAI và Google về việc bên thứ ba dùng đăng nhập thuê bao; việc áp dụng của Anthropic cho adapter ACP chạy trên Agent SDK.
