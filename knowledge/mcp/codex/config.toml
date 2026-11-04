@@ -19,7 +19,8 @@ startup_timeout_sec = 60
 tool_timeout_sec = 120
 # Không lên được máy chủ thì `codex exec` dừng với lỗi thay vì chạy tiếp không có cad-guard.
 required = true
-# Danh sách cho phép đúng 5 công cụ chỉ đọc (Codex lọc phía client, đã kiểm).
-enabled_tools = ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model"]
+# Danh sách cho phép đúng 6 công cụ chỉ đọc (Codex lọc phía client, đã kiểm). propose_changeset KHÔNG có ở đây:
+# chỉ thêm khi máy chủ chạy với --allow-propose (xem knowledge/mcp/README.md).
+enabled_tools = ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff"]
 # Chỉ cần khi chạy cad-guard từ mã nguồn thay vì đã `pip install`:
 # env = { PYTHONPATH = '<THU_MUC_REPO>\packages\core' }

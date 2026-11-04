@@ -9,7 +9,7 @@ Ba cách dùng nhắc tới bên dưới: **(A)** người dùng mở Codex tron
 
 ## 1. Cấu hình MCP
 
-**Khoá của `[mcp_servers.<tên>]` (máy chủ stdio)** [tài liệu: [MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), [Config reference](https://learn.chatgpt.com/docs/config-file/config-reference)]:
+**Khoá của `[mcp_servers.<tên>]` (máy chủ stdio)** [tài liệu: [MCP](https://learn.chatgpt.com/docs/extend/mcp), [Config reference](https://learn.chatgpt.com/docs/config-file/config-reference)]:
 
 | Khoá | Ý nghĩa | Mặc định |
 | --- | --- | --- |
@@ -26,7 +26,7 @@ Ba cách dùng nhắc tới bên dưới: **(A)** người dùng mở Codex tron
 Đã kiểm [máy]:
 
 - Mẫu `knowledge/mcp/codex/config.toml` và `cadguard.config.toml` sau khi điền đường dẫn thật (python của venv, `PYTHONPATH` = `packages/core`, workspace tạm, `--profile standards/company-profile.example.yaml`) được Codex đọc đúng: `codex mcp list`, `codex mcp list --json`, `codex mcp get cad-guard`, `codex -p cadguard mcp get cad-guard` hiện đủ `command`, `args` (có `--profile`), `cwd`, `env` (giá trị bị che `*****`), `enabled_tools`, `startup_timeout_sec = 60`, `tool_timeout_sec = 120`.
-- **Kết nối thật mà không gọi mô hình**: chạy `codex app-server` (stdio JSON-RPC), gửi `initialize` → `mcpServerStatus/list` → `thread/start` (`sandbox: read-only`, `approvalPolicy: never`, `ephemeral: true`) → `mcpServer/tool/call`. Kết quả: máy chủ `cad-guard` (MCP SDK 1.30.0) trả đủ 5 công cụ; `list_drawings` trả 3 tệp với mã băm `F_…` (không tên tệp); `audit` trả `standard: design-hygiene-v0`, `profile: {name: cong-ty-mau, version: 0.1.0}`, `counts: {E: 0, W: 2, I: 0}`; `explain_rule VS-01` trả tham số đã gộp hồ sơ công ty. Không cần đăng nhập cho bước này. (`codex doctor` chỉ đếm số máy chủ MCP, không khởi động chúng.)
+- **Kết nối thật mà không gọi mô hình**: chạy `codex app-server` (stdio JSON-RPC), gửi `initialize` → `mcpServerStatus/list` → `thread/start` (`sandbox: read-only`, `approvalPolicy: never`, `ephemeral: true`) → `mcpServer/tool/call`. Kết quả: máy chủ `cad-guard` (MCP SDK 1.30.0) trả đủ 5 công cụ (lúc đó chưa có `diff`; nay máy chủ có 6 công cụ chỉ đọc); `list_drawings` trả 3 tệp với mã băm `F_…` (không tên tệp); `audit` trả `standard: design-hygiene-v0`, `profile: {name: cong-ty-mau, version: 0.1.0}`, `counts: {E: 0, W: 2, I: 0}`; `explain_rule VS-01` trả tham số đã gộp hồ sơ công ty. Không cần đăng nhập cho bước này. (`codex doctor` chỉ đếm số máy chủ MCP, không khởi động chúng.)
 - **`enabled_tools` / `disabled_tools` lọc thật**: `-c 'mcp_servers.cad-guard.enabled_tools=["list_drawings","audit"]'` → chỉ còn 2 công cụ; `disabled_tools=["query_model"]` → còn 4.
 - **Thời gian khởi động**: lần đầu `startup_timeout_sec = 20` bị lỗi `timed out handshaking with MCP server after 19.99s`; đo riêng `import cadguard.mcp_server` khởi động lạnh mất ~13 s. Mặc định 10 s của Codex **không đủ** trên Windows → mẫu đặt 60 s.
 - `codex --strict-config` **không** dùng được với `codex mcp` (`Error: --strict-config is not supported for codex mcp`).
@@ -128,7 +128,7 @@ Văn bản về **ứng dụng bên thứ ba dùng gói ChatGPT của người d
 
 - Dùng hồ sơ `knowledge/mcp/codex/cadguard.config.toml` (chép vào `$CODEX_HOME/cadguard.config.toml`), mở `codex -p cadguard -C <THU_MUC_LAM_VIEC>`. Không gộp các khoá chặn vào `~/.codex/config.toml` vì sẽ làm hỏng mọi phiên Codex khác của người dùng.
 - Chép `knowledge/AGENTS.md` vào gốc thư mục làm việc và `knowledge/skills/*` vào `<THU_MUC_LAM_VIEC>/.agents/skills/`.
-- Giữ `startup_timeout_sec = 60`, `required = true`, `enabled_tools` đủ 5 công cụ.
+- Giữ `startup_timeout_sec = 60`, `required = true`, `enabled_tools` đủ 6 công cụ chỉ đọc (`list_drawings`, `audit`, `explain_rule`, `get_model_summary`, `query_model`, `diff`); thêm `propose_changeset` chỉ khi máy chủ chạy với `--allow-propose` (mặc định không bật, xem `knowledge/mcp/README.md`).
 - Trước khi dùng với bản vẽ thật: chạy phép thử A1 có mô hình (yêu cầu trợ lý đọc một DXF/tệp ngoài thư mục; xác nhận không có công cụ làm được).
 
 **(B) Ứng dụng cad-guard khởi chạy Codex — được về kỹ thuật, chưa rõ về điều khoản.**
@@ -143,7 +143,7 @@ Văn bản về **ứng dụng bên thứ ba dùng gói ChatGPT của người d
 
 ## Chưa chắc
 
-1. Mô hình có thấy và gọi được 5 công cụ cad-guard trong phiên thật không, và MCP tool có bị đòi phê duyệt khi `approval_policy = "never"` không (chưa chạy mô hình; `prompt-input` không hiện công cụ MCP).
+1. Mô hình có thấy và gọi được 6 công cụ cad-guard trong phiên thật không, và MCP tool có bị đòi phê duyệt khi `approval_policy = "never"` không (chưa chạy mô hình; `prompt-input` không hiện công cụ MCP).
 2. Subagent (`collaboration.spawn_agent`) có kế thừa `shell_tool = false` và sandbox không.
 3. `apply_patch` có thật sự bị từ chối hoàn toàn ở read-only + never trên Windows không (theo tài liệu là có; chưa thử vì cần mô hình).
 4. Hồ sơ quyền chặn đọc `**/*.dxf` trên Windows: cần sandbox "elevated" (cài bằng quyền admin), chưa chạy hết.

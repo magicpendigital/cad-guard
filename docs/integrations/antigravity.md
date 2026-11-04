@@ -71,7 +71,7 @@ agy mcp list | remove <tên> | enable <tên> | disable <tên>
 
 - Với mẫu `knowledge/mcp/antigravity/mcp_config.json` (đã thay giữ chỗ, bật cả mục `--profile`), `agy mcp list` hiện đủ hai máy chủ.
 - Một `session/new` qua `agy acp` làm `agy` khởi động cả hai và lưu đặc tả công cụ vào `~/.gemini/antigravity-cli/mcp/<máy chủ>/*.json`, kèm `instructions.md`.
-- Máy chủ hiện trả **6** công cụ: `list_drawings`, `audit`, `explain_rule`, `get_model_summary`, `query_model` và `diff` (`diff` mới có từ commit 7a5d491). Mẫu dùng `enabledTools` nên chỉ để lộ 5 công cụ cũ. Muốn cho trợ lý dùng `diff` thì thêm tên này vào `enabledTools`.
+- Máy chủ hiện trả **6** công cụ: `list_drawings`, `audit`, `explain_rule`, `get_model_summary`, `query_model` và `diff` (`diff` mới có từ commit 7a5d491). Mẫu `enabledTools` liệt kê đủ 6 công cụ chỉ đọc này (test giữ khớp với `TOOL_NAMES` của máy chủ). Khi máy chủ chạy với `--allow-propose`, phải thêm `propose_changeset` vào `enabledTools` thì trợ lý mới thấy; mặc định không bật (xem `knowledge/mcp/README.md`).
 
 **Biến môi trường cho máy chủ.** Đặt trong khoá `env` (hoặc `agy mcp add --env`). Chỉ cần `PYTHONPATH` khi chạy cad-guard từ mã nguồn. Không đặt khoá hay token vào đây.
 

@@ -185,7 +185,7 @@ claude --bare -p "<câu hỏi>" --output-format json
   --max-turns 20 --max-budget-usd 1 --no-session-persistence --model <mô hình>
 ```
 
-Chưa chắc: `--tools ""` hoặc `--tools "Skill"` có gỡ luôn `ToolSearch` không, và khi đó công cụ MCP còn nạp được không (5 công cụ thì có lẽ không bị hoãn nạp). Phải thử một lần có token trước khi chốt.
+Chưa chắc: `--tools ""` hoặc `--tools "Skill"` có gỡ luôn `ToolSearch` không, và khi đó công cụ MCP còn nạp được không (6 công cụ thì có lẽ không bị hoãn nạp). Phải thử một lần có token trước khi chốt.
 
 ### 3.3 Agent SDK ([tổng quan](https://code.claude.com/docs/en/agent-sdk/overview))
 
@@ -262,7 +262,7 @@ Kiểm thật **[máy]**: điền mẫu bằng đường dẫn thật (Python c�
 2. Đã tin cậy: `cad-guard … ✔ Connected`; `cad-guard-ho-so` ẩn (bị từ chối); máy chủ user `may-chu-khac` ẩn (allowlist); `doctor` không có cảnh báo về quyền.
 3. Bỏ allowlist: `may-chu-khac ✔ Connected` lộ ra. Đây là bằng chứng allowlist có tác dụng.
 
-Chưa kiểm vì cần gọi mô hình: trong phiên thật, trợ lý gọi được 5 công cụ và bị từ chối khi thử `Read`/`Bash`/`PowerShell`. Đây là bài thử bắt buộc trước khi dùng với bản vẽ khách (mục 5.1 kế hoạch).
+Chưa kiểm vì cần gọi mô hình: trong phiên thật, trợ lý gọi được 6 công cụ chỉ đọc (thêm `propose_changeset` nếu máy chủ chạy với `--allow-propose`) và bị từ chối khi thử `Read`/`Bash`/`PowerShell`. Đây là bài thử bắt buộc trước khi dùng với bản vẽ khách (mục 5.1 kế hoạch).
 
 Điều mẫu cũ sai hoặc thiếu:
 

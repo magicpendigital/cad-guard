@@ -47,7 +47,8 @@ PATH_DENIED_MSG = "Đường dẫn không được phép: chỉ nhận tệp .dx
 GENERIC_ERROR_MSG = "Không thể thực hiện yêu cầu; hãy kiểm tra dữ liệu và đường dẫn."
 
 INSTRUCTIONS = (
-    "Công cụ CHỈ ĐỌC của cad-guard để kiểm tra bản vẽ nội thất DXF theo luật tất định. "
+    "Công cụ CHỈ ĐỌC của cad-guard để kiểm tra bản vẽ nội thất DXF theo luật tất định: list_drawings, audit, "
+    "explain_rule, get_model_summary, query_model, diff (so hai bản vẽ, vd. bản gốc và tệp mới sau khi người dùng áp dụng). "
     "Đường dẫn luôn tương đối với thư mục làm việc của máy chủ; có thể dùng mã tệp do list_drawings trả về. "
     "Khi bật ẩn danh, tên tệp/layer/khối/kiểu chữ là mã phiên (L_…, B_…, F_…), dùng lại được trong cùng phiên. "
     "Kết luận đúng/sai lấy từ kết quả luật, không tự suy đoán. "

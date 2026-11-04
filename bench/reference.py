@@ -1,6 +1,6 @@
 """Người trả lời THAM CHIẾU cho bộ chấm: gọi thẳng các hàm công cụ trong `cadguard.agent.tools`, tất định.
 
-Đây là "trợ lý hoàn hảo" dùng chính 5 công cụ chỉ đọc mà máy chủ MCP đưa cho trợ lý thật, nên:
+Đây là "trợ lý hoàn hảo" dùng chính các công cụ chỉ đọc mà máy chủ MCP đưa cho trợ lý thật (máy chủ có 6; bộ chấm hiện dùng 5, chưa dùng `diff`), nên:
 - bộ chấm phải đạt 100% với người trả lời này (nếu không: tác vụ hoặc đáp án sai, hoặc công cụ đã đổi hành vi);
 - mỗi hàm `_dang_*` là bản mẫu "trợ lý nên gọi công cụ nào, đọc trường nào" cho skill trong `knowledge/skills/`.
 

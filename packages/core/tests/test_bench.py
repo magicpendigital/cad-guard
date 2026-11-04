@@ -141,20 +141,85 @@ def _mcp_files():
     return sorted(p for p in MCP_DIR.rglob("*") if p.is_file())
 
 
-def test_four_mcp_templates_exist_and_parse():
+MCP_TEMPLATES = {
+    "README.md",
+    "claude-code/.mcp.json",
+    "claude-code/.claude/settings.json",
+    "codex/config.toml",
+    "codex/cadguard.config.toml",
+    "opencode/opencode.json",
+    "antigravity/mcp_config.json",
+    "antigravity/cadguard.settings.json",
+}
+
+
+def _parse_template(path: Path):
+    text = path.read_text(encoding="utf-8")
+    if path.suffix == ".json":
+        return json.loads(text)
+    if path.suffix == ".toml":
+        tomllib = pytest.importorskip("tomllib")
+        return tomllib.loads(text)
+    return None
+
+
+def _server_commands(data) -> dict[str, list[str]]:
+    """Máy chủ MCP khai báo trong một mẫu → dòng lệnh (không gồm <PYTHON>). Tệp chỉ có quyền thì rỗng."""
+    if not isinstance(data, dict):
+        return {}
+    servers: dict[str, list[str]] = {}
+    for key in ("mcpServers", "mcp_servers"):  # Claude Code/Antigravity JSON, Codex TOML
+        for name, spec in (data.get(key) or {}).items():
+            servers[name] = [spec.get("command", ""), *spec.get("args", [])]
+    for name, spec in (data.get("mcp") or {}).items():  # OpenCode: command là một danh sách
+        servers[name] = list(spec.get("command", []))
+    return servers
+
+
+def test_mcp_templates_exist_and_parse():
     files = {p.relative_to(MCP_DIR).as_posix() for p in _mcp_files()}
-    assert {"claude-code/.mcp.json", "codex/config.toml", "opencode/opencode.json", "antigravity/mcp_config.json",
-            "README.md"} <= files
+    assert MCP_TEMPLATES <= files
+    declaring = set()
     for path in _mcp_files():
+        rel = path.relative_to(MCP_DIR).as_posix()
+        if path.suffix == ".md":
+            continue
+        assert path.suffix in {".json", ".toml"}, f"{rel}: định dạng mẫu chưa được kiểm"
+        data = _parse_template(path)
+        servers = _server_commands(data)
         text = path.read_text(encoding="utf-8")
-        if path.suffix == ".json":
-            json.loads(text)
-        elif path.suffix == ".toml":
-            tomllib = pytest.importorskip("tomllib")
-            data = tomllib.loads(text)
-            assert data["mcp_servers"]["cad-guard"]["args"][:3] == ["-m", "cadguard", "mcp"]
-        if path.name != "README.md" and path.suffix != ".md":
-            assert "<THU_MUC_LAM_VIEC>" in text or path.name == "settings.json"
+        if servers:
+            declaring.add(rel)
+            assert "<THU_MUC_LAM_VIEC>" in text, rel
+            assert "cad-guard" in servers, rel
+            for name, cmd in servers.items():
+                assert cmd[1:4] == ["-m", "cadguard", "mcp"], (rel, name, cmd)
+                assert "--workspace" in cmd and "<THU_MUC_LAM_VIEC>" in cmd, (rel, name, cmd)
+                assert "--allow-propose" not in cmd, (rel, name, "mẫu không được bật --allow-propose")
+    assert {"claude-code/.mcp.json", "codex/config.toml", "codex/cadguard.config.toml", "opencode/opencode.json",
+            "antigravity/mcp_config.json"} <= declaring
+    # Tệp chỉ có quyền: không khai báo máy chủ, không bắt buộc giữ chỗ.
+    assert not {"claude-code/.claude/settings.json", "antigravity/cadguard.settings.json"} & declaring
+
+
+def _template_allowlists() -> dict[str, list[str]]:
+    lists = {}
+    for rel in ("codex/config.toml", "codex/cadguard.config.toml"):
+        data = _parse_template(MCP_DIR / rel)
+        lists[rel] = data["mcp_servers"]["cad-guard"]["enabled_tools"]
+    for name, spec in _parse_template(MCP_DIR / "antigravity" / "mcp_config.json")["mcpServers"].items():
+        lists[f"antigravity/mcp_config.json:{name}"] = spec["enabledTools"]
+    return lists
+
+
+def test_cli_allowlists_match_server_tool_names():
+    """Danh sách công cụ liệt kê tên (Codex, Antigravity) phải đúng bằng TOOL_NAMES của máy chủ, không thiếu, không thừa."""
+    from cadguard.mcp_server import PROPOSE_TOOL, TOOL_NAMES
+
+    for where, names in _template_allowlists().items():
+        assert len(names) == len(TOOL_NAMES) == len(set(names)), where
+        assert set(names) == set(TOOL_NAMES), where
+        assert PROPOSE_TOOL not in names, f"{where}: propose_changeset mặc định không bật"
 
 
 @pytest.mark.parametrize("path", _mcp_files(), ids=lambda p: p.relative_to(MCP_DIR).as_posix())
@@ -180,7 +245,7 @@ def test_knowledge_avoids_wrong_audience_phrase():
 def test_knowledge_agents_md_covers_rules():
     text = (KNOWLEDGE / "AGENTS.md").read_text(encoding="utf-8")
     for needle in ("Thiết kế", "Kỹ thuật", "Lập trình sản xuất", "records_capped", "skipped", "ẩn danh", "WIPEOUT", "xref",
-                   "list_drawings", "audit", "explain_rule", "get_model_summary", "query_model"):
+                   "list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff"):
         assert needle in text, needle
 
 
@@ -204,7 +269,9 @@ def test_required_skills_have_valid_frontmatter():
 
 
 def test_skills_reference_only_cadguard_tools():
-    tools = {"list_drawings", "audit", "explain_rule", "get_model_summary", "query_model"}
+    from cadguard.mcp_server import TOOL_NAMES
+
+    tools = set(TOOL_NAMES)
     for path in SKILLS_DIR.glob("*/SKILL.md"):
         text = path.read_text(encoding="utf-8")
         assert any(t in text for t in tools), path

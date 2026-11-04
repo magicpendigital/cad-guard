@@ -135,7 +135,7 @@ Mẫu thêm agent `cad-guard` (`mode: primary`, cùng bộ quyền) và đặt `
 | | OpenCode qua `opencode acp` | cad-guard tự gọi API |
 | --- | --- | --- |
 | Lớp nhà cung cấp | Có sẵn hơn 75 nhà cung cấp, kể cả cục bộ | Phải tự viết. Phần lớn nhà cung cấp đi được qua lối tương thích OpenAI (OpenRouter, Ollama, LM Studio, DeepSeek…), Anthropic viết riêng |
-| Vòng lặp agent, phiên, nén ngữ cảnh, hỏi quyền | Có sẵn | Tự viết. Với 5 công cụ chỉ đọc, vòng lặp nhỏ |
+| Vòng lặp agent, phiên, nén ngữ cảnh, hỏi quyền | Có sẵn | Tự viết. Với 6 công cụ chỉ đọc, vòng lặp nhỏ |
 | Bảo đảm "chỉ cad-guard" | Bằng cấu hình (đã kiểm ở mức cấu hình), có thể bị cấu hình tầng cao hơn ghi đè | Tuyệt đối: không tồn tại công cụ nào khác |
 | Đường đi dữ liệu | Thêm một tiến trình tự lưu lịch sử phiên, tự lấy danh mục mô hình từ models.dev, tự kiểm cập nhật (tắt được bằng biến môi trường) | Chỉ cad-guard ↔ nhà cung cấp |
 | Mã client | Dùng chung client ACP của V2 (đằng nào cũng phải viết cho Claude/Codex) | Thêm một đường riêng trong ứng dụng |
@@ -148,7 +148,7 @@ Mẫu thêm agent `cad-guard` (`mode: primary`, cùng bộ quyền) và đặt `
   - đặt khoá bằng biến môi trường của tiến trình con, đọc từ kho khoá hệ điều hành;
   - đặt các biến `OPENCODE_DISABLE_CLAUDE_CODE=1`, `OPENCODE_DISABLE_EXTERNAL_SKILLS=1`, `OPENCODE_DISABLE_AUTOUPDATE=1`, `OPENCODE_DISABLE_MODELS_FETCH=1` (cần kèm `OPENCODE_MODELS_PATH` ghim danh mục mô hình), `OPENCODE_DB` trỏ vào thư mục phiên;
   - ghim phiên bản OpenCode.
-- **Giữ phương án dự phòng "cad-guard tự gọi API"** cho hai trường hợp: khách đòi bảo đảm tuyệt đối "không có công cụ nào khác" (bậc NDA), hoặc ACP của OpenCode đổi làm vỡ tích hợp. Với 5 công cụ chỉ đọc, phương án này nhỏ: một lớp Anthropic, một lớp tương thích OpenAI, vòng lặp gọi công cụ.
+- **Giữ phương án dự phòng "cad-guard tự gọi API"** cho hai trường hợp: khách đòi bảo đảm tuyệt đối "không có công cụ nào khác" (bậc NDA), hoặc ACP của OpenCode đổi làm vỡ tích hợp. Với 6 công cụ chỉ đọc, phương án này nhỏ: một lớp Anthropic, một lớp tương thích OpenAI, vòng lặp gọi công cụ.
 - Không nên tự viết lại toàn bộ harness (V3), đúng như kế hoạch đã nêu.
 - Bench có thể dùng `opencode run --format json --agent cad-guard -m <provider/model>` để chạy nhiều mô hình bằng một lệnh.
 

@@ -264,7 +264,7 @@ def test_no_anonymize_shows_names_and_warns(ws_env):
 
 
 def _every_tool_on_every_file(ws_env, args, errlog_name):
-    """Gọi đủ 5 công cụ trên mọi DXF của workspace (query_model lấy hết các trang) qua giao thức thật."""
+    """Gọi 5 công cụ đọc từng tệp (trừ diff) trên mọi DXF của workspace (query_model lấy hết các trang) qua giao thức thật."""
 
     async def body(s):
         listing = _data(await s.call_tool("list_drawings", {}))
@@ -293,7 +293,7 @@ def _every_tool_on_every_file(ws_env, args, errlog_name):
 
 @needs_sdk
 def test_stream_threshold_zero_matches_ezdxf_over_protocol(ws_env):
-    """--stream-threshold-mb 0 (luôn theo dòng) cho đúng kết quả như số âm (luôn ezdxf) trên cả 5 công cụ."""
+    """--stream-threshold-mb 0 (luôn theo dòng) cho đúng kết quả như số âm (luôn ezdxf) trên cả 5 công cụ đọc từng tệp (trừ diff)."""
     plain = ["--no-anonymize"]  # mã ẩn danh có muối ngẫu nhiên theo phiên; so tên thật giữa hai tiến trình
     stream = _every_tool_on_every_file(ws_env, [*plain, "--stream-threshold-mb", "0"], "server_stream.err")
     ezdxf_ = _every_tool_on_every_file(ws_env, [*plain, "--stream-threshold-mb", "-1"], "server_ezdxf.err")
