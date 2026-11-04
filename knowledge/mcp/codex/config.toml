@@ -1,9 +1,25 @@
-# Mẫu cho Codex CLI: thêm khối này vào tệp cấu hình của Codex (thường là ~/.codex/config.toml).
-# Thay <PYTHON> và <THU_MUC_LAM_VIEC>. Không đặt khoá API hay token vào tệp này.
-# Các khoá chặn công cụ shell/đọc tệp của Codex KHÔNG có ở đây: xem knowledge/mcp/README.md (cần kiểm lại với tài liệu chính thức).
+# Mẫu cho Codex CLI (đã kiểm với codex-cli 0.165.0, 04/11/2026): khối máy chủ MCP cad-guard.
+# Cách dùng được khuyến nghị: KHÔNG gộp tệp này vào ~/.codex/config.toml, mà dùng tệp hồ sơ
+# cadguard.config.toml cùng thư mục (có thêm các khoá chặn shell/web) và mở Codex bằng `codex -p cadguard`.
+# Tệp này chỉ dành cho ai muốn có cad-guard trong mọi phiên Codex (gộp vào ~/.codex/config.toml,
+# hoặc vào <THU_MUC_LAM_VIEC>/.codex/config.toml nếu thư mục đó đã được Codex đánh dấu "trusted").
+#
+# Thay <PYTHON> và <THU_MUC_LAM_VIEC>. Trên Windows dùng chuỗi nháy đơn '...' để không phải nhân đôi dấu \.
+# Không đặt khoá API hay token vào tệp này.
 
 [mcp_servers.cad-guard]
-command = "<PYTHON>"
-args = ["-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>"]
-# Tuỳ chọn: áp hồ sơ công ty (thay dòng args trên bằng dòng này, bỏ dấu #).
-# args = ["-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>", "--profile", "<HO_SO_CONG_TY>"]
+command = '<PYTHON>'
+args = ["-m", "cadguard", "mcp", "--workspace", '<THU_MUC_LAM_VIEC>']
+# Tuỳ chọn: áp hồ sơ công ty cad-guard (thay dòng args trên bằng dòng này, bỏ dấu #).
+# Đây là hồ sơ công ty của cad-guard (YAML cg.company-profile/1), KHÔNG phải hồ sơ cấu hình `-p` của Codex.
+# args = ["-m", "cadguard", "mcp", "--workspace", '<THU_MUC_LAM_VIEC>', "--profile", '<HO_SO_CONG_TY>']
+cwd = '<THU_MUC_LAM_VIEC>'
+# Python + ezdxf khởi động lạnh trên Windows đo được ~13 giây; mặc định của Codex là 10 giây nên phải nâng.
+startup_timeout_sec = 60
+tool_timeout_sec = 120
+# Không lên được máy chủ thì `codex exec` dừng với lỗi thay vì chạy tiếp không có cad-guard.
+required = true
+# Danh sách cho phép đúng 5 công cụ chỉ đọc (Codex lọc phía client, đã kiểm).
+enabled_tools = ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model"]
+# Chỉ cần khi chạy cad-guard từ mã nguồn thay vì đã `pip install`:
+# env = { PYTHONPATH = '<THU_MUC_REPO>\packages\core' }

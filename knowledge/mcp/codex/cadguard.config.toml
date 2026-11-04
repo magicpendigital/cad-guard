@@ -1,0 +1,37 @@
+# Hồ sơ cấu hình Codex CLI cho phiên cad-guard (đã kiểm với codex-cli 0.165.0, 04/11/2026).
+# Chép tệp này thành $CODEX_HOME/cadguard.config.toml (mặc định CODEX_HOME là ~/.codex, trên Windows
+# là %USERPROFILE%\.codex), rồi mở Codex TRONG thư mục làm việc của phiên:
+#   codex -p cadguard -C <THU_MUC_LAM_VIEC>
+#   codex exec -p cadguard -C <THU_MUC_LAM_VIEC> --skip-git-repo-check --ephemeral "<yêu cầu>"
+# Hồ sơ chồng lên ~/.codex/config.toml, chỉ có hiệu lực khi có `-p cadguard`; phiên Codex khác không bị ảnh hưởng.
+#
+# Thay <PYTHON> và <THU_MUC_LAM_VIEC>. Trên Windows dùng chuỗi nháy đơn '...'.
+# Không đặt khoá API hay token vào tệp này. Đăng nhập do Codex tự làm (`codex login`).
+#
+# Mức ép buộc (xem docs/integrations/codex.md mục 2):
+# - shell_tool = false: mô hình KHÔNG còn công cụ chạy lệnh (exec_command, write_stdin) - đã kiểm.
+# - view_image = false: bỏ công cụ xem ảnh trên đĩa - đã kiểm.
+# - web_search = "disabled": bỏ công cụ tìm web (theo tài liệu).
+# - Còn lại công cụ apply_patch (ghi tệp, không tắt được bằng khoá đã biết); sandbox read-only +
+#   approval "never" làm mọi lệnh ghi bị từ chối. Hãy vẫn dùng thư mục làm việc rỗng chỉ chứa tệp của phiên.
+
+sandbox_mode = "read-only"
+approval_policy = "never"
+web_search = "disabled"
+
+[features]
+shell_tool = false
+view_image = false
+
+[mcp_servers.cad-guard]
+command = '<PYTHON>'
+args = ["-m", "cadguard", "mcp", "--workspace", '<THU_MUC_LAM_VIEC>']
+# Tuỳ chọn: áp hồ sơ công ty cad-guard (thay dòng args trên bằng dòng này, bỏ dấu #).
+# args = ["-m", "cadguard", "mcp", "--workspace", '<THU_MUC_LAM_VIEC>', "--profile", '<HO_SO_CONG_TY>']
+cwd = '<THU_MUC_LAM_VIEC>'
+startup_timeout_sec = 60
+tool_timeout_sec = 120
+required = true
+enabled_tools = ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model"]
+# Chỉ cần khi chạy cad-guard từ mã nguồn thay vì đã `pip install`:
+# env = { PYTHONPATH = '<THU_MUC_REPO>\packages\core' }

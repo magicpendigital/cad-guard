@@ -8,13 +8,14 @@ Thư mục này có mẫu cấu hình để một CLI agent có sẵn gọi máy
 
 | CLI | Tệp mẫu | Đặt ở đâu | Độ chắc về định dạng |
 | --- | --- | --- | --- |
-| Claude Code | `claude-code/.mcp.json` | gốc thư mục làm việc của phiên | Theo tài liệu Claude Code (khoá `mcpServers`); nên kiểm lại theo phiên bản đang dùng |
-| Claude Code (quyền) | `claude-code/settings.json` | `.claude/settings.json` trong thư mục làm việc | Khoá `permissions.allow/deny`, `enabledMcpjsonServers`; tên công cụ MCP dạng `mcp__cad-guard__<tên>`. Nên kiểm lại |
-| Codex CLI | `codex/config.toml` | gộp vào `~/.codex/config.toml` | Mục `[mcp_servers.<tên>]` với `command`, `args`. Chỗ đặt tệp cấu hình theo dự án (nếu có) **cần kiểm lại với tài liệu chính thức** |
-| OpenCode | `opencode/opencode.json` | gốc thư mục làm việc | Khoá `mcp` (`type: local`, `command` là mảng) và `permission`. Tên quyền **cần kiểm lại với tài liệu chính thức** |
+| Claude Code | `claude-code/.mcp.json` | gốc thư mục làm việc của phiên | **Đã kiểm** với Claude Code 2.1.318 (`claude mcp list` báo `✔ Connected` sau khi tin cậy thư mục). Hai máy chủ: `cad-guard` và `cad-guard-ho-so` (có `--profile`) |
+| Claude Code (quyền) | `claude-code/.claude/settings.json` | `.claude/settings.json` trong thư mục làm việc (giữ nguyên đường dẫn) | **Đã kiểm** tên công cụ bằng `claude doctor`, allowlist máy chủ bằng `claude mcp list`. Chưa kiểm trong phiên có gọi mô hình. Chi tiết: `docs/integrations/claude-code.md` |
+| Codex CLI (khuyến nghị) | `codex/cadguard.config.toml` | `$CODEX_HOME/cadguard.config.toml` (mặc định `~/.codex/`), mở bằng `codex -p cadguard -C <THU_MUC_LAM_VIEC>` | **Đã kiểm với codex-cli 0.165.0** (04/11/2026): hồ sơ cấu hình gồm máy chủ MCP + tắt shell/xem ảnh/web + read-only. Chi tiết và nguồn: `docs/integrations/codex.md` |
+| Codex CLI (chỉ MCP) | `codex/config.toml` | gộp vào `~/.codex/config.toml`, hoặc `<THU_MUC_LAM_VIEC>/.codex/config.toml` (chỉ nạp khi thư mục được Codex đánh dấu `trusted`) | Đã kiểm: `[mcp_servers.cad-guard]` với `command`, `args`, `cwd`, `startup_timeout_sec`, `required`, `enabled_tools`. Không có khoá chặn công cụ |
+| OpenCode | `opencode/opencode.json` | gốc thư mục làm việc (`opencode.json` của dự án) | **Đã thử với OpenCode 1.19.4**: `opencode mcp list` báo `cad-guard connected` (cả bản có `--profile`); quyền `"*": "deny"` + `cad-guard_*` đã kiểm bằng `opencode debug agent`. Chưa thử phiên có mô hình. Chi tiết: `docs/integrations/opencode.md` |
 | Antigravity CLI (`agy`) | `antigravity/mcp_config.json` | **chưa rõ** | **Chưa chắc.** Mẫu dùng dạng `mcpServers` (`command`, `args`) mà Gemini CLI, tiền thân của Antigravity CLI, dùng trong `settings.json`. Tên tệp, chỗ đặt và khoá chặn công cụ của Antigravity CLI **cần kiểm lại với tài liệu chính thức** trước khi dùng |
 
-Chưa mẫu nào được thử chạy thật với từng CLI. Đây là việc của bước A0/A1 trong `plans/cad-guard-agent.md`.
+Mẫu OpenCode đã được thử kết nối MCP và kiểm quyền với OpenCode 1.19.4 (chưa thử phiên có mô hình). Mẫu Claude Code đã được thử kết nối MCP với Claude Code 2.1.318 (chưa thử phiên có mô hình), xem mục "Claude Code". Mẫu Codex đã được thử với codex-cli 0.165.0 (chưa thử phiên có mô hình): Codex nạp đúng mẫu, khởi động máy chủ cad-guard và gọi được `list_drawings`/`audit`/`explain_rule` có áp `--profile`, xem `docs/integrations/codex.md`. Các mẫu khác chưa được thử chạy thật với từng CLI. Đây là việc của bước A0/A1 trong `plans/cad-guard-agent.md`.
 
 ## Cách dùng
 
@@ -24,12 +25,12 @@ Chưa mẫu nào được thử chạy thật với từng CLI. Đây là việc
    - `<PYTHON>`: đường dẫn đầy đủ tới `python` đã cài cad-guard (ví dụ `C:/Python313/python.exe`);
    - `<THU_MUC_LAM_VIEC>`: đường dẫn đầy đủ tới thư mục làm việc của phiên.
    - Trên Windows, trong JSON viết `/` hoặc `\\` (hai dấu gạch ngược).
-4. Chép `knowledge/AGENTS.md` vào gốc thư mục làm việc (CLI đọc `AGENTS.md`; Claude Code đọc `CLAUDE.md`, có thể tạo `CLAUDE.md` chỉ chứa dòng `@AGENTS.md`). Chép `knowledge/skills/` vào chỗ CLI đọc skill (ví dụ `.claude/skills/` cho Claude Code); chỗ đọc skill của các CLI khác cần kiểm lại.
+4. Chép `knowledge/AGENTS.md` vào gốc thư mục làm việc. Claude Code từ v2.1.277 đọc thẳng `AGENTS.md` khi không có `CLAUDE.md`; cách chắc nhất vẫn là tạo thêm `CLAUDE.md` chỉ chứa dòng `@AGENTS.md`. Chép `knowledge/skills/` vào chỗ CLI đọc skill (ví dụ `.claude/skills/` cho Claude Code); chỗ đọc skill của các CLI khác cần kiểm lại.
 5. Mở CLI **trong thư mục làm việc đó**, tự đăng nhập bằng tài khoản hoặc khoá API của chính bạn/công ty.
 
 Máy chủ mặc định ẩn danh Bậc 1. Chỉ thêm `--no-anonymize` vào `args` khi khách đã đồng ý bằng văn bản.
 
-Hồ sơ công ty (tuỳ chọn): thêm `"--profile", "<HO_SO_CONG_TY>"` vào cuối `args` (đường dẫn đầy đủ tới tệp YAML `cg.company-profile/1`); không có `--standard` thì chuẩn mặc định là chuẩn ghi trong hồ sơ, và `audit`/`explain_rule` trả `profile: {name, version}` của hồ sơ đã áp. Mẫu Codex có dòng ví dụ để bỏ dấu `#`; mẫu OpenCode có mục `cad-guard-ho-so` đang tắt (`enabled: false`).
+Hồ sơ công ty (tuỳ chọn): thêm `"--profile", "<HO_SO_CONG_TY>"` vào cuối `args` (đường dẫn đầy đủ tới tệp YAML `cg.company-profile/1`); không có `--standard` thì chuẩn mặc định là chuẩn ghi trong hồ sơ, và `audit`/`explain_rule` trả `profile: {name, version}` của hồ sơ đã áp. Hai mẫu Codex có dòng ví dụ để bỏ dấu `#` (đừng nhầm `--profile` của cad-guard với `-p/--profile` của Codex: cái sau chọn tệp `$CODEX_HOME/<tên>.config.toml`); mẫu OpenCode có mục `cad-guard-ho-so` đang tắt (`enabled: false`): thay `<HO_SO_CONG_TY>`, đặt `enabled: true` và đặt `cad-guard` thành `enabled: false` (chỉ bật một trong hai để trợ lý không thấy hai bộ công cụ trùng nhau).
 
 ## Đăng nhập và khoá
 
@@ -42,10 +43,24 @@ CLI agent có sẵn công cụ đọc tệp, tìm tệp, chạy lệnh, mở web
 
 1. Mở CLI trong **thư mục làm việc rỗng chỉ chứa tệp của phiên** (bước 2 ở trên). Đây là lớp bảo vệ dựa vào cách dùng, áp dụng được cho mọi CLI.
 2. Tắt hoặc từ chối công cụ đọc/ghi tệp, shell và web của CLI, chỉ cho phép 5 công cụ của `cad-guard`:
-   - Claude Code: `claude-code/settings.json` từ chối `Bash`, `Read`, `Edit`, `Write`, `Glob`, `Grep`, `WebFetch`, `WebSearch` và cho phép `mcp__cad-guard__*`.
-   - OpenCode: `opencode/opencode.json` đặt `permission` của `edit`, `bash`, `webfetch` là `deny`. OpenCode có thể còn công cụ đọc/liệt kê tệp không nằm dưới các quyền này; **cần kiểm lại với tài liệu chính thức** cách tắt chúng.
-   - Codex CLI: có chế độ sandbox và chính sách phê duyệt, nhưng theo hiểu biết hiện tại chế độ chỉ đọc **vẫn cho đọc tệp**. Cách tắt hẳn công cụ đọc tệp/shell **cần kiểm lại với tài liệu chính thức**; tới lúc đó dựa vào thư mục làm việc rỗng.
+   - Claude Code: `claude-code/.claude/settings.json` từ chối 19 công cụ dựng sẵn (shell gồm cả `PowerShell` và `Monitor`, đọc/ghi/tìm tệp, web, subagent, công cụ đẩy nội dung ra ngoài), chỉ cho phép `mcp__cad-guard__*`, `mcp__cad-guard-ho-so__*` và `Skill`, chạy ở chế độ `dontAsk`, chặn máy chủ MCP khác bằng `allowedMcpServers`. Xem mục "Claude Code".
+   - OpenCode: `opencode/opencode.json` đặt `permission` `"*": "deny"` (chặn mọi công cụ tích hợp: `read`, `glob`, `grep`, `edit`/`write`/`apply_patch`, `bash`, `webfetch`, `websearch`, `task`, `todowrite`, `question`, `external_directory`…), rồi cho phép `cad-guard_*`, `cad-guard-ho-so_*` và 4 skill cad-guard theo tên (`permission.skill`). Agent `cad-guard` là mặc định (`default_agent`). Đã kiểm trên OpenCode 1.19.4 bằng `opencode debug agent <tên>`: với `cad-guard`, `build`, `plan`, `explore`, `general` chỉ còn công cụ `skill`; gọi `read` bị từ chối; skill ngoài danh sách bị từ chối. Chép `knowledge/skills/*` vào `.opencode/skills/` của thư mục làm việc. Khi khởi chạy, nên đặt `OPENCODE_DISABLE_CLAUDE_CODE=1` và `OPENCODE_DISABLE_EXTERNAL_SKILLS=1` để OpenCode không nạp `~/.claude/CLAUDE.md` và skill cá nhân. Cài cad-guard bằng `pip` thì không cần `environment`; chạy từ mã nguồn thì thêm `"environment": {"PYTHONPATH": "<repo>/packages/core"}` vào mục MCP. **Chưa xác nhận** tên công cụ MCP trong phiên có mô hình (dự kiến `cad-guard_<tên>`). Nếu tên khác, `"*": "deny"` sẽ chặn cả công cụ cad-guard, tức hỏng theo hướng an toàn.
+   - Codex CLI: dùng `codex/cadguard.config.toml` với `codex -p cadguard`. Đã kiểm trên 0.165.0 bằng `codex debug prompt-input` (liệt kê công cụ mô hình thấy, không gọi mô hình): `features.shell_tool = false` bỏ hẳn công cụ chạy lệnh (Codex không có công cụ đọc tệp riêng, đọc tệp vốn đi qua shell), `features.view_image = false` bỏ công cụ xem ảnh, `web_search = "disabled"` bỏ tìm web. Còn công cụ ghi `apply_patch` (không tắt được), bị `sandbox_mode = "read-only"` + `approval_policy = "never"` chặn. `enabled_tools` giới hạn đúng 5 công cụ cad-guard (đã kiểm). Chặn đọc `**/*.dxf` bằng hồ sơ quyền của Codex trên Windows cần cài sandbox "elevated" bằng quyền admin, chưa kiểm hết. Với Codex, `AGENTS.md` ở gốc và skill ở `<THU_MUC_LAM_VIEC>/.agents/skills/<tên>/SKILL.md` được nạp cả khi thư mục không phải repo git. Đặt `startup_timeout_sec = 60` vì mặc định 10 giây không đủ cho Python khởi động lạnh trên Windows.
    - Antigravity CLI: **chưa biết** cơ chế chặn công cụ; cần kiểm lại với tài liệu chính thức.
 3. `AGENTS.md` cũng dặn trợ lý chỉ dùng công cụ cad-guard, nhưng đó là **lời dặn**, không phải rào chặn. Đừng chỉ dựa vào nó.
 
 **Mức ép buộc khác nhau theo CLI và chưa được kiểm trên từng CLI.** Trước khi dùng với bản vẽ thật của khách phải thử: yêu cầu trợ lý đọc một tệp ngoài thư mục làm việc (và một DXF trong thư mục bằng công cụ đọc tệp của CLI), xác nhận bị từ chối. Ghi kết quả thử theo từng CLI và phiên bản.
+
+## Claude Code (đã kiểm với 2.1.318)
+
+Chi tiết, nguồn và khuyến nghị cho ba cách dùng (gói làm việc / hạn mức tài khoản / khoá API): `docs/integrations/claude-code.md`.
+
+1. Chép **cả hai** tệp, giữ đường dẫn: `claude-code/.mcp.json` → `<THU_MUC_LAM_VIEC>/.mcp.json`, `claude-code/.claude/settings.json` → `<THU_MUC_LAM_VIEC>/.claude/settings.json`. Thay `<PYTHON>`, `<THU_MUC_LAM_VIEC>` và, nếu dùng hồ sơ, `<HO_SO_CONG_TY>`.
+2. Hồ sơ công ty: mặc định bật `cad-guard`, tắt `cad-guard-ho-so`. Muốn dùng hồ sơ thì đổi chỗ hai tên giữa `enabledMcpjsonServers` và `disabledMcpjsonServers` trong `.claude/settings.json`.
+3. Cách khác, không chép `.mcp.json`: chạy trong thư mục làm việc (tên máy chủ phải đứng ngay sau `add`, trước `-e`):
+   `claude mcp add cad-guard -s project -- "<PYTHON>" -m cadguard mcp --workspace "<THU_MUC_LAM_VIEC>"` (thêm `--profile "<HO_SO_CONG_TY>"` ở cuối nếu cần).
+4. Mở `claude` trong thư mục làm việc và **chấp nhận hộp thoại tin cậy thư mục**. Chưa tin cậy thì máy chủ ở trạng thái `Pending approval` và các quy tắc allow của dự án bị bỏ qua, nên công cụ cad-guard bị từ chối.
+5. Kiểm: `claude mcp list` phải báo `cad-guard: … ✔ Connected` và không còn máy chủ nào khác. Máy chậm thì đặt `MCP_TIMEOUT=60000` (ms) trước khi chạy `claude`.
+6. Trước khi dùng với bản vẽ thật: trong phiên, yêu cầu trợ lý đọc một DXF bằng công cụ tệp, đọc một tệp ngoài thư mục và chạy một lệnh shell. Cả ba phải bị từ chối. Ghi kết quả kèm phiên bản Claude Code.
+
+Giới hạn cần biết: đây là chặn của chương trình theo cấu hình dự án. Người dùng sửa được cấu hình đó, và mod người dùng tự cài có thể vượt deny khi máy không có managed settings. Trên Windows không có sandbox hệ điều hành cho Claude Code. Muốn chặn cứng thì IT công ty đưa cùng nội dung vào managed settings.
