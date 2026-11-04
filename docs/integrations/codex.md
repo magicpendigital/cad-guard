@@ -9,7 +9,7 @@ Ba cách dùng nhắc tới bên dưới: **(A)** người dùng mở Codex tron
 
 ## 1. Cấu hình MCP
 
-**Khoá của `[mcp_servers.<tên>]` (máy chủ stdio)** [tài liệu: [MCP](https://learn.chatgpt.com/docs/extend/mcp?surface=cli), [Config reference](https://learn.chatgpt.com/docs/config-file/config-reference)]:
+**Khoá của `[mcp_servers.<tên>]` (máy chủ stdio)** [tài liệu: [MCP](https://learn.chatgpt.com/docs/extend/mcp), [Config reference](https://learn.chatgpt.com/docs/config-file/config-reference)]:
 
 | Khoá | Ý nghĩa | Mặc định |
 | --- | --- | --- |

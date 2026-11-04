@@ -87,6 +87,6 @@ Hồ sơ công ty (B06): `moi_truong.ho_so` tương ứng cờ `python -m cadgua
 
 ## Chưa làm
 
-- Người trả lời chạy qua CLI agent thật (Claude Code, Codex CLI, OpenCode, Antigravity CLI) và đọc số token/chi phí của từng CLI.
+- Người trả lời qua OpenCode (chưa có engine). Claude Code, Codex CLI, Antigravity CLI và API trực tiếp: đã có `bench/engine_answerer.py` (`python scripts/bench.py --engine …`, xem `docs/bench.md`), chưa chạy với mô hình thật.
 - Tác vụ có sửa bản vẽ (chờ công cụ ghi: changeset, `validate_output`).
 - Tác vụ trên bản vẽ khâu Kỹ thuật/Lập trình sản xuất chi tiết hơn (chờ mẫu và luật).

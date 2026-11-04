@@ -1,4 +1,5 @@
-"""Dòng lệnh: cadguard audit | stats | rules | profile | fixtures | mcp | propose | apply | undo | diff | validate.
+"""Dòng lệnh: cadguard audit | stats | rules | profile | fixtures | mcp | propose | apply | undo | diff | validate
+| ask | chat | engines | keys.
 
 Mã thoát của `audit`: 0 = không có lỗi mức E; 1 = có lỗi mức E; 2 = không đọc được đầu vào/chuẩn.
 `propose`/`validate`: 0 = đạt, 1 = kiểm không đạt, 2 = lỗi/từ chối. `apply`/`undo`: 0 = xong, 2 = từ chối/lỗi.
@@ -479,6 +480,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     mcp_arguments(m)
     m.set_defaults(fn=cmd_mcp)
+
+    from .assistant.commands import add_parsers as assistant_parsers  # ask, chat, engines, keys (trợ lý AI)
+
+    assistant_parsers(sub)
 
     args = p.parse_args(argv)
     try:
