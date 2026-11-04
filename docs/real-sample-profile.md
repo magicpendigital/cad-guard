@@ -1,6 +1,6 @@
 # Hồ sơ 5 bản vẽ thật (đợt mẫu 04/11/2026) — số tổng hợp, ẩn danh
 
-Trạng thái: **kết quả đầu tiên trên dữ liệu thật, n = 5, một đơn vị thiết kế.** Không đủ để kết luận về cả ngành; đủ để sửa vài giả định sai của kế hoạch.
+Trạng thái: **kết quả đầu tiên trên dữ liệu thật, n = 5, một công ty, khâu thiết kế/kỹ thuật.** Không đủ để kết luận về cả ngành; đủ để sửa vài giả định sai của kế hoạch.
 Quy tắc dữ liệu: bản vẽ thật nằm **ngoài repo** (thư mục riêng trên ổ D, do CEO chuyển ra ngày 04/11; `Data sample/` vẫn bị chặn trong `.gitignore` để phòng khi đặt lại). Tài liệu này chỉ có **con số**: không tên tệp/layer/khối/khách, không nội dung chữ. Các tệp được gọi M1–M5.
 Đội MCA và mọi agent **chỉ được đọc tài liệu này** và DXF tổng hợp, không được đọc bản thật (xem `AGENTS.md`).
 
@@ -107,13 +107,13 @@ Số cảnh báo/lỗi của trình chuyển rất lớn và có khối "ACDB_BL
 | LY-03, LY-04, TX-08, DH-01, DH-02, DH-10 | 1 mỗi luật | Cần xem từng ca; DH-10 (Z khác 0) khớp với số liệu mục 3 |
 | PR-02 | bỏ qua | Bảng kê không có: đúng với loại bản vẽ này |
 
-Kết luận: với loại bản vẽ này, **v0 không có luật nào đủ phù hợp để bật nguyên trạng**. Bộ luật vẫn đúng hướng cho xưởng; còn cho đơn vị thiết kế cần "chuẩn thiết kế triển khai" riêng, bắt đầu từ mục 4.6.
+Kết luận: với loại bản vẽ này, **v0 không có luật nào đủ phù hợp để bật nguyên trạng**. Bộ luật vẫn đúng hướng cho khâu cuối (bản vẽ đưa xuống sản xuất); cho khâu thiết kế/kỹ thuật cần "chuẩn triển khai" riêng, bắt đầu từ mục 4.6.
 
 ## 6. Hệ quả cho kế hoạch và việc làm tiếp
 
 1. **Mẫu còn thiếu (CEO/phòng kỹ thuật):** bản vẽ của khâu kỹ thuật chi tiết và của phòng lập trình sản xuất (kèm tệp DXF/CNC họ giao cho máy), để chọn luật cho khâu 2 và 3 (4.1).
 2. **Lõi:** đọc theo dòng cho `audit` (không chỉ `profile`); duyệt cả khối; chuẩn cấu hình theo công ty; chế độ học quy ước (4.4).
 3. **Luật mới** (cần mã trong `standards/` và phiên bản chuẩn mới `furniture-v0.1`, theo quy trình AGENTS.md): vệ sinh layer xref, phình kiểu chữ/kích thước, đối tượng trên layer 0, ghi đè ByLayer, phông tiếng Việt Unicode, kích thước ghi đè chữ, WIPEOUT/OLE.
-4. **Trợ lý (A0):** `query_model` trả tóm tắt theo vùng/layer; công cụ "khảo sát bản vẽ" (đếm, thống kê, tìm) vì đơn vị thiết kế rất cần hỏi đáp trên bản vẽ lớn.
+4. **Trợ lý (A0):** `query_model` trả tóm tắt theo vùng/layer; công cụ "khảo sát bản vẽ" (đếm, thống kê, tìm) vì phòng thiết kế/kỹ thuật làm việc với bản vẽ rất lớn và cần hỏi đáp nhanh trên chúng.
 5. **P0 còn thiếu:** DXF xuất từ phần mềm gốc (đối chiếu), danh sách sự cố thật, bản vẽ xưởng, nhãn tốt/xấu để đo độ chính xác.
 6. **Pháp lý:** LibreDWG chỉ là công cụ phân tích một lần. Đường đọc DWG cho sản phẩm vẫn là "khách xuất DXF từ phần mềm của họ" (`plans/cad-guard-direction.md`).
