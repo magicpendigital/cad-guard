@@ -1,5 +1,5 @@
 """Dòng lệnh: cadguard audit | stats | rules | profile | fixtures | mcp | propose | apply | undo | diff | validate
-| ask | chat | engines | keys.
+| ask | chat | engines | keys | app.
 
 Mã thoát của `audit`: 0 = không có lỗi mức E; 1 = có lỗi mức E; 2 = không đọc được đầu vào/chuẩn.
 `propose`/`validate`: 0 = đạt, 1 = kiểm không đạt, 2 = lỗi/từ chối. `apply`/`undo`: 0 = xong, 2 = từ chối/lỗi.
@@ -374,6 +374,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if res["ok"] else 1
 
 
+def cmd_app(args: argparse.Namespace) -> int:
+    from .app import run_from_args
+
+    return run_from_args(args)
+
+
 def cmd_mcp(args: argparse.Namespace) -> int:
     from .mcp_server import run_from_args  # SDK `mcp` chỉ được import bên trong, khi chạy lệnh này
 
@@ -484,6 +490,14 @@ def main(argv: list[str] | None = None) -> int:
     from .assistant.commands import add_parsers as assistant_parsers  # ask, chat, engines, keys (trợ lý AI)
 
     assistant_parsers(sub)
+
+    from .app import add_arguments as app_arguments
+
+    ua = sub.add_parser("app", help="mở giao diện cục bộ trong trình duyệt (chỉ 127.0.0.1, có mã phiên)",
+                        description="Ứng dụng web cục bộ: danh sách bản vẽ, kết quả kiểm, đề xuất sửa (xem trước, áp dụng "
+                        "ra tệp mới khi bạn xác nhận, hoàn tác), luật áp dụng, trò chuyện với trợ lý AI. Xem docs/app.md.")
+    app_arguments(ua)
+    ua.set_defaults(fn=cmd_app)
 
     args = p.parse_args(argv)
     try:
