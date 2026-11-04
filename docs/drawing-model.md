@@ -1,4 +1,4 @@
-﻿# Giao diện Drawing Model mở rộng
+# Giao diện Drawing Model mở rộng
 
 Schema vẫn là `cg.drawing/1`. Các trường mới có mặc định để đọc JSON cũ. Tên khối được so sánh không phân biệt hoa thường khi tính độ sâu. Luật nên đọc `model.stats`/`model.blocks`/`model.styles` để chạy được với cả hai đường đọc; `entities` có thể bị cắt trần ở đường stream (`stats.entity_records_truncated`). Khi `stats` là `None`, dữ liệu thống kê không có sẵn, không được coi là số 0.
 

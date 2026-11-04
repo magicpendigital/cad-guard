@@ -9,6 +9,7 @@ DXF nhị phân luôn quay về ezdxf ở chế độ `auto`, vì bộ đọc th
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 from typing import Literal, NamedTuple
 
@@ -28,8 +29,25 @@ class ReaderChoice(NamedTuple):
     size_mb: float
 
 
+def check_threshold(threshold_mb: float | None) -> None:
+    """Ném ValueError (tiếng Việt) nếu ngưỡng là NaN hoặc vô cực; None và số hữu hạn đều hợp lệ."""
+    if threshold_mb is None:
+        return
+    if isinstance(threshold_mb, bool) or not isinstance(threshold_mb, (int, float)):
+        raise ValueError("Ngưỡng đọc theo dòng (MB) phải là một số.")
+    if not math.isfinite(threshold_mb):
+        raise ValueError(
+            f"Ngưỡng đọc theo dòng (MB) phải là số hữu hạn, không nhận NaN hay vô cực (đang là {threshold_mb}). "
+            "Dùng 0 để luôn đọc theo dòng, số âm để luôn dùng ezdxf."
+        )
+
+
 def choose_reader(path: str | Path, reader: str = "auto", threshold_mb: float | None = DEFAULT_STREAM_THRESHOLD_MB) -> ReaderChoice:
-    """Quyết định bộ đọc cho một tệp, không đọc nội dung (trừ vài byte đầu để nhận DXF nhị phân)."""
+    """Quyết định bộ đọc cho một tệp, không đọc nội dung (trừ vài byte đầu để nhận DXF nhị phân).
+
+    Ngưỡng NaN/vô cực bị từ chối bằng ValueError (xem `check_threshold`).
+    """
+    check_threshold(threshold_mb)
     p = Path(path)
     size_mb = p.stat().st_size / (1024 * 1024)
     if reader in ("ezdxf", "stream"):
@@ -52,4 +70,4 @@ def read_with(path: str | Path, reader: ReaderName, max_entity_records: int = DE
     return read_dxf(path)
 
 
-__all__ = ["DEFAULT_STREAM_THRESHOLD_MB", "ReaderChoice", "choose_reader", "read_with"]
+__all__ = ["DEFAULT_STREAM_THRESHOLD_MB", "ReaderChoice", "check_threshold", "choose_reader", "read_with"]

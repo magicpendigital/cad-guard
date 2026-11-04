@@ -6,12 +6,15 @@ Chạy: `python -m cadguard mcp --workspace <thư mục>`.
 - stdout chỉ dành cho JSON-RPC: trước khi phục vụ, fd 1 và `sys.stdout` được chuyển sang stderr;
   luồng giao thức ghi vào bản sao riêng của stdout gốc.
 - Mặc định ẩn danh Bậc 1 (mã phiên thay tên tệp/layer/khối/kiểu chữ); `--no-anonymize` tắt và cảnh báo ra stderr.
+- `--profile <tệp>`: hồ sơ công ty áp cho audit/explain_rule khi gọi đúng chuẩn của hồ sơ; kết quả ghi tên/phiên bản
+  hồ sơ (không đường dẫn). Hồ sơ sai, hoặc ngưỡng --stream-threshold-mb là NaN/vô cực: báo stderr, thoát mã 2.
 - Lỗi công cụ trả về là câu tiếng Việt chung, không chứa đường dẫn tuyệt đối hay nội dung ngoại lệ nội bộ.
 """
 
 import argparse
 import json
 import os
+import re
 import sys
 from io import TextIOWrapper
 from pathlib import Path
@@ -20,10 +23,11 @@ from .agent import tools
 from .agent.anonymize import Anonymizer
 from .agent.workspace import PathDenied, Workspace
 from .dxf_stream import DEFAULT_MAX_ENTITY_RECORDS
-from .reader_select import DEFAULT_STREAM_THRESHOLD_MB
-from .standard import find_standards_dir
+from .reader_select import DEFAULT_STREAM_THRESHOLD_MB, check_threshold
+from .standard import ProfileError, find_standards_dir, load_profile
 
 SERVER_NAME = "cad-guard"
+DEFAULT_STANDARD = "furniture-v0"
 TOOL_NAMES = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model")
 
 INSTALL_HINT = (
@@ -63,9 +67,17 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     )
     p.add_argument(
         "--standard",
-        default="furniture-v0",
+        default=None,
         metavar="TÊN",
-        help="chuẩn mặc định cho audit/explain_rule (mặc định: furniture-v0); công cụ vẫn nhận tham số standard riêng.",
+        help=f"chuẩn mặc định cho audit/explain_rule (mặc định: chuẩn ghi trong --profile, nếu không có thì {DEFAULT_STANDARD}); "
+        "công cụ vẫn nhận tham số standard riêng (vd. design-hygiene-v0).",
+    )
+    p.add_argument(
+        "--profile",
+        default=None,
+        metavar="TỆP",
+        help="hồ sơ công ty (YAML cg.company-profile/1) ghi đè ngưỡng/mẫu layer/tắt luật; áp cho audit/explain_rule "
+        "khi gọi đúng chuẩn của hồ sơ. Hồ sơ sai thì không khởi động (mã 2).",
     )
     p.add_argument(
         "--stream-threshold-mb",
@@ -139,9 +151,20 @@ def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0")
         str,
         Field(description="Tệp .dxf: đường dẫn tương đối trong thư mục làm việc (vd. 'a/b.dxf') hoặc mã tệp từ list_drawings."),
     ]
+    available = sorted(
+        p.stem for p in Path(ctx.standards_dir).glob("*.yaml") if re.fullmatch(r"[a-z0-9][a-z0-9.\-]*", p.stem) and not p.stem.startswith("company-profile")
+    )
+    profile_note = (
+        f" Hồ sơ công ty '{ctx.profile.name}' {ctx.profile.version} được áp khi chuẩn là {ctx.profile.standard}."
+        if ctx.profile is not None
+        else ""
+    )
     StandardArg = Annotated[
         str,
-        Field(description=f"Tên chuẩn (mặc định {default_standard}).", pattern=r"^[a-z0-9][a-z0-9.\-]*$"),
+        Field(
+            description=f"Tên chuẩn (mặc định {default_standard}); có: {', '.join(available) or default_standard}.{profile_note}",
+            pattern=r"^[a-z0-9][a-z0-9.\-]*$",
+        ),
     ]
     StrOrList = str | list[str] | None
 
@@ -167,7 +190,8 @@ def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0")
 
     @server.tool(
         name="audit",
-        description="Kiểm tra một bản vẽ theo chuẩn bằng luật tất định. Trả số lỗi theo mức (E/W/I), "
+        description="Kiểm tra một bản vẽ theo chuẩn bằng luật tất định (vd. furniture-v0, hoặc design-hygiene-v0 cho vệ sinh bản vẽ). "
+        "'profile' ghi tên/phiên bản hồ sơ công ty đã áp (null nếu không áp). Trả số lỗi theo mức (E/W/I), "
         f"luật đã chạy/bỏ qua và tối đa {ctx.max_findings} phát hiện. 'records_capped' = true nghĩa là danh sách đối tượng "
         "bị cắt ở trần bộ nhớ (tệp rất lớn), phát hiện có thể thiếu.",
         annotations=read_only,
@@ -250,8 +274,10 @@ def serve(server) -> None:
 
 def run_from_args(args: argparse.Namespace) -> int:
     """Điểm vào của `python -m cadguard mcp`."""
-    if _import_sdk() is None:
-        _err(INSTALL_HINT)
+    try:
+        check_threshold(args.stream_threshold_mb)
+    except ValueError as exc:
+        _err(f"--stream-threshold-mb: {exc}")
         return 2
     try:
         workspace = Workspace(Path(args.workspace))
@@ -263,6 +289,20 @@ def run_from_args(args: argparse.Namespace) -> int:
     except FileNotFoundError as exc:
         _err(str(exc))
         return 2
+    profile = None
+    if getattr(args, "profile", None):
+        try:
+            profile = load_profile(args.profile)
+        except ProfileError as exc:  # thông điệp chỉ nêu tên tệp, không đường dẫn đầy đủ
+            _err(f"Không khởi động máy chủ MCP: {exc}")
+            return 2
+    standard = args.standard or (profile.standard if profile else DEFAULT_STANDARD)
+    if profile is not None and profile.standard != standard:
+        _err(
+            f"Không khởi động máy chủ MCP: hồ sơ '{profile.name}' viết cho chuẩn '{profile.standard}', "
+            f"không dùng được với chuẩn '{standard}' (--standard)."
+        )
+        return 2
     anonymize = not args.no_anonymize
     ctx = tools.ToolContext(
         workspace,
@@ -270,18 +310,30 @@ def run_from_args(args: argparse.Namespace) -> int:
         standards_dir,
         stream_threshold_mb=args.stream_threshold_mb,
         max_entity_records=args.max_entity_records,
+        profile=profile,
     )
     try:
-        tools._standard(ctx, args.standard)
+        tools._standard(ctx, standard)
     except tools.ToolError:
-        _err(f"Không dùng được chuẩn '{args.standard}'.")
+        _err(f"Không dùng được chuẩn '{standard}'.")
         return 2
+    except ProfileError as exc:  # vd. hồ sơ ghi đè luật/tham số không có trong chuẩn
+        _err(f"Không khởi động máy chủ MCP: hồ sơ công ty '{profile.name}' sai: {exc}")
+        return 2
+    except FileNotFoundError:
+        _err(f"Không dùng được chuẩn '{standard}'.")
+        return 2
+    if _import_sdk() is None:
+        _err(INSTALL_HINT)
+        return 2
+    if profile is not None:
+        _err(f"cad-guard MCP: áp hồ sơ công ty '{profile.name}' phiên bản {profile.version} cho chuẩn {standard}.")
     if not anonymize:
         _err(
             "CẢNH BÁO: đã TẮT ẩn danh (--no-anonymize). Trợ lý AI sẽ thấy tên tệp, layer, khối và kiểu chữ thật "
             "(ngoài Bậc 1). Chỉ dùng khi khách đã đồng ý bằng văn bản."
         )
-    server = build_server(ctx, args.standard)
+    server = build_server(ctx, standard)
     _err("cad-guard MCP: đang phục vụ qua stdio (chỉ đọc). Dừng bằng cách đóng stdin hoặc Ctrl+C.")
     try:
         serve(server)

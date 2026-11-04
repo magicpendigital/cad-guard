@@ -13,7 +13,7 @@ import re
 from ..dxf_stream import DEFAULT_MAX_ENTITY_RECORDS
 from ..reader_select import DEFAULT_STREAM_THRESHOLD_MB, choose_reader, read_with
 from ..runner import audit_model
-from ..standard import find_standards_dir, load_standard
+from ..standard import CompanyProfile, find_standards_dir, load_standard
 from .anonymize import Anonymizer
 from .workspace import Workspace
 
@@ -37,6 +37,8 @@ class ToolContext:
     stream_threshold_mb: float | None = DEFAULT_STREAM_THRESHOLD_MB
     # Trần bản ghi `entities` của bộ đọc theo dòng; quá trần thì kết quả có `records_capped: true`.
     max_entity_records: int = DEFAULT_MAX_ENTITY_RECORDS
+    # Hồ sơ công ty (đã nạp, đã kiểm): chỉ áp khi chuẩn được gọi trùng `profile.standard`.
+    profile: CompanyProfile | None = None
     ids: dict[str, str] = field(default_factory=dict)
 
 
@@ -113,7 +115,8 @@ def _standard(ctx, name):
     path = (root / (name + ".yaml")).resolve(strict=True)
     if not path.is_relative_to(root) or not path.is_file():
         raise ToolError("Không tìm thấy chuẩn.")
-    return load_standard(name, root)
+    profile = ctx.profile if ctx.profile is not None and ctx.profile.standard == name else None
+    return load_standard(name, root, profile=profile)
 
 
 def _bytes(value):
@@ -138,7 +141,7 @@ def audit(ctx: ToolContext, file: str, standard: str = "furniture-v0") -> dict:
     findings = [{"rule_id": f.rule_id, "severity": f.severity, "message": anon.scrub_text(f.message, names), "layout": anon.token("layout", f.layout) if f.layout else None, "layer": anon.token("layer", f.layer) if f.layer else None, "count": f.count, "handles": f.handles} for f in result.findings[:max(0, ctx.max_findings)]]
     counts = {s: sum(f.severity == s for f in result.findings) for s in ("E", "W", "I")}
     skipped = [{"rule_id": rule, "reason": ("Lỗi nội bộ của luật." if rule in result.internal_errors else anon.scrub_text(reason, names))} for rule, reason in result.skipped]
-    return {"file": _file_id(ctx, path), "standard": std.name, "version": std.version, "counts": counts, "rules_run": result.rules_run, "skipped": skipped, "findings": findings, "truncated": len(result.findings) > max(0, ctx.max_findings), "records_capped": _records_capped(model)}
+    return {"file": _file_id(ctx, path), "standard": std.name, "version": std.version, "profile": std.profile, "counts": counts, "rules_run": result.rules_run, "skipped": skipped, "findings": findings, "truncated": len(result.findings) > max(0, ctx.max_findings), "records_capped": _records_capped(model)}
 
 
 @_safe
@@ -157,7 +160,7 @@ def explain_rule(ctx: ToolContext, rule_id: str, standard: str = "furniture-v0")
         candidate = {**params, key: value}
         if _bytes(candidate) <= 8192:
             params = candidate
-    return {**spec.model_dump(include={"id", "title", "severity", "kind", "false_positive_risk", "source", "reads", "implemented"}), "params": params, "description_md": description, "examples": {"good": [], "bad": []}}
+    return {**spec.model_dump(include={"id", "title", "severity", "kind", "false_positive_risk", "source", "reads", "implemented"}), "enabled": spec.enabled, "rule_params": dict(spec.params), "profile": std.profile, "params": params, "description_md": description, "examples": {"good": [], "bad": []}}
 
 
 @_safe

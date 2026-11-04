@@ -38,6 +38,12 @@ Kiểm 04/11/2026 bằng `importlib.metadata` trên venv đã cài `python scrip
 | Fork LibreCAD/QCAD/FreeCAD | Ngoài hướng đã chọn (xem `plans/cad-guard-direction.md`); giấy phép copyleft chưa kiểm |
 | Autodesk APS Model Derivative | Gửi bản vẽ lên đám mây + tính phí theo token; trái nguyên tắc xử lý cục bộ |
 
+## Cần quyết
+
+- **certifi (MPL-2.0)**, kéo theo bắc cầu: SDK `mcp` → httpx → certifi. Chỉ ảnh hưởng khi **phân phối** bản đóng gói có extras `[agent]`; lõi `cadguard` (không extras) không chứa certifi, và máy chủ MCP stdio không gọi HTTP. Phương án (chưa chọn, chưa đổi phụ thuộc):
+  1. Xin ý kiến pháp lý: MPL-2.0 là copyleft yếu theo từng tệp; dùng nguyên bản không sửa thường chỉ cần kèm giấy phép và chỉ nơi lấy mã nguồn của certifi.
+  2. Nếu khả thi: dùng kho chứng chỉ của hệ điều hành qua `truststore` (MIT) thay cho bó chứng chỉ của certifi; phải kiểm xem httpx/`mcp` có còn bắt buộc cài certifi không (nếu vẫn bắt buộc thì phương án này không bỏ được certifi khỏi gói phân phối).
+
 ## Chưa quyết (quyết ở đầu P1b)
 
 - Thư viện dựng hình DXF cho trình xem/rà soát (web hoặc máy tính): chọn và ghi giấy phép ở đây.

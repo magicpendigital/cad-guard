@@ -1,7 +1,7 @@
 # Hồ sơ 5 bản vẽ thật (đợt mẫu 04/11/2026) — số tổng hợp, ẩn danh
 
 Trạng thái: **kết quả đầu tiên trên dữ liệu thật, n = 5, một công ty, khâu thiết kế/kỹ thuật.** Không đủ để kết luận về cả ngành; đủ để sửa vài giả định sai của kế hoạch.
-Quy tắc dữ liệu: bản vẽ thật nằm **ngoài repo** (thư mục riêng trên ổ D, do CEO chuyển ra ngày 04/11; `Data sample/` vẫn bị chặn trong `.gitignore` để phòng khi đặt lại). Tài liệu này chỉ có **con số**: không tên tệp/layer/khối/khách, không nội dung chữ. Các tệp được gọi M1–M5.
+Quy tắc dữ liệu: bản vẽ thật nằm **ngoài repo** (thư mục riêng trên ổ D, do CEO chuyển ra ngày 04/11; thư mục dữ liệu mẫu cũ vẫn bị chặn trong `.gitignore` để phòng khi đặt lại). Tài liệu này chỉ có **con số**: không tên tệp/layer/khối/khách, không nội dung chữ. Các tệp được gọi M1–M5.
 Đội MCA và mọi agent **chỉ được đọc tài liệu này** và DXF tổng hợp, không được đọc bản thật (xem `AGENTS.md`).
 
 ## 1. Kết luận ngắn

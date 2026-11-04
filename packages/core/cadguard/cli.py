@@ -58,7 +58,14 @@ def _read_model(f: Path, reader: str, threshold_mb: float):
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
-    profile = load_profile(args.profile) if args.profile else None
+    from .reader_select import check_threshold
+
+    try:
+        check_threshold(args.stream_threshold_mb)
+    except ValueError as exc:
+        print(f"--stream-threshold-mb: {exc}", file=sys.stderr)
+        return 2
+    profile =load_profile(args.profile) if args.profile else None
     name = args.standard or (profile.standard if profile else DEFAULT_STANDARD)
     std = load_standard(name, Path(args.standards_dir) if args.standards_dir else None, profile=profile)
     files = _collect(args.paths)

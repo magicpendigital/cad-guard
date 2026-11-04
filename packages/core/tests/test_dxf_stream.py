@@ -251,6 +251,28 @@ def test_cli_stream_reports_binary_in_vietnamese(tmp_path, capsys):
     assert "DXF nhị phân" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("bad", [math.nan, math.inf, -math.inf])
+def test_choose_reader_rejects_non_finite_threshold(tmp_path, bad):
+    from cadguard.reader_select import choose_reader
+
+    path = tmp_path / "a.dxf"
+    ezdxf.new().saveas(path)
+    with pytest.raises(ValueError, match="hữu hạn"):
+        choose_reader(path, "auto", bad)
+    assert choose_reader(path, "auto", None).reason == "disabled"
+    assert choose_reader(path, "auto", 0).reader == "stream"
+
+
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf"])
+def test_cli_rejects_non_finite_threshold(tmp_path, capsys, bad):
+    path = tmp_path / "a.dxf"
+    ezdxf.new().saveas(path)
+    code = main(["audit", str(path), f"--stream-threshold-mb={bad}", "--standards-dir", str(STANDARDS)])
+    err = capsys.readouterr().err
+    assert code == 2
+    assert "--stream-threshold-mb" in err and "hữu hạn" in err
+
+
 # ---- hiệu năng tệp rất lớn (chỉ chạy với -m slow)
 
 MEASURE = r"""
