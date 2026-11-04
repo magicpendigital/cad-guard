@@ -40,6 +40,27 @@ def _collect(paths: list[str]) -> list[Path]:
     return out
 
 
+def _read_model(f: Path, reader: str, threshold_mb: float):
+    """Chọn đường đọc: ezdxf (nạp trọn) hoặc theo dòng; `auto` = theo dòng khi tệp >= ngưỡng MB."""
+    from .dxf_stream import DXFStreamError, is_binary_dxf, read_dxf_stream
+
+    if reader == "auto":
+        size_mb = f.stat().st_size / (1024 * 1024)
+        if size_mb < threshold_mb:
+            return read_dxf(f)
+        if is_binary_dxf(f):
+            print(f"{f.name}: DXF nhị phân, bộ đọc theo dòng không hỗ trợ; dùng ezdxf.", file=sys.stderr)
+            return read_dxf(f)
+        print(f"{f.name}: tệp lớn ({size_mb:.0f} MB ≥ {threshold_mb:g} MB), dùng bộ đọc theo dòng.", file=sys.stderr)
+        reader = "stream"
+    if reader == "stream":
+        try:
+            return read_dxf_stream(f)
+        except DXFStreamError as exc:
+            raise ValueError(str(exc)) from None
+    return read_dxf(f)
+
+
 def cmd_audit(args: argparse.Namespace) -> int:
     std = load_standard(args.standard, Path(args.standards_dir) if args.standards_dir else None)
     files = _collect(args.paths)
@@ -49,10 +70,13 @@ def cmd_audit(args: argparse.Namespace) -> int:
     items = []
     for f in files:
         try:
-            model = read_dxf(f)
+            model = _read_model(f, args.reader, args.stream_threshold_mb)
         except Exception as exc:  # noqa: BLE001
             print(f"Không đọc được {f.name}: {type(exc).__name__}: {exc}", file=sys.stderr)
             continue
+        if model.stats is not None and model.stats.entity_records_truncated:
+            print(f"Lưu ý {f.name}: danh sách đối tượng đã bị cắt ở trần bộ nhớ; thống kê vẫn đủ nhưng "
+                  "luật đọc từng đối tượng có thể bỏ sót.", file=sys.stderr)
         res = audit_model(model, std)
         telemetry.record_audit(model.file_hash)
         items.append((f.name, model.file_hash, res))
@@ -143,6 +167,10 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("paths", nargs="+")
     a.add_argument("--out", help="ghi báo cáo: .html hoặc .json")
     a.add_argument("--json", action="store_true", help="in báo cáo JSON ra stdout")
+    a.add_argument("--reader", choices=["ezdxf", "stream", "auto"], default="auto",
+                   help="bộ đọc DXF: ezdxf (nạp trọn), stream (theo dòng, ít bộ nhớ), auto (stream khi tệp lớn; mặc định)")
+    a.add_argument("--stream-threshold-mb", type=float, default=50.0,
+                   help="ngưỡng MB để auto chuyển sang đọc theo dòng (mặc định 50)")
     common(a)
     a.set_defaults(fn=cmd_audit)
 
