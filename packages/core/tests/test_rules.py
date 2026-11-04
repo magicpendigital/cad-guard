@@ -13,6 +13,9 @@ EXPECTED = {
     "bad_titleblock.dxf": {"SH-04", "SH-05"},
     "bad_geometry.dxf": {"DH-01", "DH-02", "DH-09", "DH-10"},
     "bad_parts.dxf": {"PR-02", "TX-01", "TX-08", "VW-01"},
+    # Fixture của chuẩn design-hygiene-v0 (tên layer/kiểu chữ không theo FN-*): ghi đúng tập luật furniture bắn.
+    "hygiene_ok.dxf": {"LY-01", "TX-01"},
+    "hygiene_bad.dxf": {"LY-01", "LY-03", "LY-09", "TX-01", "TX-08"},
 }
 
 
@@ -24,7 +27,8 @@ def test_fixture_triggers_exact_rules(synthetic, standard, name, expected):
 
 def test_every_implemented_rule_has_positive_and_negative_case(synthetic, standard):
     positive = set().union(*EXPECTED.values()) | {"DH-07"}  # DH-07 kiểm bằng mô hình ở dưới
-    assert positive == set(REGISTRY), "luật nào chưa có ca dương trong EXPECTED thì phải bổ sung"
+    furniture_ids = {r.id for r in standard.rules if r.implemented}
+    assert positive == furniture_ids, "luật nào chưa có ca dương trong EXPECTED thì phải bổ sung"
     ok = {f.rule_id for f in audit_model(read_dxf(synthetic / "ok_sheet.dxf"), standard).findings}
     assert ok == set()  # ca âm: bản vẽ sạch không vi phạm luật nào
 

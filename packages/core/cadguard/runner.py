@@ -18,7 +18,6 @@ class AuditResult:
 
 
 def audit_model(model: DrawingModel, standard: Standard) -> AuditResult:
-    ctx = Ctx(globals=standard.globals)
     res = AuditResult()
     for spec in standard.rules:
         if not spec.enabled:
@@ -26,6 +25,7 @@ def audit_model(model: DrawingModel, standard: Standard) -> AuditResult:
         fn = REGISTRY.get(spec.id)
         if not spec.implemented or fn is None:
             continue
+        ctx = Ctx(globals=standard.globals, params=dict(spec.params))
         try:
             found = fn(model, ctx)
         except Skip as s:

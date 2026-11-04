@@ -26,7 +26,7 @@ import math
 import re
 from pathlib import Path
 
-from .dxf_reader import _block_depth, _font_kind
+from .dxf_reader import TEXT_TYPES, _block_depth, _font_kind, is_non_ascii_text
 from .model import BlockRec, DrawingModel, EntityRec, LayerRec, LayoutRec, ModelStats, SpaceStats, StyleRec, ViewportRec
 
 DEFAULT_MAX_ENTITY_RECORDS = 300_000  # ~1,2 KB/bản ghi -> khoảng 350 MB ở trần
@@ -305,6 +305,27 @@ def _entity_rec(t: str, handle: str, layer: str, color, lw, tc, spec: dict, xs: 
     return EntityRec.model_construct(**f)
 
 
+def _text_non_ascii(t: str, tags: list) -> bool:
+    """Nội dung TEXT (mã 1) hoặc MTEXT (mã 3 + 1) có ký tự ngoài ASCII; cùng phạm vi mã như `_scan`."""
+    codes = (1, 3) if t == "MTEXT" else (1,)
+    in102 = False
+    for code, val in tags:
+        if code >= 1000 or code == 101:
+            break
+        if code == 102:
+            in102 = val.startswith("{")
+            continue
+        if not in102 and code in codes and is_non_ascii_text(val):
+            return True
+    return False
+
+
+def _add_text(counter: dict[str, int], t: str, spec: dict, tags: list) -> None:
+    if t in TEXT_TYPES and _text_non_ascii(t, tags):
+        style = spec.get(7, "Standard")
+        counter[style] = counter.get(style, 0) + 1
+
+
 class _Parser:
     def __init__(self, max_entity_records: int) -> None:
         self.max_records = max(0, int(max_entity_records))
@@ -326,6 +347,8 @@ class _Parser:
         self.cur_block: str | None = None  # khoá khối đang đọc
         self.block_layers: set[str] = set()
         self.blocks_space = _Space()
+        self.block_text_na: dict[str, int] = {}  # chữ ngoài ASCII theo kiểu chữ, trong định nghĩa khối
+        self.text_na: dict[str, dict[str, int]] = {}  # như trên, theo khối layout
         # layout: khoá khối layout -> dữ liệu
         self.spaces: dict[str, _Space] = {}
         self.records: dict[str, list[EntityRec]] = {}
@@ -484,11 +507,13 @@ class _Parser:
         self.attribs = None
         if not layout_ctx:
             self._block_entity(container, t, layer, color, lw, tc, spec)
+            _add_text(self.block_text_na, t, spec, tags)
             return
         sp = self.spaces.get(container)
         if sp is None:
             sp = self.spaces[container] = _Space()
         sp.add(t, layer, color, lw, tc, spec.get(1) if t == "DIMENSION" else None)
+        _add_text(self.text_na.setdefault(container, {}), t, spec, tags)
         if t == "VIEWPORT":
             vid = _int(spec.get(69, "0")) or 0
             scale = None
@@ -656,6 +681,7 @@ class _Parser:
             layouts.setdefault("model", ("Model", "@*model_space", 420.0, 297.0, 1))
             layouts.setdefault("layout1", ("Layout1", "@*paper_space", 420.0, 297.0, 1))
         model_space, paper_space = _Space(), _Space()
+        text_na = dict(self.block_text_na)
         for name, br, w, h, units in layouts.values():
             key = br[1:] if br and br.startswith("@") else self.br_handles.get(br or "")
             if key is None:
@@ -664,6 +690,8 @@ class _Parser:
             space = self.spaces.get(key)
             if space is not None:
                 (model_space if is_model else paper_space).merge(space)
+            for style, n in self.text_na.get(key, {}).items():
+                text_na[style] = text_na.get(style, 0) + n
             recs = self.records.get(key, [])
             if is_model:
                 m.entities.extend(recs)
@@ -680,6 +708,7 @@ class _Parser:
         stats.modelspace = model_space.to_model()
         stats.paperspace = paper_space.to_model()
         stats.entity_records_truncated = self.truncated
+        stats.text_non_ascii_by_style = text_na
         m.stats = stats
         return m
 

@@ -96,6 +96,9 @@ class ModelStats(BaseModel):
     layers_xref_dependent: int = 0
     shape_styles: int = 0
     entity_records_truncated: bool = False
+    # TEXT/MTEXT có ký tự ngoài ASCII (thường là tiếng Việt có dấu, hoặc mã \U+/\M+), đếm theo tên kiểu chữ
+    # của đối tượng, gồm cả không gian mô hình, giấy và định nghĩa khối. Mới thêm, mặc định rỗng (tương thích ngược).
+    text_non_ascii_by_style: dict[str, int] = Field(default_factory=dict)
 
 
 class ViewportRec(BaseModel):

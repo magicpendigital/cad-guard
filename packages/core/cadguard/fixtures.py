@@ -158,6 +158,64 @@ def make_model_features(path: Path) -> None:
     _finish(doc, path)
 
 
+HYG_LAYERS = ["SYN-TUONG", "SYN-NOI-THAT", "SYN-CHU", "SYN-KICH-THUOC"]
+
+
+def _hygiene_base():
+    """Bản vẽ khâu thiết kế tổng hợp, KHÔNG dùng setup=True (để số kiểu chữ/kích thước nhỏ)."""
+    doc = ezdxf.new("R2018")
+    doc.header["$INSUNITS"] = 4
+    for name in HYG_LAYERS:
+        doc.layers.add(name)
+    doc.styles.add("SYN-CHU", font="arial.ttf")
+    blk = doc.blocks.new("SYN-GHE")  # nội dung khối trên layer 0: đúng thông lệ, VS-03 không tính
+    blk.add_lwpolyline([(0, 0), (450, 0), (450, 450), (0, 450)], close=True, dxfattribs={"layer": "0"})
+    blk.add_text("Ghế đơn", dxfattribs={"layer": "0", "style": "SYN-CHU", "height": 50})
+    msp = doc.modelspace()
+    for i in range(6):
+        msp.add_line((0, i * 1000), (6000, i * 1000), dxfattribs={"layer": "SYN-TUONG"})
+    for i in range(3):
+        msp.add_blockref("SYN-GHE", (i * 600, 200), dxfattribs={"layer": "SYN-NOI-THAT"})
+    msp.add_text("Tủ bếp trên", dxfattribs={"layer": "SYN-CHU", "style": "SYN-CHU", "height": 100, "insert": (0, -300)})
+    msp.add_mtext("Ghi chú: dán cạnh nhựa 1 ly", dxfattribs={"layer": "SYN-CHU", "style": "SYN-CHU", "char_height": 100,
+                                                             "insert": (0, -600)})
+    msp.add_linear_dim(base=(0, -900), p1=(0, 0), p2=(6000, 0), dimstyle="Standard",
+                       dxfattribs={"layer": "SYN-KICH-THUOC"}).render()
+    return doc, msp
+
+
+def make_hygiene_ok(path: Path) -> None:
+    """Sạch với design-hygiene-v0: không VS-* nào."""
+    doc, _msp = _hygiene_base()
+    doc.saveas(path)
+
+
+def make_hygiene_bad(path: Path) -> None:
+    """Gây đúng VS-01..VS-07 của design-hygiene-v0 (ngưỡng mặc định)."""
+    doc, msp = _hygiene_base()
+    ezdxf_setup = ezdxf.new("R2018", setup=True)  # VS-02: chép hàng loạt kiểu chữ/kích thước của bộ cài đặt ezdxf
+    for st in ezdxf_setup.styles:
+        if st.dxf.name not in doc.styles:
+            doc.styles.add(st.dxf.name, font=st.dxf.font)
+    for ds in ezdxf_setup.dimstyles:
+        if ds.dxf.name not in doc.dimstyles:
+            doc.dimstyles.new(ds.dxf.name)
+    doc.layers.add("SYNX1|SYN-TUONG")  # VS-01: layer dư của xref
+    doc.layers.add("SYNX2$0$SYN-CUA")
+    for i in range(3):  # VS-03: 3/… đối tượng trực tiếp trên layer 0
+        msp.add_circle((i * 100, 5000), 40, dxfattribs={"layer": "0"})
+    for i in range(4):  # VS-04: ghi đè màu và độ dày nét
+        msp.add_line((0, 7000 + i * 50), (900, 7000 + i * 50), dxfattribs={"layer": "SYN-TUONG", "color": 1, "lineweight": 50})
+    image_def = doc.add_image_def(filename="syn_anh.png", size_in_pixel=(10, 10))
+    for i in range(11):  # VS-05: 11 IMAGE > 10
+        msp.add_image(image_def, insert=(i * 20, 8000), size_in_units=(10, 10), dxfattribs={"layer": "SYN-NOI-THAT"})
+    msp.add_linear_dim(base=(0, -1200), p1=(0, 0), p2=(6000, 0), text="5999", dimstyle="Standard",
+                       dxfattribs={"layer": "SYN-KICH-THUOC"}).render()  # VS-06
+    doc.styles.add("SYN-VN-SHX", font="syn_vn.shx")  # VS-07: chữ có dấu dùng phông SHX
+    msp.add_text("Cửa trượt kính", dxfattribs={"layer": "SYN-CHU", "style": "SYN-VN-SHX", "height": 100, "insert": (0, -1500)})
+    doc.saveas(path)
+
+
 ALL = {
     "ok_sheet.dxf": make_ok_sheet,
     "model_features.dxf": make_model_features,
@@ -165,6 +223,8 @@ ALL = {
     "bad_titleblock.dxf": make_bad_titleblock,
     "bad_geometry.dxf": make_bad_geometry,
     "bad_parts.dxf": make_bad_parts,
+    "hygiene_ok.dxf": make_hygiene_ok,
+    "hygiene_bad.dxf": make_hygiene_bad,
 }
 
 

@@ -139,6 +139,24 @@ def _block_depth(name: str, blocks: dict[str, BlockRec], visiting: set[str]) -> 
                 for child in block.child_blocks if child in blocks and child not in visiting), default=0)
 
 
+TEXT_TYPES = ("TEXT", "MTEXT")
+
+
+def is_non_ascii_text(s: str) -> bool:
+    """Chữ có ký tự ngoài ASCII, hoặc mã Unicode/đa byte kiểu DXF (\\U+xxxx, \\M+nxxxx) chưa giải mã."""
+    return not s.isascii() or "\\U+" in s or "\\M+" in s
+
+
+def _count_text(counter: dict[str, int], e) -> None:
+    t = e.dxftype()
+    if t not in TEXT_TYPES:
+        return
+    content = e.text if t == "MTEXT" else str(e.dxf.get("text", "") or "")
+    if is_non_ascii_text(content or ""):
+        style = str(e.dxf.get("style", "Standard"))
+        counter[style] = counter.get(style, 0) + 1
+
+
 def _font_kind(font: str) -> str:
     ext = Path(font.replace("\\", "/")).suffix.lower()
     return "shx" if ext == ".shx" else "ttf" if ext in (".ttf", ".ttc", ".otf") else "other" if font else "none"
@@ -212,6 +230,7 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
                         child = str(e.dxf.name)
                         rec.child_blocks[child] = rec.child_blocks.get(child, 0) + 1
                     _count_entity(m.stats.blocks, e)
+                    _count_text(m.stats.text_non_ascii_by_style, e)
                 except Exception:  # noqa: BLE001
                     continue
         except Exception:  # noqa: BLE001
@@ -238,6 +257,7 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
         for e in layout:
             try:
                 _count_entity(m.stats.modelspace if is_model else m.stats.paperspace, e)
+                _count_text(m.stats.text_non_ascii_by_style, e)
             except Exception:  # noqa: BLE001
                 pass
             if e.dxftype() == "VIEWPORT":
