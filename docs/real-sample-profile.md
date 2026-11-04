@@ -1,12 +1,12 @@
 # Hồ sơ 5 bản vẽ thật (đợt mẫu 04/11/2026) — số tổng hợp, ẩn danh
 
 Trạng thái: **kết quả đầu tiên trên dữ liệu thật, n = 5, một đơn vị thiết kế.** Không đủ để kết luận về cả ngành; đủ để sửa vài giả định sai của kế hoạch.
-Quy tắc dữ liệu: bản vẽ thật nằm ở thư mục ngoài đường dẫn theo dõi của git (`Data sample/`, đã chặn trong `.gitignore`). Tài liệu này chỉ có **con số**: không tên tệp/layer/khối/khách, không nội dung chữ. Các tệp được gọi M1–M5.
+Quy tắc dữ liệu: bản vẽ thật nằm **ngoài repo** (thư mục riêng trên ổ D, do CEO chuyển ra ngày 04/11; `Data sample/` vẫn bị chặn trong `.gitignore` để phòng khi đặt lại). Tài liệu này chỉ có **con số**: không tên tệp/layer/khối/khách, không nội dung chữ. Các tệp được gọi M1–M5.
 Đội MCA và mọi agent **chỉ được đọc tài liệu này** và DXF tổng hợp, không được đọc bản thật (xem `AGENTS.md`).
 
 ## 1. Kết luận ngắn
 
-1. **Đây là bản vẽ triển khai thiết kế nội thất cho công trình (sảnh, khu tiện ích, bản triển khai tổng hợp), không phải bản vẽ xưởng sản xuất đồ gỗ.** Chuẩn `furniture-v0` (khung tên, viewport, thẻ vị trí, bảng kê, dán cạnh) **hầu như không áp dụng được** cho loại bản vẽ này. Nếu khách hàng đích là xưởng sản xuất, cần một đợt mẫu thứ hai: bản vẽ xưởng/shop drawing.
+1. **Bối cảnh là một công ty sản xuất có ba phòng nối tiếp nhau: Thiết kế → Kỹ thuật → Lập trình sản xuất (rồi xưởng).** Năm bản mẫu thuộc khâu thiết kế/kỹ thuật (bản vẽ triển khai nội thất công trình: sảnh, khu tiện ích, bản triển khai tổng hợp). Chuẩn `furniture-v0` (khung tên, viewport, thẻ vị trí, bảng kê, dán cạnh) viết cho khâu sau (bản vẽ chi tiết đưa xuống sản xuất) nên **hầu như không áp dụng được cho khâu này**. Chưa có mẫu nào của phòng lập trình sản xuất.
 2. **Bản vẽ làm hoàn toàn trong không gian mô hình.** 4/5 tệp có 0 đối tượng trong không gian giấy, 1 tệp có 2. Không có viewport/tỉ lệ khung nhìn để kiểm: nhóm luật VW và phần lớn SH vô nghĩa ở đây.
 3. **Phần lớn nội dung nằm trong định nghĩa khối, không ở không gian mô hình** (gấp 9–23 lần ở 4/5 tệp). Bộ đọc và các luật hiện tại chỉ nhìn không gian mô hình: bỏ sót phần lớn bản vẽ.
 4. **Tệp rất nặng.** DWG 7–49 MB thành DXF ASCII 77–445 MB. Nạp trọn tệp bằng ezdxf đã dùng hơn 500 MB RAM khi chưa xong ở tệp 78 MB; **ước tính (chưa đo)** là không nổi ở tệp 262–445 MB trên máy 8 GB. Đã làm đường đọc theo dòng: 11–29 giây/tệp.
@@ -56,12 +56,16 @@ Ghi chú: M1–M5 không theo thứ tự ý nghĩa nào. Dấu "–" là không 
 
 ## 4. Phát hiện và đánh giá
 
-### 4.1 Loại bản vẽ khác giả định
-Kế hoạch `plans/cad-guard.md` viết cho bản vẽ của **xưởng sản xuất** (tủ bếp, tủ áo; cắt, dán cạnh, bảng kê, khung tên). Mẫu thật là bản vẽ **tư vấn thiết kế/triển khai** của đơn vị thiết kế. Khác biệt này quan trọng cho chọn luật và cho sản phẩm.
-**Cần CEO xác nhận:** người dùng đích đầu tiên là ai?
-- (a) đơn vị thiết kế (như mẫu này): ưu tiên dọn bản vẽ, nhất quán layer/chữ/kích thước, bàn giao;
-- (b) xưởng sản xuất: ưu tiên bóc tách, bảng kê, dán cạnh, CNC.
-Hai bên có thể nối nhau (bản triển khai của (a) là đầu vào của (b)), nhưng luật và dữ liệu thử khác nhau.
+### 4.1 Mẫu thuộc khâu đầu của chuỗi, chưa phải khâu cuối
+Kế hoạch `plans/cad-guard.md` viết cho bản vẽ đưa xuống **sản xuất** (cắt, dán cạnh, bảng kê, khung tên). Công ty có ba phòng nối tiếp, mỗi phòng cần một loại kiểm khác:
+
+| Khâu | Phòng | Bản vẽ điển hình | Kiểm gì | Mẫu hiện có |
+| --- | --- | --- | --- | --- |
+| 1 | Thiết kế | Phương án, triển khai không gian | Nhất quán layer/chữ/kích thước, bản vẽ sạch và nhẹ, đủ thông tin để chuyển tiếp | Có (5 tệp) |
+| 2 | Kỹ thuật | Triển khai chi tiết, bản vẽ thi công, bóc tách | Đủ và đúng kích thước, khớp giữa hình và bảng, vật liệu, phụ kiện, ghi chú | Có thể một phần (chưa xác định tệp nào thuộc khâu này) |
+| 3 | Lập trình sản xuất | Dữ liệu cho CNC/cắt: tấm, đường bao, khoan, dán cạnh | Đường bao khép kín, layer gia công đúng, đơn vị, gốc toạ độ, không trùng/không đứt | Chưa có |
+
+Hệ quả: (1) đây không phải lựa chọn "thiết kế hay xưởng": cùng một công ty cần các gói luật nối tiếp, và **đầu ra tốt của khâu trước là đầu vào của khâu sau** (một bản triển khai bẩn sinh ra lỗi ở khâu lập trình); (2) bắt đầu từ **vệ sinh và nhất quán** (đo được và đúng với mẫu hiện có), rồi mở dần sang khâu 2 và 3 khi có mẫu; (3) cần mẫu của khâu 2 và 3 trước khi chọn luật cho hai khâu này.
 
 ### 4.2 Bộ đọc hiện tại bỏ sót phần lớn nội dung
 Ở 4/5 tệp, số đối tượng trong định nghĩa khối gấp 9–23 lần không gian mô hình. Hệ quả: (1) các luật về layer/đối tượng phải quét cả khối (khối lồng, khối ẩn danh); (2) công cụ `query_model` của trợ lý phải trả **tóm tắt và truy vấn theo vùng/layer**, không bao giờ dựng toàn bộ vào ngữ cảnh mô hình ngôn ngữ (một tệp có > 400.000 đối tượng trong khối).
@@ -107,7 +111,7 @@ Kết luận: với loại bản vẽ này, **v0 không có luật nào đủ ph
 
 ## 6. Hệ quả cho kế hoạch và việc làm tiếp
 
-1. **Cổng quyết định mới (CEO):** người dùng đích đầu tiên (4.1).
+1. **Mẫu còn thiếu (CEO/phòng kỹ thuật):** bản vẽ của khâu kỹ thuật chi tiết và của phòng lập trình sản xuất (kèm tệp DXF/CNC họ giao cho máy), để chọn luật cho khâu 2 và 3 (4.1).
 2. **Lõi:** đọc theo dòng cho `audit` (không chỉ `profile`); duyệt cả khối; chuẩn cấu hình theo công ty; chế độ học quy ước (4.4).
 3. **Luật mới** (cần mã trong `standards/` và phiên bản chuẩn mới `furniture-v0.1`, theo quy trình AGENTS.md): vệ sinh layer xref, phình kiểu chữ/kích thước, đối tượng trên layer 0, ghi đè ByLayer, phông tiếng Việt Unicode, kích thước ghi đè chữ, WIPEOUT/OLE.
 4. **Trợ lý (A0):** `query_model` trả tóm tắt theo vùng/layer; công cụ "khảo sát bản vẽ" (đếm, thống kê, tìm) vì đơn vị thiết kế rất cần hỏi đáp trên bản vẽ lớn.

@@ -191,11 +191,14 @@ A0–A1 không cần bản vẽ khách và không phụ thuộc P0, nên có th�
 | 5 | Cho phép agent viết kịch bản (B) sau A2, trong sandbox | Hoãn đến A5, quyết sau khi có số liệu |
 | 6 | Ngân sách thử: chi phí token cho bộ chấm A1 (khoảng nhỏ, do đội đặt trần) | Cần CEO đặt trần |
 
-## 9a. Quyết định đã chốt
+## 9a. Quyết định đã chốt và điều chỉnh
 
-| Ngày | Quyết định | Hệ quả |
+| Ngày | Nội dung | Hệ quả |
 | --- | --- | --- |
-| 04/11/2026 | **Người dùng đích đầu tiên là đơn vị thiết kế** (CEO chọn sau khi xem `docs/real-sample-profile.md`). Xưởng sản xuất là bước sau, cần đợt mẫu riêng | Ưu tiên: đọc bản vẽ lớn, khảo sát/hỏi đáp trên bản vẽ, "dọn bản vẽ" (luật vệ sinh), chuẩn theo công ty và học quy ước. Hoãn: bóc tách, bảng kê, dán cạnh, CNC (gói G2–G3 ở mục 7). `furniture-v0` giữ nguyên làm chuẩn cho xưởng; đơn vị thiết kế dùng chuẩn mới `design-hygiene-v0`. Bản mẫu giao diện (`design/ui-mockup.html`) hiện vẽ theo bối cảnh xưởng và cần sửa lại theo bối cảnh thiết kế trước khi đưa người dùng xem |
+| 04/11/2026 | CEO xác nhận bối cảnh: **công ty sản xuất có ba phòng nối tiếp: Thiết kế, Kỹ thuật, Lập trình sản xuất** (rồi xưởng). Năm bản vẽ thật đã có thuộc khâu thiết kế/kỹ thuật (triển khai). Dữ liệu mẫu đã chuyển ra ngoài repo (D:\Data sample) | Bắt đầu từ **vệ sinh và nhất quán bản vẽ** (đo được trên mẫu thật), bộ đọc bản vẽ lớn, hỏi đáp/khảo sát, chuẩn cấu hình theo công ty. `furniture-v0` giữ nguyên cho khâu cuối. Cần mẫu khâu kỹ thuật chi tiết và lập trình sản xuất để chọn luật hai khâu này (xem `docs/real-sample-profile.md` mục 4.1). Chuẩn mới cho khâu đầu: `design-hygiene-v0` |
+| 04/11/2026 (đính chính) | Một bản ghi trước đó ghi "người dùng đích là đơn vị thiết kế" là **hiểu sai** bối cảnh; thay bằng dòng trên | Giao MCA lần 2 (w-4c26ae) viết theo hiểu biết cũ; phần nền (hợp nhất nhánh, bộ đọc lớn, MCP, hygiene) không đổi, phần `knowledge/` và lời văn "đơn vị thiết kế" cần chỉnh khi nghiệm thu |
+
+Giao diện mẫu (`design/ui-mockup.html`) vẽ theo bối cảnh xưởng; cần cập nhật theo chuỗi ba phòng (mỗi phòng một góc nhìn, bàn giao từ phòng này sang phòng sau) trước khi đưa người dùng xem.
 
 ## 10. Chưa xác định / chưa kiểm
 
