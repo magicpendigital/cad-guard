@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from pathlib import Path
 
 import ezdxf
 from ezdxf.math import Vec3
 
-from .model import DrawingModel, EntityRec, LayerRec, LayoutRec, ViewportRec
+from .model import BlockRec, DrawingModel, EntityRec, LayerRec, LayoutRec, ModelStats, SpaceStats, StyleRec, ViewportRec
 
 Z_TOL = 1e-6
 PROXY_TYPES = {"ACAD_PROXY_ENTITY", "PROXY", "ACAD_PROXY_OBJECT"}
@@ -55,6 +56,9 @@ def _entity_rec(e, space: str) -> EntityRec:
         layer=str(e.dxf.get("layer", "0")),
         space=space,
         is_proxy=t in PROXY_TYPES,
+        color=e.dxf.get("color", None),
+        lineweight=e.dxf.get("lineweight", None),
+        true_color=e.dxf.get("true_color", None),
     )
     try:
         rec.has_nonzero_z = _has_z(e)
@@ -103,8 +107,45 @@ def _viewport_scale(vp) -> float | None:
         return None
 
 
+
+def _count_entity(stats: SpaceStats, e) -> None:
+    """??m b?n ghi ch?nh, kh?ng bung n?i dung INSERT hay ??i t??ng con."""
+    t = e.dxftype()
+    if t in {"ATTRIB", "VERTEX", "SEQEND"}:
+        return
+    layer = str(e.dxf.get("layer", "0"))
+    stats.entities += 1
+    stats.by_type[t] = stats.by_type.get(t, 0) + 1
+    stats.by_layer[layer] = stats.by_layer.get(layer, 0) + 1
+    color = e.dxf.get("color", None)
+    lw = e.dxf.get("lineweight", None)
+    stats.color_override += int(color is not None and color != 256)
+    stats.lineweight_override += int(lw is not None and lw not in (-1, -2, -3))
+    stats.true_color += int(e.dxf.get("true_color", None) is not None)
+    stats.dim_total += int(t == "DIMENSION")
+    if t == "DIMENSION":
+        stats.dim_text_override += int((e.dxf.get("text", "") or "") not in ("", "<>"))
+    stats.wipeout += int(t == "WIPEOUT")
+    stats.image += int(t == "IMAGE")
+    stats.ole += int(t in ("OLE2FRAME", "OLEFRAME"))
+    stats.proxy += int(t == "ACAD_PROXY_ENTITY")
+
+
+def _block_depth(name: str, blocks: dict[str, BlockRec], visiting: set[str]) -> int:
+    # M?t c?nh d?n t?i kh?i ?? n?m tr?n ???ng ?i b? c?t, kh?ng t?nh c?nh ??.
+    block = blocks[name]
+    visiting = visiting | {name}
+    return max((1 + _block_depth(child, blocks, visiting)
+                for child in block.child_blocks if child in blocks and child not in visiting), default=0)
+
+
+def _font_kind(font: str) -> str:
+    ext = Path(font.replace("\\", "/")).suffix.lower()
+    return "shx" if ext == ".shx" else "ttf" if ext in (".ttf", ".ttc", ".otf") else "other" if font else "none"
+
 def build_model(doc, file_hash: str = "") -> DrawingModel:
     m = DrawingModel(file_hash=file_hash, dxf_version=str(doc.dxfversion))
+    m.stats = ModelStats(source="ezdxf", modelspace=SpaceStats(), paperspace=SpaceStats(), blocks=SpaceStats())
     try:
         m.insunits = int(doc.header.get("$INSUNITS", 0))
     except Exception:  # noqa: BLE001
@@ -112,9 +153,13 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
 
     for layer in doc.layers:
         d = layer.dxf
+        name = str(d.name)
+        parts = re.split(r"\||\$0\$", name, maxsplit=1)
         m.layers.append(
             LayerRec(
-                name=str(d.name),
+                name=name,
+                xref_dependent=bool(int(d.get("flags", 0)) & 16 or len(parts) > 1),
+                xref_name=parts[0] if len(parts) > 1 else None,
                 color=int(d.get("color", 7)),
                 linetype=str(d.get("linetype", "Continuous")),
                 lineweight=int(d.get("lineweight", -3)),
@@ -124,13 +169,63 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
             )
         )
 
+    m.stats.layers_xref_dependent = sum(layer.xref_dependent for layer in m.layers)
+    for style in doc.styles:
+        try:
+            if int(style.dxf.get("flags", 0)) & 1:
+                m.stats.shape_styles += 1
+                continue
+            font = str(style.dxf.get("font", "") or "")
+            m.styles.append(StyleRec(name=str(style.dxf.name), font=font,
+                                     bigfont=str(style.dxf.get("bigfont", "") or ""), font_kind=_font_kind(font)))
+        except Exception:  # noqa: BLE001
+            continue
+    for style in doc.dimstyles:
+        try:
+            m.dim_styles.append(str(style.dxf.name))
+        except Exception:  # noqa: BLE001
+            continue
+
     block_layers: set[str] = set()
     for block in doc.blocks:
-        if str(block.name).startswith("*"):
+        try:
+            name = str(block.name)
+            is_layout = name.lower().startswith(("*model_space", "*paper_space"))
+            kind = "named" if not name.startswith("*") else "anon_" + (name[1:2].upper() if name[1:2].upper() in "UDXA" else "other")
+            rec = BlockRec(name=name, kind=kind, is_layout=is_layout,
+                           is_xref=bool(int(block.block.dxf.get("flags", 0)) & 4))
+            m.blocks.append(rec)
+            if is_layout:
+                continue
+            for e in block:
+                try:
+                    t = e.dxftype()
+                    if not name.startswith("*"):
+                        block_layers.add(str(e.dxf.get("layer", "0")))
+                    if t in {"ATTRIB", "VERTEX", "SEQEND"}:
+                        continue
+                    layer = str(e.dxf.get("layer", "0"))
+                    rec.entity_count += 1
+                    rec.types[t] = rec.types.get(t, 0) + 1
+                    rec.layers[layer] = rec.layers.get(layer, 0) + 1
+                    if t == "INSERT":
+                        child = str(e.dxf.name)
+                        rec.child_blocks[child] = rec.child_blocks.get(child, 0) + 1
+                    _count_entity(m.stats.blocks, e)
+                except Exception:  # noqa: BLE001
+                    continue
+        except Exception:  # noqa: BLE001
             continue
-        for e in block:
-            block_layers.add(str(e.dxf.get("layer", "0")))
     m.block_layers = sorted(block_layers)
+    lookup = {b.name.casefold(): b for b in m.blocks if not b.is_layout}
+    # T?n kh?i trong DXF kh?ng ph?n bi?t ch? hoa/th??ng.
+    graph = {key: b.model_copy(update={"child_blocks": {n.casefold(): v for n, v in b.child_blocks.items()}}) for key, b in lookup.items()}
+    for key, block in lookup.items():
+        block.depth = _block_depth(key, graph, set())
+    m.stats.blocks_named = sum(b.kind == "named" for b in lookup.values())
+    m.stats.blocks_anonymous = sum(b.kind != "named" for b in lookup.values())
+    m.stats.blocks_xref = sum(b.is_xref for b in lookup.values())
+    m.stats.max_block_depth = max((b.depth for b in lookup.values()), default=0)
 
     for layout in doc.layouts:
         is_model = layout.name.lower() == "model"
@@ -141,12 +236,19 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
             lrec = LayoutRec(name=layout.name, paper_w_mm=w, paper_h_mm=h)
             m.layouts.append(lrec)
         for e in layout:
+            try:
+                _count_entity(m.stats.modelspace if is_model else m.stats.paperspace, e)
+            except Exception:  # noqa: BLE001
+                pass
             if e.dxftype() == "VIEWPORT":
                 vid = int(e.dxf.get("id", 0))
                 if lrec is not None and vid != 1:  # id 1 = khung tờ giấy, không phải khung nhìn
                     lrec.viewports.append(ViewportRec(layout=layout.name, id=vid, scale=_viewport_scale(e)))
                 continue
-            m.entities.append(_entity_rec(e, space))
+            try:
+                m.entities.append(_entity_rec(e, space))
+            except Exception:  # noqa: BLE001
+                continue
     return m
 
 
