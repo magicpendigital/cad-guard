@@ -1,4 +1,4 @@
-"""Dòng lệnh: cadguard audit | stats | rules | fixtures.
+"""Dòng lệnh: cadguard audit | stats | rules | profile | fixtures | mcp.
 
 Mã thoát của `audit`: 0 = không có lỗi mức E; 1 = có lỗi mức E; 2 = không đọc được đầu vào/chuẩn.
 """
@@ -123,6 +123,12 @@ def cmd_fixtures(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_mcp(args: argparse.Namespace) -> int:
+    from .mcp_server import run_from_args  # SDK `mcp` chỉ được import bên trong, khi chạy lệnh này
+
+    return run_from_args(args)
+
+
 def main(argv: list[str] | None = None) -> int:
     _utf8()
     p = argparse.ArgumentParser(prog="cadguard", description="cad-guard: kiểm tra bản vẽ theo luật tất định")
@@ -158,6 +164,18 @@ def main(argv: list[str] | None = None) -> int:
     f = sub.add_parser("fixtures", help="sinh lại DXF tổng hợp")
     f.add_argument("out_dir", nargs="?", default="fixtures/synthetic")
     f.set_defaults(fn=cmd_fixtures)
+
+    from .mcp_server import add_arguments as mcp_arguments
+
+    m = sub.add_parser(
+        "mcp",
+        add_help=False,
+        help="máy chủ MCP stdio chỉ đọc cho trợ lý AI (cần extras [agent])",
+        description="Máy chủ MCP stdio CHỈ ĐỌC: 5 công cụ list_drawings, audit, explain_rule, get_model_summary, "
+        "query_model. stdout chỉ dành cho JSON-RPC; thông báo ra stderr. Cần SDK: pip install cadguard[agent].",
+    )
+    mcp_arguments(m)
+    m.set_defaults(fn=cmd_mcp)
 
     args = p.parse_args(argv)
     try:

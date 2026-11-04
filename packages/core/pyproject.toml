@@ -15,6 +15,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+# Máy chủ MCP stdio (`python -m cadguard mcp`); SDK chính thức, giấy phép MIT (xem docs/licenses.md).
+agent = ["mcp>=1.10,<2"]
 
 [project.scripts]
 cadguard = "cadguard.cli:main"
