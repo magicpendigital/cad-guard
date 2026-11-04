@@ -5,6 +5,11 @@
       "type": "local",
       "command": ["<PYTHON>", "-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>"],
       "enabled": true
+    },
+    "cad-guard-ho-so": {
+      "type": "local",
+      "command": ["<PYTHON>", "-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>", "--profile", "<HO_SO_CONG_TY>"],
+      "enabled": false
     }
   },
   "permission": {

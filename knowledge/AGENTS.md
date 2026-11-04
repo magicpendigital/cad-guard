@@ -81,4 +81,7 @@ Quy ước "sẵn sàng bàn giao": không còn lỗi E, dữ liệu không bị
 1. `list_drawings` để biết có bản vẽ nào (mã tệp `F_…`).
 2. Hỏi người dùng đang ở phòng nào và muốn gì (khảo sát, kiểm lỗi, dọn bản vẽ, bàn giao). Chọn skill tương ứng trong `skills/`.
 3. Chọn chuẩn: khâu Thiết kế và nhận vào Kỹ thuật → `design-hygiene-v0`; giao xuống Lập trình sản xuất → `furniture-v0`. Không chắc thì chạy cả hai và nói rõ.
-4. Hồ sơ công ty (ngưỡng riêng) hiện **chưa** truyền được qua công cụ `audit`; kết quả là theo ngưỡng mặc định của chuẩn. Nói rõ điều này nếu người dùng hỏi về ngưỡng của công ty.
+4. Hồ sơ công ty (ngưỡng riêng, luật tắt, mẫu tên layer) được áp khi máy chủ MCP khởi động với `--profile <tệp>`, và chỉ áp khi gọi đúng chuẩn ghi trong hồ sơ. Trợ lý không chọn hay đổi hồ sơ. Đọc trường `profile` trong kết quả `audit`/`explain_rule`:
+   - `profile` = `{name, version}`: kết quả theo hồ sơ đó; ghi tên và phiên bản hồ sơ khi trích dẫn.
+   - `profile` = null: đang theo **ngưỡng mặc định** của chuẩn; nói rõ điều này, nhất là khi người dùng hỏi về ngưỡng của công ty.
+   - `explain_rule` có `enabled` (luật có bị hồ sơ tắt không) và `rule_params` (tham số đang áp). Lấy ngưỡng từ đây, không lấy từ trí nhớ.

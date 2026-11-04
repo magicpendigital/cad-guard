@@ -29,6 +29,8 @@ Chưa mẫu nào được thử chạy thật với từng CLI. Đây là việc
 
 Máy chủ mặc định ẩn danh Bậc 1. Chỉ thêm `--no-anonymize` vào `args` khi khách đã đồng ý bằng văn bản.
 
+Hồ sơ công ty (tuỳ chọn): thêm `"--profile", "<HO_SO_CONG_TY>"` vào cuối `args` (đường dẫn đầy đủ tới tệp YAML `cg.company-profile/1`); không có `--standard` thì chuẩn mặc định là chuẩn ghi trong hồ sơ, và `audit`/`explain_rule` trả `profile: {name, version}` của hồ sơ đã áp. Mẫu Codex có dòng ví dụ để bỏ dấu `#`; mẫu OpenCode có mục `cad-guard-ho-so` đang tắt (`enabled: false`).
+
 ## Đăng nhập và khoá
 
 - cad-guard **không đọc, không lưu, không chuyển** thông tin đăng nhập hay khoá của CLI. CLI tự đăng nhập theo cách của nó.

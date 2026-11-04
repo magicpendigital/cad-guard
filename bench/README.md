@@ -60,7 +60,7 @@ Kiểm tra (`kiem_tra[].loai`):
 | B03-layer-du-xref | `hygiene_bad.dxf` | Số layer dư từ xref (VS-01) |
 | B04-kich-thuoc-ghi-de | `hygiene_bad.dxf` | Tổng số kích thước và số bị ghi đè chữ (qua `query_model`) |
 | B05-hygiene-ok-sach | `hygiene_ok.dxf` | Xác nhận sạch theo `design-hygiene-v0` |
-| B06-ho-so-cong-ty | `hygiene_bad.dxf` + hồ sơ | Hồ sơ công ty làm mất VS-02, VS-05 |
+| B06-ho-so-cong-ty | `hygiene_bad.dxf` + hồ sơ | Hồ sơ công ty làm mất VS-02, VS-05; `profile.name` đúng hồ sơ đã áp |
 | B07-records-capped | `hygiene_bad.dxf` (trần 5 bản ghi) | Báo `records_capped` và cảnh báo người dùng |
 | B08-ghi-chu-ban-giao | `hygiene_bad.dxf` | Ghi chú bàn giao Thiết kế → Kỹ thuật đủ trường bắt buộc |
 | B09-an-danh-khong-lo-ten | `hygiene_bad.dxf` (ẩn danh) | Trả lời đúng mà không lộ tên layer/tệp thật |
@@ -83,7 +83,7 @@ Giao diện: một hàm Python `ham(task: dict, workspace: Path) -> dict`.
 
 Gọi thẳng 5 hàm công cụ trong `cadguard.agent.tools` (đúng những gì máy chủ MCP đưa cho trợ lý), tất định, chi phí 0. Phải đạt 100%; nếu không thì đáp án, tác vụ hoặc hành vi công cụ đã lệch.
 
-Ngoại lệ: B06 (hồ sơ công ty). Công cụ `audit` của MCP **chưa nhận hồ sơ công ty**, nên tham chiếu áp hồ sơ bằng API lõi (`load_standard(..., profile=...)`, như `cadguard audit --profile`). Trợ lý thật hiện chỉ trả lời được B06 bằng suy luận từ ngưỡng trong `message` của `audit`. Đề xuất: thêm tham số hồ sơ cho máy chủ MCP rồi bỏ ngoại lệ này.
+Hồ sơ công ty (B06): `moi_truong.ho_so` tương ứng cờ `python -m cadguard mcp --profile ho-so.yaml`. Tham chiếu dựng `ToolContext(profile=...)` và gọi `audit` như mọi tác vụ khác; `audit` tự áp hồ sơ khi chuẩn trùng chuẩn của hồ sơ và trả `profile: {name, version}` (null nếu không áp). Kết quả "trước" lấy từ cùng công cụ với `profile=None`, tức một máy chủ không có `--profile`. Người trả lời qua CLI thật cần hai máy chủ cho B06: một có `--profile`, một không.
 
 ## Chưa làm
 

@@ -4,12 +4,14 @@
 - bộ chấm phải đạt 100% với người trả lời này (nếu không: tác vụ hoặc đáp án sai, hoặc công cụ đã đổi hành vi);
 - mỗi hàm `_dang_*` là bản mẫu "trợ lý nên gọi công cụ nào, đọc trường nào" cho skill trong `knowledge/skills/`.
 
-Ngoại lệ duy nhất: tác vụ hồ sơ công ty. Công cụ `audit` của MCP CHƯA nhận hồ sơ, nên tham chiếu áp hồ sơ bằng
-API lõi (`load_standard(..., profile=...)`, như `cadguard audit --profile`). Không gọi LLM, không gọi mạng.
+Hồ sơ công ty: tác vụ có `moi_truong.ho_so` thì ngữ cảnh mang `profile` (như máy chủ khởi động với
+`python -m cadguard mcp --profile <tệp>`); công cụ `audit`/`explain_rule` tự áp hồ sơ khi gọi đúng chuẩn của hồ sơ
+và ghi `profile: {name, version}` vào kết quả. Không gọi LLM, không gọi mạng.
 """
 
 from __future__ import annotations
 
+import dataclasses
 from collections import Counter
 from pathlib import Path
 
@@ -18,8 +20,7 @@ from cadguard.agent.anonymize import Anonymizer
 from cadguard.agent.workspace import Workspace
 from cadguard.dxf_stream import DEFAULT_MAX_ENTITY_RECORDS
 from cadguard.reader_select import DEFAULT_STREAM_THRESHOLD_MB
-from cadguard.runner import audit_model
-from cadguard.standard import find_standards_dir, load_standard
+from cadguard.standard import find_standards_dir, load_profile
 
 PROFILE_FILE = "ho-so.yaml"
 
@@ -27,12 +28,14 @@ PROFILE_FILE = "ho-so.yaml"
 def make_context(task: dict, workspace: Path) -> tools.ToolContext:
     """Dựng ngữ cảnh công cụ giống `python -m cadguard mcp` với các cờ trong `moi_truong` của tác vụ."""
     env = task.get("moi_truong") or {}
+    workspace = Path(workspace)
     return tools.ToolContext(
         Workspace(workspace),
         Anonymizer(enabled=env.get("an_danh", True)),  # mặc định ẩn danh Bậc 1, như máy chủ MCP
         find_standards_dir(Path(__file__).resolve()),
         stream_threshold_mb=env.get("stream_threshold_mb", DEFAULT_STREAM_THRESHOLD_MB),
         max_entity_records=env.get("max_entity_records", DEFAULT_MAX_ENTITY_RECORDS),
+        profile=load_profile(workspace / PROFILE_FILE) if env.get("ho_so") else None,  # như cờ --profile
     )
 
 
@@ -95,13 +98,13 @@ def _dang_xac_nhan_sach(task, ctx):
 def _dang_ho_so(task, ctx):
     file = _only_file(ctx)
     name = _standard(task)
-    before = _rule_ids(tools.audit(ctx, file, name)["findings"])
-    path = ctx.workspace.resolve(ctx.ids.get(file, file))
-    model = tools.load_model(path, ctx.stream_threshold_mb, ctx.max_entity_records)
-    std = load_standard(name, ctx.standards_dir, profile=ctx.workspace.root / PROFILE_FILE)
-    after = sorted({f.rule_id for f in audit_model(model, std).findings})
+    # "Trước" = máy chủ không có --profile; "sau" = máy chủ của phiên (có --profile). Cả hai đều qua công cụ audit.
+    plain = tools.audit(dataclasses.replace(ctx, profile=None), file, name)
+    with_profile = tools.audit(ctx, file, name)
+    before, after = _rule_ids(plain["findings"]), _rule_ids(with_profile["findings"])
     return {"truoc": before, "sau": after, "mat_di": sorted(set(before) - set(after)),
-            "them_moi": sorted(set(after) - set(before))}
+            "them_moi": sorted(set(after) - set(before)), "ho_so": with_profile["profile"],
+            "ho_so_truoc": plain["profile"]}
 
 
 def _dang_records_capped(task, ctx):
