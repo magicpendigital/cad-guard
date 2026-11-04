@@ -26,6 +26,13 @@ class Finding:
 @dataclass
 class Ctx:
     globals: dict
+    params: dict = field(default_factory=dict)  # tham số của luật đang chạy (RuleSpec.params, đã áp hồ sơ công ty)
+
+    def param(self, name: str):
+        """Tham số của luật; chuẩn không khai báo thì luật không chạy được (Skip), không đoán giá trị."""
+        if name not in self.params:
+            raise Skip(f"chuẩn chưa khai báo tham số '{name}' cho luật này")
+        return self.params[name]
 
 
 RuleFn = Callable[[DrawingModel, Ctx], list[Finding]]
@@ -47,4 +54,4 @@ def sample(handles: list[str], n: int = 5) -> list[str]:
 
 
 # Nạp các module luật để chúng tự đăng ký.
-from . import data_hygiene, layers, sheets, text_views  # noqa: E402,F401
+from . import data_hygiene, hygiene, layers, sheets, text_views  # noqa: E402,F401

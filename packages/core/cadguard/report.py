@@ -38,7 +38,8 @@ def build_report(standard: Standard, items: list[tuple[str, str, AuditResult]]) 
     return {
         "schema": "cg.report/1",
         "tool_version": __version__,
-        "standard": {"name": standard.name, "version": standard.version},
+        "standard": {"name": standard.name, "version": standard.version,
+                     **({"profile": dict(standard.profile)} if standard.profile else {})},
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "files": files,
         "totals": totals,
@@ -67,7 +68,10 @@ def render_html(report: dict) -> str:
         "<!doctype html><html lang='vi'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>",
         "<title>Báo cáo kiểm tra bản vẽ</title><style>" + _CSS + "</style></head><body><main>",
         "<h1>Báo cáo kiểm tra bản vẽ</h1>",
-        f"<p class='mut'>Chuẩn <b>{e(report['standard']['name'])}</b> · cad-guard {e(report['tool_version'])} · {e(report['generated_at'])}</p>",
+        f"<p class='mut'>Chuẩn <b>{e(report['standard']['name'])}</b>"
+        + (f" · hồ sơ công ty <b>{e(report['standard']['profile']['name'])}</b> {e(report['standard']['profile']['version'])}"
+           if report["standard"].get("profile") else "")
+        + f" · cad-guard {e(report['tool_version'])} · {e(report['generated_at'])}</p>",
         f"<p>Tổng: <span class='E'>{report['totals']['E']} lỗi</span> · <span class='W'>{report['totals']['W']} cảnh báo</span> · <span class='I'>{report['totals']['I']} thông tin</span></p>",
         "<p class='mut'>Công cụ chỉ gợi ý, không ký duyệt bản vẽ. Người kiểm vẫn là người quyết định.</p>",
     ]

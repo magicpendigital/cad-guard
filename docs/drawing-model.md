@@ -28,6 +28,7 @@ Schema vẫn là `cg.drawing/1`. Các trường mới có mặc định để đ
 | `stats.max_block_depth` | int; 0 | Độ sâu lớn nhất trong các khối ngoài layout. |
 | `stats.layers_xref_dependent`, `shape_styles` | int; 0 | Số layer phụ thuộc xref và STYLE có cờ hình bit 1. |
 | `stats.entity_records_truncated` | bool; false | Danh sách entities bị cắt trần; thống kê vẫn tính toàn bộ. |
+| `stats.text_non_ascii_by_style` | map[string,int]; {} | Số TEXT/MTEXT có ký tự ngoài ASCII (hoặc mã `\U+`/`\M+`), theo tên kiểu chữ ghi trên đối tượng (thiếu = `Standard`); tính cả model, layout giấy và định nghĩa khối. MTEXT xét mã 1 và 3. Không tính ATTRIB/ATTDEF. Dùng cho VS-07. |
 
 Trong mỗi `SpaceStats`:
 
@@ -44,6 +45,8 @@ Trong mỗi `SpaceStats`:
 Khối chỉ đếm mỗi định nghĩa một lần, không nhân theo số INSERT. `entities` giữ ngữ nghĩa cũ: chỉ model/layout giấy và không chứa VIEWPORT; `block_layers` giữ ngữ nghĩa cũ, chỉ layer trong khối tên thường.
 
 ## Dành cho Luồng 3
+
+Đã cài thành chuẩn `design-hygiene-v0` (VS-01…VS-07, xem `standards/design-hygiene-v0.md`); bảng dưới là thiết kế ban đầu, cách tính thật xem tệp chuẩn.
 
 | Luật vệ sinh dự kiến | Trường cần dùng |
 | --- | --- |

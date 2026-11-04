@@ -14,6 +14,11 @@ def standard():
 
 
 @pytest.fixture(scope="session")
+def hygiene():
+    return load_standard("design-hygiene-v0", REPO / "standards")
+
+
+@pytest.fixture(scope="session")
 def synthetic(tmp_path_factory):
     d = tmp_path_factory.mktemp("synthetic")
     fixtures.make_all(d)

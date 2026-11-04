@@ -1,0 +1,24 @@
+# standards/company-profile.example.yaml — VÍ DỤ hồ sơ công ty (dữ liệu minh hoạ, không phải của công ty thật nào).
+# Dùng: python -m cadguard audit <tệp/thư mục> --profile standards/company-profile.example.yaml
+# Hồ sơ chỉ GHI ĐÈ tham số đã khai báo trong chuẩn; không thêm luật, không sửa tệp chuẩn.
+# Sai sót (trường lạ, mã luật không có, tham số lạ, sai kiểu, mẫu regex hỏng) -> báo lỗi tiếng Việt, thoát mã 2.
+schema: cg.company-profile/1
+name: cong-ty-mau
+version: 0.1.0
+standard: design-hygiene-v0          # chuẩn áp dụng; nếu không truyền --standard thì dùng chuẩn này
+standard_version: 0.1.0              # tuỳ chọn: khác phiên bản chuẩn đang nạp thì báo lỗi
+description: Ví dụ hồ sơ cho phòng Thiết kế.
+layer_patterns:
+  # Thay globals.allowed_layer_patterns: layer dạng xref nhưng công ty chủ động giữ (VS-01).
+  allowed:
+  - ^KHUNG-TEN\|
+  # Thay globals.exempt_layer_patterns: layer được miễn kiểm ghi đè màu/độ dày nét (VS-04).
+  exempt:
+  - ^TRINH-BAY-
+overrides:
+  VS-02:
+    max_text_styles: 20
+    max_dim_styles: 12
+  VS-04:
+    max_color_override_ratio: 0.2
+disabled: []                         # mã luật tắt hẳn cho công ty này, ví dụ [VS-05]

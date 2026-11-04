@@ -14,8 +14,10 @@ from pathlib import Path
 from . import __version__, fixtures, report, telemetry
 from .rules import REGISTRY
 from .runner import audit_model
-from .standard import find_standards_dir, load_standard
+from .standard import ProfileError, find_standards_dir, load_profile, load_standard
 from .stats import compute_stats
+
+DEFAULT_STANDARD = "furniture-v0"
 
 
 def _utf8() -> None:
@@ -56,7 +58,9 @@ def _read_model(f: Path, reader: str, threshold_mb: float):
 
 
 def cmd_audit(args: argparse.Namespace) -> int:
-    std = load_standard(args.standard, Path(args.standards_dir) if args.standards_dir else None)
+    profile = load_profile(args.profile) if args.profile else None
+    name = args.standard or (profile.standard if profile else DEFAULT_STANDARD)
+    std = load_standard(name, Path(args.standards_dir) if args.standards_dir else None, profile=profile)
     files = _collect(args.paths)
     if not files:
         print("Không có tệp .dxf nào để quét.", file=sys.stderr)
@@ -96,14 +100,14 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
 
 def cmd_stats(args: argparse.Namespace) -> int:
-    std = load_standard(args.standard, Path(args.standards_dir) if args.standards_dir else None)
+    std = load_standard(args.standard or DEFAULT_STANDARD, Path(args.standards_dir) if args.standards_dir else None)
     stats = compute_stats(std)
     print(json.dumps(stats) if args.json else "\n".join(f"{k}: {v}" for k, v in stats.items()))
     return 0
 
 
 def cmd_rules(args: argparse.Namespace) -> int:
-    std = load_standard(args.standard, Path(args.standards_dir) if args.standards_dir else None)
+    std = load_standard(args.standard or DEFAULT_STANDARD, Path(args.standards_dir) if args.standards_dir else None)
     for r in std.rules:
         mark = "x" if (r.implemented and r.id in REGISTRY) else " "
         print(f"[{mark}] {r.id}  {r.severity}  {r.title}")
@@ -154,7 +158,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     def common(sp: argparse.ArgumentParser) -> None:
-        sp.add_argument("--standard", default="furniture-v0")
+        sp.add_argument("--standard", default=None, help=f"tên chuẩn trong standards/ (mặc định {DEFAULT_STANDARD})")
         sp.add_argument("--standards-dir", default=None)
 
     a = sub.add_parser("audit", help="quét tệp/thư mục DXF")
@@ -165,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
                    help="bộ đọc DXF: ezdxf (nạp trọn), stream (theo dòng, ít bộ nhớ), auto (stream khi tệp lớn; mặc định)")
     a.add_argument("--stream-threshold-mb", type=float, default=50.0,
                    help="ngưỡng MB để auto chuyển sang đọc theo dòng (mặc định 50)")
+    a.add_argument("--profile", default=None,
+                   help="hồ sơ công ty (YAML cg.company-profile/1) ghi đè ngưỡng/mẫu layer; không có --standard thì dùng chuẩn ghi trong hồ sơ")
     common(a)
     a.set_defaults(fn=cmd_audit)
 
@@ -202,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
     try:
         return int(args.fn(args))
-    except FileNotFoundError as exc:
+    except (FileNotFoundError, ProfileError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
 
