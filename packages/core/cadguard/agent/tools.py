@@ -233,3 +233,150 @@ def query_model(ctx: ToolContext, file: str, filter: dict, limit: int = 100, cur
         items.pop()
     if not items and offset < len(matched): raise ToolError("Một đối tượng vượt trần kích thước trang.")
     return result()
+
+
+# ---------- công cụ đề xuất sửa (A2): chỉ ghi changeset JSON, KHÔNG ghi DXF; áp dụng do người qua CLI ----------
+
+DIFF_MAX_BYTES = 65536
+_DEF_KIND = {"layers": "layer", "text_styles": "style", "dim_styles": "dimstyle", "blocks": "block"}
+_ATTR_KIND = {"layer": "layer", "style": "style", "dimstyle": "dimstyle", "name": "block", "geometry": "block"}
+REDACTED = "…ẩn…"
+
+
+def _all_names(model):
+    """Mọi tên đã biết trong bản vẽ (cho giải mã/scrub): layer, kiểu chữ, kiểu kích thước, khối, layout."""
+    names = _names(model)
+    names += [("style", s.name) for s in model.styles]
+    names += [("dimstyle", d) for d in model.dim_styles]
+    names += [("block", b.name) for b in model.blocks if not b.is_layout]
+    return names
+
+
+def _space_token(anon, space: str) -> str:
+    if space.startswith("block:"):
+        return "block:" + anon.token("block", space[6:])
+    return anon.token("layout", space)
+
+
+def _attr_value(anon, attr, value):
+    if not anon.enabled:
+        return value
+    kind = _ATTR_KIND.get(attr)
+    if kind and isinstance(value, str):
+        return anon.token(kind, value)
+    if isinstance(value, str):
+        return REDACTED
+    return value
+
+
+def _anon_defs(anon, defs: dict) -> dict:
+    return {kind: {key: [anon.token(_DEF_KIND[kind], n) for n in names] for key, names in v.items()} for kind, v in defs.items()}
+
+
+def _anon_report(anon, rep: dict) -> dict:
+    out = {k: v for k, v in rep.items() if k != "details"}
+    det = rep.get("details")
+    if not det:
+        return out
+    d = {}
+    if "removed_layers" in det:
+        d["removed_layers"] = [anon.token("layer", x) for x in det["removed_layers"]]
+    if "target" in det:
+        d["target"] = anon.token("layer", det["target"])
+    if "renamed_layers" in det:
+        d["renamed_layers"] = [[anon.token("layer", a), anon.token("layer", b)] for a, b in det["renamed_layers"]]
+    if "removed" in det:
+        d["removed"] = {kind: [anon.token(_DEF_KIND[kind], n) for n in names] for kind, names in det["removed"].items()}
+    out["details"] = d
+    return out
+
+
+@_safe
+def propose_changeset(ctx: ToolContext, file: str, ops, standard: str = "design-hygiene-v0",
+                      protected_layers: list | None = None) -> dict:
+    """Chạy khô các thao tác (từ vựng cố định) và lưu changeset vào thư mục phiên; KHÔNG ghi DXF.
+
+    Tên ẩn danh (L_…, S_…, D_…, B_…, Y_…) trong thao tác được giải mã về tên thật trước khi lưu;
+    kết quả xem trước trả về đã ẩn danh. Áp dụng chỉ do người dùng qua `cadguard apply`.
+    """
+    from ..changeset.apply import ChangesetError, propose
+    from ..changeset.ops import OpError, dump_ops, map_names, parse_ops
+    from .anonymize import TokenError
+
+    path, model = _model(ctx, file)
+    anon = ctx.anonymizer
+    names = _all_names(model)
+    if protected_layers is not None and (not isinstance(protected_layers, list) or not all(isinstance(x, str) for x in protected_layers)):
+        raise ToolError("protected_layers phải là danh sách tên/mã layer.")
+    try:
+        parsed = parse_ops(ops)
+        decode = anon.decoder(names)
+        real_ops = [map_names(o, decode) for o in parsed]
+        protected = [decode("layer", x) for x in protected_layers or []]
+        _standard(ctx, standard)
+        cs, pv = propose(ctx.workspace, path.relative_to(ctx.workspace.root).as_posix(), None, ops=real_ops,
+                         standard=standard, standards_dir=Path(ctx.standards_dir), profile=ctx.profile,
+                         protected_layers=protected, created_by="agent")
+    except (OpError, TokenError, ChangesetError) as exc:
+        raise ToolError(anon.scrub_text(str(exc), names)) from None
+    prot = pv["protection"]
+    return {
+        "changeset_id": cs.id,
+        "file": _file_id(ctx, path),
+        "standard": pv["standard"],
+        "version": pv["standard_version"],
+        "profile": pv["profile"],
+        "ops": dump_ops(parsed),
+        "protection": {"layers": [anon.token("layer", x) for x in prot["layers"]], "patterns_count": len(prot["patterns"])},
+        "ops_report": [_anon_report(anon, r) for r in pv["ops"]],
+        "diff": pv["diff"],
+        "definitions": _anon_defs(anon, pv["definitions"]),
+        "rules": pv["rules"],
+        "rules_regressed": pv["rules_regressed"],
+        "findings_after": [{**f, "message": anon.scrub_text(f["message"], names)} for f in pv["findings_after"][:max(0, ctx.max_findings)]],
+        "checks": [{**c, "message": anon.scrub_text(c["message"], names)} for c in pv["checks"]],
+        "ok": pv["ok"],
+        "summary_vi": pv["summary_vi"],
+        "diff_summary_vi": pv["diff_summary_vi"],
+        "apply": "Trợ lý KHÔNG áp dụng được. Người dùng xem trước rồi tự chạy: cadguard apply "
+                 f"{cs.id} --workspace <thư mục làm việc>; kết quả ghi ra tệp mới, tệp gốc giữ nguyên.",
+    }
+
+
+@_safe
+def diff(ctx: ToolContext, a: str, b: str, max_items: int = 100) -> dict:
+    """So hai DXF trong thư mục làm việc theo handle; đã ẩn danh; JSON tối đa 64 KB."""
+    from ..changeset.diff import diff_files
+
+    pa, pb = _path(ctx, a), _path(ctx, b)
+    max_items = max(1, min(500, int(max_items)))
+    d = diff_files(pa, pb, max_items)
+    anon = ctx.anonymizer
+
+    def ent(e):
+        return {**e, "layer": anon.token("layer", e["layer"]), "space": _space_token(anon, e["space"])}
+
+    changed = []
+    for e in d["entities"]["changed"]:
+        item = ent(e)
+        item["attrs"] = {k: [_attr_value(anon, k, v[0]), _attr_value(anon, k, v[1])] for k, v in e["attrs"].items()}
+        changed.append(item)
+    out = {
+        "a": {"id": _file_id(ctx, pa), "sha256": d["a"]["sha256"]},
+        "b": {"id": _file_id(ctx, pb), "sha256": d["b"]["sha256"]},
+        "summary": d["summary"],
+        "summary_vi": d["summary_vi"],
+        "entities": {"added": [ent(e) for e in d["entities"]["added"]], "removed": [ent(e) for e in d["entities"]["removed"]],
+                     "changed": changed},
+        "definitions": _anon_defs(anon, d["definitions"]),
+        "truncated": d["truncated"],
+    }
+    while _bytes(out) > DIFF_MAX_BYTES:
+        lists = [out["entities"][k] for k in ("changed", "added", "removed")]
+        lists += [v for kind in out["definitions"].values() for v in kind.values()]
+        longest = max(lists, key=len)
+        if not longest:
+            raise ToolError("Không thể giới hạn kích thước kết quả.")
+        longest.pop()
+        out["truncated"] = True
+    return out

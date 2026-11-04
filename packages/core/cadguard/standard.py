@@ -84,6 +84,8 @@ class LayerPatterns(BaseModel):
     model_config = ConfigDict(extra="forbid")
     allowed: list[str] | None = None
     exempt: list[str] | None = None
+    # Layer BẢO VỆ cho công cụ sửa (changeset): thao tác chạm layer khớp mẫu bị từ chối. Không ảnh hưởng luật.
+    protected: list[str] | None = None
 
 
 class CompanyProfile(BaseModel):
@@ -132,6 +134,8 @@ def load_profile(path: str | Path) -> CompanyProfile:
         raise ProfileError(f"Hồ sơ công ty '{p.name}' sai: {_pydantic_msg(exc)}.") from None
     if prof.schema_id != PROFILE_SCHEMA:
         raise ProfileError(f"Hồ sơ công ty '{p.name}': schema phải là '{PROFILE_SCHEMA}', đang là '{prof.schema_id}'.")
+    if prof.layer_patterns.protected is not None:
+        _check_patterns("layer_patterns.protected", prof.layer_patterns.protected)
     return prof
 
 

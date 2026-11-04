@@ -58,4 +58,4 @@ Kết luận theo luật tất định của cad-guard; trợ lý không tự ph
 
 - Không nói "bản vẽ đạt" khi còn luật bị bỏ qua hoặc dữ liệu bị cắt.
 - Không tự đọc DXF, không chạy lệnh ngoài, không đoán tên thật khi đang ẩn danh.
-- Không hứa "cad-guard sẽ tự sửa": hiện công cụ chỉ đọc.
+- Không hứa "cad-guard sẽ tự sửa": trợ lý chỉ đề xuất changeset (skill `don-ban-ve`), người dùng tự áp dụng ra tệp mới.
