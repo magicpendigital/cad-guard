@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import time
 from pathlib import Path
 from typing import Callable
@@ -121,11 +122,19 @@ def _engine_from_env():
     if not name:
         raise RuntimeError("Chưa đặt CADGUARD_BENCH_ENGINE (vd. claude-cli, anthropic).")
     timeout = os.environ.get("CADGUARD_BENCH_TIMEOUT")
-    return create_engine(name, model=os.environ.get("CADGUARD_BENCH_MODEL") or None,
+    engine = create_engine(name, model=os.environ.get("CADGUARD_BENCH_MODEL") or None,
                          experimental=os.environ.get("CADGUARD_BENCH_EXPERIMENTAL") == "1",
                          account=os.environ.get("CADGUARD_BENCH_ACCOUNT") or None,
                          timeout=float(timeout) if timeout else None,
                          allow_openrouter=os.environ.get("CADGUARD_ALLOW_OPENROUTER") == "1")
+    if not _WARNED:
+        _WARNED.append(True)
+        for warning in getattr(engine, "auth_warnings", lambda: [])():
+            print(f"[cảnh báo] {warning}", file=sys.stderr)
+    return engine
+
+
+_WARNED: list = []  # cảnh báo biến khoá API chỉ in một lần mỗi lượt chấm
 
 
 answer = make_answerer(_engine_from_env)

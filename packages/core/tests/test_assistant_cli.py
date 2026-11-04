@@ -13,7 +13,7 @@ import pytest
 from cadguard import fixtures
 from cadguard.assistant import CancelToken, create_engine
 from cadguard.assistant.base import AUTH_ENV_VARS
-from cadguard.assistant.cli_engines import CLAUDE_DENY, AgyCliEngine, ClaudeCliEngine, CodexCliEngine
+from cadguard.assistant.cli_engines import CLAUDE_DENY, AgyCliEngine, ClaudeCliEngine, CodexCliEngine, auth_warnings
 
 FAKE_CLI = r'''
 import json, os, sys, time
@@ -94,7 +94,7 @@ def _types(events):
 
 def test_claude_parses_stream_and_usage(fake, monkeypatch):
     for var in AUTH_ENV_VARS:
-        monkeypatch.setenv(var, "test-not-a-real-key")
+        monkeypatch.delenv(var, raising=False)
     eng = ClaudeCliEngine(fake("claude"))
     events = _run(eng, fake.ws)
     types = _types(events)
@@ -110,7 +110,7 @@ def test_claude_parses_stream_and_usage(fake, monkeypatch):
     assert [e.data["text"] for e in events if e.type == "text"] == ["Có 1 lỗi E."]  # không lặp chữ của `result`
 
     d = fake.dump()
-    # Không có biến xác thực nào trong môi trường tiến trình con (kể cả khi tiến trình cha có).
+    # cad-guard không tự THÊM biến xác thực nào cho CLI.
     assert not [v for v in AUTH_ENV_VARS if v in d["env"]]
     assert d["env"]["MCP_TIMEOUT"] == "60000"
     # Thư mục làm việc của CLI chỉ chứa tệp cấu hình sinh ra; không có DXF. Đã dọn sau phiên.
@@ -145,7 +145,8 @@ def test_claude_command_line_blocks_tools_and_no_bare(fake, tmp_path):
     mcp = json.loads((sess / "mcp.json").read_text(encoding="utf-8"))
     server = mcp["mcpServers"]["cad-guard"]
     assert server["command"] == sys.executable
-    assert server["args"][:4] == ["-m", "cadguard", "mcp", "--workspace"]
+    assert server["args"][:3] == ["-m", "cadguard.assistant.mcp_launch", "--workspace"]
+    assert set(server["env"]) == {"PYTHONPATH", "PYTHONUTF8"}  # máy chủ MCP: không biến xác thực nào
     assert "--allow-propose" in server["args"] and "--no-anonymize" not in server["args"]
     assert Path(server["env"]["PYTHONPATH"], "cadguard").is_dir()
     settings = json.loads((sess / "settings.json").read_text(encoding="utf-8"))
@@ -241,7 +242,7 @@ def test_codex_flags_and_events(fake, monkeypatch):
         assert frag in joined
     assert argv[-1] == "-" and "Có bao nhiêu lỗi?" in d["stdin"]
     assert d["env"].get("CODEX_HOME") == os.environ.get("CODEX_HOME")  # không đặt CODEX_HOME riêng
-    assert "OPENAI_API_KEY" not in d["env"]
+    assert d["env"]["OPENAI_API_KEY"] == "test-not-a-real-key"  # giữ nguyên biến của người dùng
     assert d["cwd_files"] == ["AGENTS.md"]
 
 
@@ -269,7 +270,7 @@ def test_agy_business_flags_and_result(fake, monkeypatch):
     argv = d["argv"]
     assert "--sandbox" in argv and "--settings" in argv and argv[argv.index("--output-format") + 1] == "stream-json"
     assert d["env"]["AGY_CLI_DISABLE_AUTO_UPDATE"] == "true"
-    assert "GEMINI_API_KEY" not in d["env"]
+    assert d["env"]["GEMINI_API_KEY"] == "test-not-a-real-key"  # giữ nguyên, cad-guard không gỡ
     assert sorted(d["cwd_files"]) == [".agents", "settings.json"]
 
 
@@ -306,3 +307,75 @@ def test_detect_installed_fake(fake):
 def test_bad_workspace_is_error(fake, tmp_path):
     events = _run(ClaudeCliEngine(fake("claude")), tmp_path / "khong-co")
     assert events[0].type == "error" and events[0].data["code"] == "workspace"
+
+
+# ---------- biến xác thực: không thêm, không bớt cho CLI; gỡ khỏi máy chủ MCP ----------
+
+
+def test_cli_env_keeps_user_auth_vars_unchanged(fake, monkeypatch):
+    for var in AUTH_ENV_VARS:
+        monkeypatch.setenv(var, f"test-user-value-{var.lower()}")
+    list(ClaudeCliEngine(fake("claude")).run([{"role": "user", "content": "x"}], workspace=fake.ws))
+    env = fake.dump()["env"]
+    for var in AUTH_ENV_VARS:
+        assert env[var] == f"test-user-value-{var.lower()}"  # kể cả CLAUDE_CODE_OAUTH_TOKEN, ANTHROPIC_API_KEY
+
+
+def test_mcp_server_config_has_no_auth_vars(fake, tmp_path, monkeypatch):
+    for var in AUTH_ENV_VARS:
+        monkeypatch.setenv(var, "test-not-a-real-key")
+    sess = tmp_path / "s3"
+    sess.mkdir()
+    for eng in (ClaudeCliEngine(fake("claude")), AgyCliEngine(fake("agy"), account="business")):
+        for f in sess.rglob("*"):
+            if f.is_file():
+                f.unlink()
+        for d in sorted((x for x in sess.rglob("*") if x.is_dir()), reverse=True):
+            d.rmdir()
+        eng.build([{"role": "user", "content": "x"}], workspace=fake.ws, session_dir=sess)
+        for cfg in list(sess.rglob("*.json")):
+            text = cfg.read_text(encoding="utf-8")
+            assert "test-not-a-real-key" not in text and not [v for v in AUTH_ENV_VARS if v in text]
+    cmd, _, _ = CodexCliEngine(fake("codex"), experimental=True).build(
+        [{"role": "user", "content": "x"}], workspace=fake.ws, session_dir=sess)
+    env_args = [a for a in cmd if ".env=" in a]
+    assert env_args and not [a for a in env_args if any(v in a for v in AUTH_ENV_VARS)]
+
+
+def test_mcp_launch_strips_auth_vars_in_server_process(monkeypatch):
+    from cadguard.assistant import mcp_launch
+
+    seen = {}
+
+    def fake_main(argv):
+        seen["argv"] = argv
+        seen["env"] = dict(os.environ)
+        return 0
+
+    monkeypatch.setattr("cadguard.cli.main", fake_main)
+    for var in AUTH_ENV_VARS:
+        monkeypatch.setenv(var, "test-not-a-real-key")
+    monkeypatch.setenv("KHAC", "giu")
+    assert mcp_launch.main(["--workspace", "ws", "--allow-propose"]) == 0
+    assert seen["argv"] == ["mcp", "--workspace", "ws", "--allow-propose"]
+    assert not [v for v in AUTH_ENV_VARS if v in seen["env"]] and seen["env"]["KHAC"] == "giu"
+
+
+def test_auth_warnings_vietnamese_without_value(monkeypatch, capsys):
+    from cadguard.cli import main as cli_main
+
+    secret = "test-secret-value-12345678"
+    assert auth_warnings("claude-cli", {}) == []
+    assert auth_warnings("claude-cli", {"CLAUDE_CODE_OAUTH_TOKEN": secret}) == []  # đăng nhập thuê bao: không cảnh báo
+    w = auth_warnings("claude-cli", {"ANTHROPIC_API_KEY": secret})
+    assert len(w) == 1 and "ANTHROPIC_API_KEY" in w[0] and "hạn mức gói" in w[0] and secret not in w[0]
+    assert auth_warnings("codex-cli", {"CODEX_API_KEY": secret})
+    assert auth_warnings("agy-cli", {"GEMINI_API_KEY": secret})
+    for var in AUTH_ENV_VARS:
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
+    monkeypatch.setitem(sys.modules, "keyring", None)  # không chạm kho khoá thật của máy
+    assert ClaudeCliEngine().auth_warnings()
+    assert cli_main(["engines", "--no-detect"]) == 0
+    out = capsys.readouterr()
+    assert "[cảnh báo] Có biến ANTHROPIC_API_KEY" in out.out and secret not in out.out + out.err

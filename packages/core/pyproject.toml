@@ -17,6 +17,8 @@ dependencies = [
 dev = ["pytest>=8"]
 # Máy chủ MCP stdio (`python -m cadguard mcp`); SDK chính thức, giấy phép MIT (xem docs/licenses.md).
 agent = ["mcp>=1.10,<2"]
+# Kho khoá hệ điều hành cho `cadguard keys` (tuỳ chọn; MIT, xem docs/licenses.md). Không có thì dùng biến môi trường.
+keyring = ["keyring>=25,<26"]
 
 [project.scripts]
 cadguard = "cadguard.cli:main"

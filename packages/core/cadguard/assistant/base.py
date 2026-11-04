@@ -9,8 +9,8 @@ from typing import Iterable, Iterator
 
 from .events import Event, Usage
 
-# Biến môi trường xác thực: cad-guard KHÔNG đặt, và gỡ khỏi môi trường tiến trình con của engine CLI
-# (để CLI dùng đăng nhập của chính nó, không vô tình tính tiền qua khoá API, không lộ khoá cho tiến trình con).
+# Biến môi trường xác thực. cad-guard KHÔNG đặt và KHÔNG gỡ chúng khỏi tiến trình CLI (giữ nguyên phương thức xác thực
+# của người dùng); chỉ gỡ khỏi máy chủ MCP của chính cad-guard (`mcp_launch.py`), vốn không cần khoá.
 AUTH_ENV_VARS = (
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_AUTH_TOKEN",

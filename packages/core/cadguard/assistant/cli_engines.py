@@ -2,10 +2,13 @@
 
 Nguyên tắc (xem docs/integrations/*.md, docs/assistant.md):
 - Luôn chạy tệp chạy đã cài trên máy (`shutil.which`), KHÔNG đóng gói kèm, KHÔNG sửa.
-- KHÔNG đọc/ghi/chuyển token, KHÔNG đặt biến xác thực; còn gỡ các biến xác thực khỏi môi trường tiến trình con
-  (trừ `agy --account api-key`, khi đó giữ nguyên `GEMINI_API_KEY` sẵn có của người dùng).
-- Mỗi phiên một thư mục làm việc TẠM chỉ chứa tệp cấu hình sinh ra; MCP trỏ tới
-  `python -m cadguard mcp --workspace <ws>` bằng `sys.executable` và PYTHONPATH của cad-guard.
+- KHÔNG đọc/ghi/chuyển token. KHÔNG THÊM và KHÔNG BỚT biến xác thực của CLI: tiến trình CLI nhận nguyên
+  `os.environ` của người dùng + vài biến kỹ thuật (`MCP_TIMEOUT`, `AGY_CLI_DISABLE_AUTO_UPDATE`). Lý do: trang pháp lý
+  của Anthropic cấm "gỡ, tắt hay hạn chế phương thức xác thực" của Claude Code (`CLAUDE_CODE_OAUTH_TOKEN` là một cách
+  đăng nhập thuê bao hợp lệ). Khi thấy biến khoá API, chỉ CẢNH BÁO (`auth_warnings`), không in giá trị.
+- Máy chủ MCP của cad-guard thì KHÔNG cần khoá: chạy qua `python -m cadguard.assistant.mcp_launch` (= `cadguard mcp`
+  sau khi gỡ biến xác thực khỏi môi trường của chính nó); tệp cấu hình MCP chỉ truyền PYTHONPATH/PYTHONUTF8.
+- Mỗi phiên một thư mục làm việc TẠM chỉ chứa tệp cấu hình sinh ra; MCP dùng `sys.executable` và PYTHONPATH của cad-guard.
 - Chặn công cụ trên DÒNG LỆNH (không chỉ trong tệp); có thời hạn phía cad-guard; huỷ được (giết cả cây tiến trình).
 """
 from __future__ import annotations
@@ -21,10 +24,10 @@ import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Iterator, Sequence
+from typing import Iterator, Mapping, Sequence
 
 from . import events as ev
-from .base import (AUTH_ENV_VARS, CancelToken, Engine, EngineError, EngineInfo, check_server_options, flatten_history,
+from .base import (CancelToken, Engine, EngineError, EngineInfo, check_server_options, flatten_history,
                    load_system_prompt, normalize_messages, resolve_session)
 from .events import Event, Usage
 
@@ -50,7 +53,8 @@ def cadguard_pythonpath() -> str:
 
 def mcp_command(workspace: Path, *, profile: Path | None, standard: str | None, allow_propose: bool,
                 options: dict | None = None) -> list[str]:
-    args = [sys.executable, "-m", "cadguard", "mcp", "--workspace", workspace.as_posix()]
+    # Bộ khởi chạy gỡ biến xác thực khỏi môi trường máy chủ MCP rồi chạy đúng `cadguard mcp` với các cờ sau.
+    args = [sys.executable, "-m", "cadguard.assistant.mcp_launch", "--workspace", workspace.as_posix()]
     opts = options or {}
     if opts.get("anonymize") is False:
         args.append("--no-anonymize")
@@ -72,11 +76,37 @@ def mcp_env() -> dict:
     return {"PYTHONPATH": pp.replace("\\", "/"), "PYTHONUTF8": "1"}
 
 
-def child_env(extra: dict | None = None, keep_auth: Sequence[str] = ()) -> dict:
-    env = {k: v for k, v in os.environ.items() if k not in AUTH_ENV_VARS or k in keep_auth}
-    env["PYTHONUTF8"] = "1"
+def child_env(extra: dict | None = None) -> dict:
+    """Môi trường tiến trình CLI: NGUYÊN `os.environ` của người dùng + biến kỹ thuật. Không thêm/bớt biến xác thực."""
+    env = dict(os.environ)
     env.update(extra or {})
     return env
+
+
+# Biến khoá API mà từng CLI sẽ dùng thay cho hạn mức gói nếu có trong môi trường (chỉ để cảnh báo, không đọc giá trị).
+API_KEY_ENV = {
+    "claude-cli": ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"),
+    "codex-cli": ("CODEX_API_KEY", "OPENAI_API_KEY"),
+    "agy-cli": ("GEMINI_API_KEY",),
+}
+_CLI_TITLE = {"claude-cli": "Claude Code", "codex-cli": "Codex", "agy-cli": "Antigravity CLI (agy)"}
+
+
+def auth_warnings(engine: str, environ: Mapping[str, str] | None = None) -> list[str]:
+    """Cảnh báo tiếng Việt khi môi trường có biến khoá API của nhà cung cấp tương ứng. Không in giá trị."""
+    env = os.environ if environ is None else environ
+    title = _CLI_TITLE.get(engine, engine)
+    out = []
+    for var in API_KEY_ENV.get(engine, ()):
+        if env.get(var):
+            if engine == "agy-cli":
+                out.append(f"Có biến {var} trong môi trường: {title} dùng khoá này (tính cước theo khoá) khi cài đặt "
+                           "modelProvider là gemini (cad-guard đặt khi --account api-key). cad-guard không đặt, không đổi biến này.")
+            else:
+                out.append(f"Có biến {var} trong môi trường: {title} sẽ dùng khoá API này (tính cước theo khoá), không dùng "
+                           f"hạn mức gói. Muốn dùng hạn mức gói thì bỏ biến {var} trong phiên terminal của bạn. "
+                           "cad-guard không đặt, không gỡ biến này.")
+    return out
 
 
 def _kill_tree(proc: subprocess.Popen) -> None:
@@ -232,8 +262,9 @@ class CliEngine(Engine):
     def extra_env(self) -> dict:
         return {}
 
-    def keep_auth_env(self) -> tuple[str, ...]:
-        return ()
+    def auth_warnings(self) -> list[str]:
+        """Cảnh báo về biến khoá API trong môi trường người dùng (hiển thị trước khi chạy)."""
+        return auth_warnings(self.info.name)
 
     def check_allowed(self) -> None:
         """Ném EngineError nếu engine không được phép chạy với cấu hình hiện tại."""
@@ -263,7 +294,7 @@ class CliEngine(Engine):
         if standard:
             prompt += f"\n\n(Chuẩn người dùng chọn: {standard}.)"
         args, stdin_text = self.prepare(session_dir, prompt, servers)
-        env = child_env(self.extra_env(), self.keep_auth_env())
+        env = child_env(self.extra_env())
         return [*self.command_prefix(), *args], stdin_text, env
 
     def run(self, messages, *, workspace, standard=None, profile=None, allow_propose=False,
@@ -549,9 +580,6 @@ class AgyCliEngine(CliEngine):
 
     def extra_env(self) -> dict:
         return {"AGY_CLI_DISABLE_AUTO_UPDATE": "true"}
-
-    def keep_auth_env(self) -> tuple[str, ...]:
-        return ("GEMINI_API_KEY",) if self.account == "api-key" else ()
 
     def check_allowed(self):
         if self.account not in AGY_ACCOUNTS:

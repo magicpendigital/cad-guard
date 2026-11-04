@@ -309,7 +309,7 @@ Chưa kiểm vì cần gọi mô hình: trong phiên thật, trợ lý gọi đ�
 3. `defaultMode: "dontAsk"` đặt trong tệp **dự án** có được tôn trọng không. Tài liệu chỉ nói `auto` và `bypassPermissions` bị bỏ qua ở tệp dự án.
 4. `allowedMcpServers` ở tệp dự án có áp **trước** khi tin cậy thư mục không (mới thấy nó áp sau khi tin cậy).
 5. ACP + gói thuê bao: được hay không (mục 4). Zed có giấy phép riêng không.
-6. `--bare` có bị coi là "hạn chế phương thức xác thực" trong cách B không (mục 5.2).
+6. `--bare` có bị coi là "hạn chế phương thức xác thực" trong cách B không (mục 5.2). Theo cùng lập luận, gỡ biến xác thực (`CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`…) khỏi môi trường của `claude` cũng là hạn chế phương thức xác thực. **Đã chốt cho engine `claude-cli`** (`cadguard/assistant/cli_engines.py`, 04/11/2026): không dùng `--bare`; tiến trình `claude` nhận nguyên môi trường của người dùng, cad-guard không thêm và không bớt biến xác thực; có `ANTHROPIC_API_KEY`/`ANTHROPIC_AUTH_TOKEN` thì chỉ cảnh báo rằng Claude Code sẽ tính cước theo khoá thay cho hạn mức gói. Biến xác thực chỉ bị gỡ khỏi máy chủ MCP của cad-guard (không cần khoá).
 7. Đóng gói kèm binary trong bộ cài cad-guard có tính là "preinstalling" được phép không. Hiện khuyến nghị không đóng gói.
 8. Tin thứ cấp "từ 04/04/2026 thuê bao không bao phủ harness bên thứ ba": không thấy trên trang chính thức hôm nay.
 9. Tên các trường trong JSON kết quả ngoài `result`, `session_id`, `usage`, `total_cost_usd`, `structured_output` (ví dụ `num_turns`, `duration_ms`, `is_error`, `modelUsage`): theo trí nhớ, chưa thấy liệt kê trên trang đã đọc.

@@ -33,8 +33,11 @@ def _make(args) -> object:
             api["max_cost_usd"] = args.max_cost_usd
         if args.max_tool_rounds is not None:
             api["max_tool_rounds"] = args.max_tool_rounds
-    return create_engine(args.engine, model=args.model, experimental=args.experimental, account=args.account,
-                         timeout=args.timeout, allow_openrouter=args.allow_openrouter, **api)
+    engine = create_engine(args.engine, model=args.model, experimental=args.experimental, account=args.account,
+                           timeout=args.timeout, allow_openrouter=args.allow_openrouter, **api)
+    for warning in getattr(engine, "auth_warnings", lambda: [])():
+        print(f"[cảnh báo] {warning}", file=sys.stderr)
+    return engine
 
 
 def usage_table(u: Usage) -> str:
@@ -138,6 +141,9 @@ def cmd_engines(args) -> int:
         row = {"engine": info.name, "che_do": "B (CLI, tài khoản của bạn)" if info.mode == "cli" else "C (API, khoá của bạn)",
                "ten": info.title, "dieu_khoan": info.terms, "thu_nghiem": info.experimental, "mac_dinh_tat": info.default_off}
         if info.mode == "cli":
+            from .cli_engines import auth_warnings
+
+            row["canh_bao"] = auth_warnings(info.name)
             if args.no_detect:
                 row["trang_thai"] = "chưa kiểm (--no-detect)"
             else:
@@ -165,8 +171,10 @@ def cmd_engines(args) -> int:
         print(f"{r['engine']}{flags} — {r['ten']}")
         print(f"  chế độ: {r['che_do']}; trạng thái: {r['trang_thai']}" + (f"; mô hình: {r['mo_hinh']}" if "mo_hinh" in r else ""))
         print(f"  điều khoản: {r['dieu_khoan']}")
-    print("\nCLI chỉ dùng bản bạn đã cài và tự đăng nhập; cad-guard không đọc, không lưu token. Khoá API chỉ đọc từ biến "
-          "môi trường hoặc kho khoá hệ điều hành (`cadguard keys`).")
+        for w in r.get("canh_bao") or []:
+            print(f"  [cảnh báo] {w}")
+    print("\nCLI chỉ dùng bản bạn đã cài và tự đăng nhập; cad-guard không đọc, không lưu token, không thêm/bớt biến "
+          "xác thực của CLI. Khoá API cho engine API chỉ đọc từ biến môi trường hoặc kho khoá hệ điều hành (`cadguard keys`).")
     return 0
 
 
