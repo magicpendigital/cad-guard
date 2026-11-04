@@ -132,8 +132,34 @@ def make_bad_parts(path: Path) -> None:
     _finish(doc, path)
 
 
+def make_model_features(path: Path) -> None:
+    """B?n t?ng h?p cho giao di?n th?ng k? v? ??nh ngh?a kh?i."""
+    doc = _base()
+    msp = _good_geometry(doc)
+    doc.layers.add("XR1|WALL")
+    doc.layers.add("XR2$0$DOOR")
+    doc.styles.add("LEGACY_SHX", font="simplex.shx")
+    doc.styles.add("LEGACY_BIG", font="romans.shx")
+    a = doc.blocks.new("FEATURE_A")
+    b = doc.blocks.new("FEATURE_B")
+    c = doc.blocks.new("FEATURE_C")
+    a.add_blockref("FEATURE_B", (0, 0), dxfattribs={"layer": "XR1|WALL"})
+    b.add_blockref("FEATURE_C", (0, 0), dxfattribs={"layer": "XR2$0$DOOR"})
+    c.add_line((0, 0), (10, 10), dxfattribs={"layer": "XR1|WALL"})
+    doc.blocks.new_anonymous_block("U").add_line((0, 0), (1, 1), dxfattribs={"layer": "XR2$0$DOOR"})
+    msp.add_blockref("FEATURE_A", (0, 0), dxfattribs={"layer": "FN-PART-OUTL"})
+    msp.add_line((20, 20), (30, 30), dxfattribs={"layer": "FN-PART-OUTL", "color": 1, "lineweight": 50})
+    msp.add_wipeout([(0, 0), (5, 0), (5, 5), (0, 5)], dxfattribs={"layer": "FN-PART-OUTL"})
+    image_def = doc.add_image_def(filename="synthetic.png", size_in_pixel=(10, 10))
+    msp.add_image(image_def, insert=(40, 40), size_in_units=(10, 10), dxfattribs={"layer": "FN-PART-OUTL"})
+    msp.add_linear_dim(base=(0, -400), p1=(0, 0), p2=(600, 0), text="999", dxfattribs={"layer": "FN-ANNO-DIMS"}).render()
+    _layout(doc)
+    _finish(doc, path)
+
+
 ALL = {
     "ok_sheet.dxf": make_ok_sheet,
+    "model_features.dxf": make_model_features,
     "bad_layers.dxf": make_bad_layers,
     "bad_titleblock.dxf": make_bad_titleblock,
     "bad_geometry.dxf": make_bad_geometry,
