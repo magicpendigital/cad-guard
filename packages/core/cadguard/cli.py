@@ -12,7 +12,6 @@ import sys
 from pathlib import Path
 
 from . import __version__, fixtures, report, telemetry
-from .dxf_reader import read_dxf
 from .rules import REGISTRY
 from .runner import audit_model
 from .standard import find_standards_dir, load_standard
@@ -42,23 +41,18 @@ def _collect(paths: list[str]) -> list[Path]:
 
 def _read_model(f: Path, reader: str, threshold_mb: float):
     """Chọn đường đọc: ezdxf (nạp trọn) hoặc theo dòng; `auto` = theo dòng khi tệp >= ngưỡng MB."""
-    from .dxf_stream import DXFStreamError, is_binary_dxf, read_dxf_stream
+    from .dxf_stream import DXFStreamError
+    from .reader_select import choose_reader, read_with
 
-    if reader == "auto":
-        size_mb = f.stat().st_size / (1024 * 1024)
-        if size_mb < threshold_mb:
-            return read_dxf(f)
-        if is_binary_dxf(f):
-            print(f"{f.name}: DXF nhị phân, bộ đọc theo dòng không hỗ trợ; dùng ezdxf.", file=sys.stderr)
-            return read_dxf(f)
-        print(f"{f.name}: tệp lớn ({size_mb:.0f} MB ≥ {threshold_mb:g} MB), dùng bộ đọc theo dòng.", file=sys.stderr)
-        reader = "stream"
-    if reader == "stream":
-        try:
-            return read_dxf_stream(f)
-        except DXFStreamError as exc:
-            raise ValueError(str(exc)) from None
-    return read_dxf(f)
+    choice = choose_reader(f, reader, threshold_mb)
+    if choice.reason == "binary":
+        print(f"{f.name}: DXF nhị phân, bộ đọc theo dòng không hỗ trợ; dùng ezdxf.", file=sys.stderr)
+    elif choice.reason == "large":
+        print(f"{f.name}: tệp lớn ({choice.size_mb:.0f} MB ≥ {threshold_mb:g} MB), dùng bộ đọc theo dòng.", file=sys.stderr)
+    try:
+        return read_with(f, choice.reader)
+    except DXFStreamError as exc:
+        raise ValueError(str(exc)) from None
 
 
 def cmd_audit(args: argparse.Namespace) -> int:

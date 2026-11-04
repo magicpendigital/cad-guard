@@ -10,7 +10,8 @@ import json
 from pathlib import Path
 import re
 
-from ..dxf_reader import read_dxf
+from ..dxf_stream import DEFAULT_MAX_ENTITY_RECORDS
+from ..reader_select import DEFAULT_STREAM_THRESHOLD_MB, choose_reader, read_with
 from ..runner import audit_model
 from ..standard import find_standards_dir, load_standard
 from .anonymize import Anonymizer
@@ -32,6 +33,10 @@ class ToolContext:
     max_drawings: int = 500
     max_findings: int = 200
     max_summary_items: int = 50
+    # Chọn bộ đọc theo kích thước tệp: None/âm = luôn ezdxf, 0 = luôn theo dòng, dương = theo dòng khi >= ngưỡng MiB.
+    stream_threshold_mb: float | None = DEFAULT_STREAM_THRESHOLD_MB
+    # Trần bản ghi `entities` của bộ đọc theo dòng; quá trần thì kết quả có `records_capped: true`.
+    max_entity_records: int = DEFAULT_MAX_ENTITY_RECORDS
     ids: dict[str, str] = field(default_factory=dict)
 
 
@@ -48,18 +53,32 @@ def _safe(fn):
 
 
 @lru_cache(maxsize=8)
-def _cached_model(path: Path, mtime: int, size: int):
-    return read_dxf(path)
+def _cached_model(path: Path, mtime: int, size: int, reader: str, max_entity_records: int | None):
+    # Khoá đệm gồm bộ đọc và trần bản ghi: ezdxf và stream (hoặc hai trần khác nhau) không dùng chung mục.
+    if reader == "stream":
+        return read_with(path, "stream", max_entity_records)
+    return read_with(path, "ezdxf")
 
 
-def load_model(path: Path):
-    """Đọc DXF với bộ nhớ đệm nhỏ theo thời gian sửa và kích thước."""
+def load_model(path: Path, stream_threshold_mb: float | None = None, max_entity_records: int = DEFAULT_MAX_ENTITY_RECORDS):
+    """Đọc DXF với bộ nhớ đệm nhỏ theo thời gian sửa, kích thước, bộ đọc và trần bản ghi.
+
+    Bộ đọc chọn bằng `reader_select.choose_reader` (như `cadguard audit --reader auto`):
+    `stream_threshold_mb` None/âm = luôn ezdxf, 0 = luôn theo dòng, dương = theo dòng khi tệp >= ngưỡng MiB.
+    """
     try:
         path = Path(path)
         stat = path.stat()
-        return _cached_model(path, stat.st_mtime_ns, stat.st_size)
+        reader = choose_reader(path, "auto", stream_threshold_mb).reader
+        cap = max(0, int(max_entity_records)) if reader == "stream" else None
+        return _cached_model(path, stat.st_mtime_ns, stat.st_size, reader, cap)
     except Exception:
         raise ToolError("Không thể đọc bản vẽ DXF.") from None
+
+
+def _records_capped(model) -> bool:
+    """True khi danh sách đối tượng bị cắt ở trần bản ghi của bộ đọc theo dòng (thống kê vẫn đủ)."""
+    return bool(model.stats is not None and model.stats.entity_records_truncated)
 
 
 def _path(ctx, file):
@@ -75,7 +94,7 @@ def _file_id(ctx, path):
 
 def _model(ctx, file):
     path = _path(ctx, file)
-    return path, load_model(path)
+    return path, load_model(path, ctx.stream_threshold_mb, ctx.max_entity_records)
 
 
 def _names(model):
@@ -119,7 +138,7 @@ def audit(ctx: ToolContext, file: str, standard: str = "furniture-v0") -> dict:
     findings = [{"rule_id": f.rule_id, "severity": f.severity, "message": anon.scrub_text(f.message, names), "layout": anon.token("layout", f.layout) if f.layout else None, "layer": anon.token("layer", f.layer) if f.layer else None, "count": f.count, "handles": f.handles} for f in result.findings[:max(0, ctx.max_findings)]]
     counts = {s: sum(f.severity == s for f in result.findings) for s in ("E", "W", "I")}
     skipped = [{"rule_id": rule, "reason": ("Lỗi nội bộ của luật." if rule in result.internal_errors else anon.scrub_text(reason, names))} for rule, reason in result.skipped]
-    return {"file": _file_id(ctx, path), "standard": std.name, "version": std.version, "counts": counts, "rules_run": result.rules_run, "skipped": skipped, "findings": findings, "truncated": len(result.findings) > max(0, ctx.max_findings)}
+    return {"file": _file_id(ctx, path), "standard": std.name, "version": std.version, "counts": counts, "rules_run": result.rules_run, "skipped": skipped, "findings": findings, "truncated": len(result.findings) > max(0, ctx.max_findings), "records_capped": _records_capped(model)}
 
 
 @_safe
@@ -152,7 +171,7 @@ def get_model_summary(ctx: ToolContext, file: str) -> dict:
     styles = Counter(anon.token("style", e.text_style) for e in model.entities if e.text_style)
     blocks = {e.block for e in model.entities if e.block}
     layouts = [{"name": anon.token("layout", x.name), "paper_w_mm": x.paper_w_mm, "paper_h_mm": x.paper_h_mm, "viewport_count": len(x.viewports)} for x in model.layouts]
-    result = {"layer_count": len(model.layers), "block_count": len(blocks), "entities_by_type": dict(types.most_common(limit)), "entities_by_space": dict(spaces.most_common(limit)), "layouts": layouts[:limit], "text_styles": dict(styles.most_common(limit)), "insunits": model.insunits, "dxf_version": model.dxf_version, "truncated": any(len(x) > limit for x in (types, spaces, styles, layouts))}
+    result = {"layer_count": len(model.layers), "block_count": len(blocks), "entities_by_type": dict(types.most_common(limit)), "entities_by_space": dict(spaces.most_common(limit)), "layouts": layouts[:limit], "text_styles": dict(styles.most_common(limit)), "insunits": model.insunits, "dxf_version": model.dxf_version, "truncated": any(len(x) > limit for x in (types, spaces, styles, layouts)), "records_capped": _records_capped(model)}
     while _bytes(result) > 16384:
         result["truncated"] = True
         for key in ("layouts", "text_styles", "entities_by_space", "entities_by_type"):
@@ -181,6 +200,7 @@ def query_model(ctx: ToolContext, file: str, filter: dict, limit: int = 100, cur
         if isinstance(v, list) and all(isinstance(x, str) for x in v): return v
         raise ToolError("Bộ lọc không hợp lệ.")
     layers, types, spaces = values("layer"), values("type"), values("space")
+    capped = _records_capped(model)
     fingerprint = hashlib.sha256(json.dumps([path.relative_to(ctx.workspace.root).as_posix(), filter], sort_keys=True, ensure_ascii=True).encode()).hexdigest()[:20]
     offset = 0
     if cursor is not None:
@@ -205,7 +225,7 @@ def query_model(ctx: ToolContext, file: str, filter: dict, limit: int = 100, cur
     def result():
         next_offset = offset + len(items)
         next_cursor = base64.urlsafe_b64encode(json.dumps({"offset": next_offset, "filter": fingerprint}).encode()).decode() if next_offset < len(matched) else None
-        return {"items": items, "next_cursor": next_cursor, "total_matched": len(matched)}
+        return {"items": items, "next_cursor": next_cursor, "total_matched": len(matched), "records_capped": capped}
     while _bytes(result()) > MAX_QUERY_BYTES and items:
         items.pop()
     if not items and offset < len(matched): raise ToolError("Một đối tượng vượt trần kích thước trang.")
