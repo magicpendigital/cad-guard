@@ -8,6 +8,7 @@ from cadguard.runner import audit_model
 # Mỗi tệp xấu phải gây ĐÚNG tập mã luật này (không hơn, không kém).
 EXPECTED = {
     "ok_sheet.dxf": set(),
+    "model_features.dxf": {"LY-01", "TX-08"},
     "bad_layers.dxf": {"LY-01", "LY-03", "LY-04", "LY-08", "LY-09"},
     "bad_titleblock.dxf": {"SH-04", "SH-05"},
     "bad_geometry.dxf": {"DH-01", "DH-02", "DH-09", "DH-10"},
