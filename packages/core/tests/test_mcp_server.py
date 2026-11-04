@@ -138,7 +138,7 @@ def test_help_lists_flags_in_vietnamese(tmp_path):
     proc = _run_cli(["mcp", "--help"], _env(tmp_path))
     out = proc.stdout.decode("utf-8")
     assert proc.returncode == 0, proc.stderr.decode("utf-8", "replace")
-    for flag in ("--workspace", "--no-anonymize", "--standard", "BẮT BUỘC", "ẩn danh"):
+    for flag in ("--workspace", "--no-anonymize", "--standard", "BẮT BUỘC", "ẩn danh", "--stream-threshold-mb", "--max-entity-records", "theo dòng"):
         assert flag in out
 
 
@@ -221,7 +221,8 @@ def test_call_all_five_tools_shapes(ws_env):
     assert len(json.dumps(m).encode()) <= 16384
 
     q = r["query"]
-    assert set(q) == {"items", "next_cursor", "total_matched"} and len(q["items"]) <= 5
+    assert set(q) == {"items", "next_cursor", "total_matched", "records_capped"} and len(q["items"]) <= 5
+    assert q["records_capped"] is False and a["records_capped"] is False and m["records_capped"] is False
     assert all(x["type"] in ("LINE", "TEXT") and "handle" in x for x in q["items"])
     assert "Không tìm thấy mã luật" in r["unknown_rule"]
     assert r["bbox"] is True
@@ -259,6 +260,80 @@ def test_no_anonymize_shows_names_and_warns(ws_env):
     text, err = _all_outputs(ws_env, args=["--no-anonymize"], errlog_name="server_plain.err")
     assert "PRIVATE_LAYER" in text and "private_file.dxf" in text and "PRIVATE_BLOCK" in text
     assert "CẢNH BÁO" in err and "--no-anonymize" in err
+
+
+def _every_tool_on_every_file(ws_env, args, errlog_name):
+    """Gọi đủ 5 công cụ trên mọi DXF của workspace (query_model lấy hết các trang) qua giao thức thật."""
+
+    async def body(s):
+        listing = _data(await s.call_tool("list_drawings", {}))
+        out = {"list_drawings": listing, "explain_rule": _data(await s.call_tool("explain_rule", {"rule_id": "LY-01"}))}
+        for d in sorted(listing["drawings"], key=lambda x: x["id"]):
+            pages, cursor = [], None
+            while True:
+                q = {"file": d["id"], "limit": MAX_QUERY_RECORDS}
+                if cursor:
+                    q["cursor"] = cursor
+                page = _data(await s.call_tool("query_model", q))
+                pages.append(page)
+                cursor = page["next_cursor"]
+                if cursor is None or len(pages) > 50:
+                    break
+            out[d["id"]] = {
+                "audit": _data(await s.call_tool("audit", {"file": d["id"]})),
+                "get_model_summary": _data(await s.call_tool("get_model_summary", {"file": d["id"]})),
+                "query_model": pages,
+            }
+        return out
+
+    result, _ = _session(ws_env, body, args=args, errlog_name=errlog_name)
+    return result
+
+
+@needs_sdk
+def test_stream_threshold_zero_matches_ezdxf_over_protocol(ws_env):
+    """--stream-threshold-mb 0 (luôn theo dòng) cho đúng kết quả như số âm (luôn ezdxf) trên cả 5 công cụ."""
+    plain = ["--no-anonymize"]  # mã ẩn danh có muối ngẫu nhiên theo phiên; so tên thật giữa hai tiến trình
+    stream = _every_tool_on_every_file(ws_env, [*plain, "--stream-threshold-mb", "0"], "server_stream.err")
+    ezdxf_ = _every_tool_on_every_file(ws_env, [*plain, "--stream-threshold-mb", "-1"], "server_ezdxf.err")
+    assert len(stream) == 2 + 5
+    assert stream == ezdxf_
+
+
+@needs_sdk
+def test_stream_records_capped_and_anonymized_over_protocol(ws_env):
+    async def body(s):
+        return (
+            await s.call_tool("audit", {"file": PRIVATE_REL}),
+            await s.call_tool("get_model_summary", {"file": PRIVATE_REL}),
+            await s.call_tool("query_model", {"file": PRIVATE_REL}),
+            await s.call_tool("query_model", {"file": "many.dxf"}),
+        )
+
+    results, _ = _session(
+        ws_env, body, args=["--stream-threshold-mb", "0", "--max-entity-records", "1"], errlog_name="server_capped.err"
+    )
+    data = [_data(r) for r in results]
+    assert all(d["records_capped"] is True for d in data)
+    assert data[3]["total_matched"] == 1
+    text = "\n".join(r.content[0].text for r in results)
+    ws = str(ws_env["ws"])
+    for secret in (*PRIVATE_NAMES, ws, json.dumps(ws)[1:-1], ws.replace("\\", "/")):
+        assert secret not in text, secret
+
+
+@needs_sdk
+def test_anonymized_on_stream_path(ws_env):
+    text, _ = _all_outputs(ws_env, args=["--stream-threshold-mb", "0"], errlog_name="server_stream_anon.err")
+    ws = str(ws_env["ws"])
+    for secret in (*PRIVATE_NAMES, ws, json.dumps(ws)[1:-1], ws.replace("\\", "/")):
+        assert secret not in text, secret
+
+
+def test_bad_max_entity_records_rejected(tmp_path):
+    proc = _run_cli(["mcp", "--workspace", str(tmp_path), "--max-entity-records", "-3"], _env(tmp_path))
+    assert proc.returncode == 2 and proc.stdout == b""
+    assert "không âm" in proc.stderr.decode("utf-8", "replace")
 
 
 @needs_sdk

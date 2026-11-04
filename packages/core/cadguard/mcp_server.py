@@ -19,6 +19,8 @@ from pathlib import Path
 from .agent import tools
 from .agent.anonymize import Anonymizer
 from .agent.workspace import PathDenied, Workspace
+from .dxf_stream import DEFAULT_MAX_ENTITY_RECORDS
+from .reader_select import DEFAULT_STREAM_THRESHOLD_MB
 from .standard import find_standards_dir
 
 SERVER_NAME = "cad-guard"
@@ -37,7 +39,9 @@ INSTRUCTIONS = (
     "Công cụ CHỈ ĐỌC của cad-guard để kiểm tra bản vẽ nội thất DXF theo luật tất định. "
     "Đường dẫn luôn tương đối với thư mục làm việc của máy chủ; có thể dùng mã tệp do list_drawings trả về. "
     "Khi bật ẩn danh, tên tệp/layer/khối/kiểu chữ là mã phiên (L_…, B_…, F_…), dùng lại được trong cùng phiên. "
-    "Kết luận đúng/sai lấy từ kết quả luật, không tự suy đoán."
+    "Kết luận đúng/sai lấy từ kết quả luật, không tự suy đoán. "
+    "Nếu kết quả có records_capped = true: bản vẽ rất lớn, danh sách đối tượng đã bị cắt ở trần bộ nhớ, "
+    "nên số đối tượng/phát hiện có thể thiếu; hãy nói rõ điều này với người dùng."
 )
 
 
@@ -63,6 +67,32 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
         metavar="TÊN",
         help="chuẩn mặc định cho audit/explain_rule (mặc định: furniture-v0); công cụ vẫn nhận tham số standard riêng.",
     )
+    p.add_argument(
+        "--stream-threshold-mb",
+        type=float,
+        default=DEFAULT_STREAM_THRESHOLD_MB,
+        metavar="MB",
+        help=f"ngưỡng MB để đọc DXF theo dòng (ít bộ nhớ) thay cho ezdxf (mặc định {DEFAULT_STREAM_THRESHOLD_MB:g}, "
+        "như `cadguard audit --reader auto`); 0 = luôn đọc theo dòng, số âm = luôn dùng ezdxf. DXF nhị phân luôn dùng ezdxf.",
+    )
+    p.add_argument(
+        "--max-entity-records",
+        type=_non_negative_int,
+        default=DEFAULT_MAX_ENTITY_RECORDS,
+        metavar="N",
+        help=f"trần số đối tượng giữ trong bộ nhớ khi đọc theo dòng (mặc định {DEFAULT_MAX_ENTITY_RECORDS}); "
+        "quá trần thì danh sách đối tượng bị cắt và kết quả công cụ có records_capped = true.",
+    )
+
+
+def _non_negative_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("phải là số nguyên không âm") from None
+    if value < 0:
+        raise argparse.ArgumentTypeError("phải là số nguyên không âm")
+    return value
 
 
 def _err(msg: str) -> None:
@@ -138,7 +168,8 @@ def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0")
     @server.tool(
         name="audit",
         description="Kiểm tra một bản vẽ theo chuẩn bằng luật tất định. Trả số lỗi theo mức (E/W/I), "
-        f"luật đã chạy/bỏ qua và tối đa {ctx.max_findings} phát hiện.",
+        f"luật đã chạy/bỏ qua và tối đa {ctx.max_findings} phát hiện. 'records_capped' = true nghĩa là danh sách đối tượng "
+        "bị cắt ở trần bộ nhớ (tệp rất lớn), phát hiện có thể thiếu.",
         annotations=read_only,
         structured_output=False,
     )
@@ -160,7 +191,7 @@ def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0")
     @server.tool(
         name="get_model_summary",
         description="Tóm tắt Drawing Model của một bản vẽ: số layer/khối, đối tượng theo loại và không gian, "
-        "layout, kiểu chữ, đơn vị, phiên bản DXF (JSON tối đa 16 KB).",
+        "layout, kiểu chữ, đơn vị, phiên bản DXF (JSON tối đa 16 KB). 'records_capped' = true: số đếm đối tượng bị cắt ở trần bộ nhớ.",
         annotations=read_only,
         structured_output=False,
     )
@@ -171,7 +202,7 @@ def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0")
         name="query_model",
         description=f"Lọc đối tượng trong bản vẽ theo layer/loại/không gian, có phân trang: mỗi trang tối đa "
         f"{tools.MAX_QUERY_RECORDS} mục và {tools.MAX_QUERY_BYTES // 1024} KB; còn nữa thì 'next_cursor' khác null, "
-        "gửi lại nguyên bộ lọc cùng cursor để lấy trang sau.",
+        "gửi lại nguyên bộ lọc cùng cursor để lấy trang sau. 'records_capped' = true: total_matched bị cắt ở trần bộ nhớ.",
         annotations=read_only,
         structured_output=False,
     )
@@ -233,7 +264,13 @@ def run_from_args(args: argparse.Namespace) -> int:
         _err(str(exc))
         return 2
     anonymize = not args.no_anonymize
-    ctx = tools.ToolContext(workspace, Anonymizer(enabled=anonymize), standards_dir)
+    ctx = tools.ToolContext(
+        workspace,
+        Anonymizer(enabled=anonymize),
+        standards_dir,
+        stream_threshold_mb=args.stream_threshold_mb,
+        max_entity_records=args.max_entity_records,
+    )
     try:
         tools._standard(ctx, args.standard)
     except tools.ToolError:

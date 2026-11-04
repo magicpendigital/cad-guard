@@ -1,11 +1,12 @@
 import json
+import math
 from pathlib import Path
 import ezdxf
 import pytest
 from cadguard import fixtures
 from cadguard.agent.workspace import Workspace, PathDenied
 from cadguard.agent.anonymize import Anonymizer
-from cadguard.agent.tools import ToolContext, ToolError, list_drawings, audit, explain_rule, get_model_summary, query_model
+from cadguard.agent.tools import MAX_QUERY_RECORDS, ToolContext, ToolError, list_drawings, audit, explain_rule, get_model_summary, load_model, query_model
 
 
 @pytest.fixture
@@ -71,7 +72,9 @@ def test_pagination(ctx):
     assert len(handles) == result["total_matched"] == len(set(handles)) == 750
 
 
-def test_privacy(ctx, tmp_path):
+@pytest.mark.parametrize("threshold", [None, 0])
+def test_privacy(ctx, tmp_path, threshold):
+    ctx.stream_threshold_mb = threshold
     doc = ezdxf.new()
     doc.layers.new("PRIVATE_LAYER")
     doc.styles.new("PRIVATE_STYLE")
@@ -81,6 +84,8 @@ def test_privacy(ctx, tmp_path):
     insert.add_attrib("TAG", "PRIVATE_VALUE", (0, 0))
     doc.modelspace().add_text("text", dxfattribs={"style": "PRIVATE_STYLE", "layer": "PRIVATE_LAYER"})
     doc.saveas(ctx.workspace.root / "private_file.dxf")
+    expected = "stream" if threshold == 0 else "ezdxf"
+    assert load_model(ctx.workspace.root / "private_file.dxf", threshold).stats.source == expected
     output = [list_drawings(ctx), audit(ctx, "private_file.dxf"), explain_rule(ctx, "LY-01"), get_model_summary(ctx, "private_file.dxf"), query_model(ctx, "private_file.dxf", {})]
     encoded = json.dumps(output)
     for secret in ("PRIVATE_LAYER", "PRIVATE_STYLE", "PRIVATE_BLOCK", "PRIVATE_VALUE", "private_file.dxf", str(tmp_path)):
@@ -132,3 +137,91 @@ def test_cursor_and_bbox(ctx):
     with pytest.raises(ToolError, match="vùng chưa hỗ trợ"): query_model(ctx, "bad_layers.dxf", {"bbox": [0, 0, 1, 1]})
     first = query_model(ctx, "bad_layers.dxf", {}, 1)
     with pytest.raises(ToolError): query_model(ctx, "bad_layers.dxf", {"type": "LINE"}, cursor=first["next_cursor"])
+
+
+# ---- chọn bộ đọc theo kích thước tệp (L1b)
+
+
+def _ctx_with(root, threshold, max_records=None):
+    extra = {} if max_records is None else {"max_entity_records": max_records}
+    return ToolContext(Workspace(root), Anonymizer(True, "salt"), Path(__file__).resolve().parents[3] / "standards", stream_threshold_mb=threshold, **extra)
+
+
+def _all_tool_outputs(ctx, name):
+    pages, cursor = [], None
+    while True:
+        page = query_model(ctx, name, {}, MAX_QUERY_RECORDS, cursor)
+        pages.append(page)
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+    return {
+        "list_drawings": list_drawings(ctx),
+        "audit": audit(ctx, name),
+        "explain_rule": explain_rule(ctx, "LY-01"),
+        "get_model_summary": get_model_summary(ctx, name),
+        "query_model": pages,
+    }
+
+
+def _same(a, b, path=""):
+    """So khớp đệ quy; số thực so theo dung sai tương đối nhỏ (length/area tính toán có thể lệch chữ số cuối)."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        assert set(a) == set(b), path
+        for k in a:
+            _same(a[k], b[k], f"{path}.{k}")
+    elif isinstance(a, list) and isinstance(b, list):
+        assert len(a) == len(b), path
+        for i, (x, y) in enumerate(zip(a, b)):
+            _same(x, y, f"{path}[{i}]")
+    elif isinstance(a, float) and isinstance(b, float):
+        assert math.isclose(a, b, rel_tol=1e-9, abs_tol=1e-12), (path, a, b)
+    else:
+        assert a == b, (path, a, b)
+
+
+@pytest.mark.parametrize("name", sorted(fixtures.ALL))
+def test_stream_tools_match_ezdxf(ctx, name):
+    root = ctx.workspace.root
+    path = root / name
+    assert load_model(path, 0).stats.source == "stream"
+    assert load_model(path, -1).stats.source == load_model(path, None).stats.source == "ezdxf"
+    ezdxf_out = _all_tool_outputs(_ctx_with(root, -1), name)
+    assert _all_tool_outputs(_ctx_with(root, None), name) == ezdxf_out
+    stream_out = _all_tool_outputs(_ctx_with(root, 0), name)
+    _same(stream_out, ezdxf_out)
+    assert ezdxf_out["audit"]["records_capped"] is False
+    assert ezdxf_out["get_model_summary"]["records_capped"] is False
+    assert all(page["records_capped"] is False for page in ezdxf_out["query_model"])
+
+
+def test_threshold_picks_reader_by_size(ctx):
+    path = ctx.workspace.root / "ok_sheet.dxf"
+    size_mb = path.stat().st_size / (1024 * 1024)
+    assert load_model(path, size_mb * 2).stats.source == "ezdxf"  # dưới ngưỡng
+    assert load_model(path, size_mb / 2).stats.source == "stream"  # trên ngưỡng
+    assert ToolContext(ctx.workspace).stream_threshold_mb == 50.0  # mặc định như CLI
+
+
+def test_cache_key_includes_reader_and_cap(ctx):
+    path = ctx.workspace.root / "bad_layers.dxf"
+    a, b = load_model(path, None), load_model(path, 0)
+    assert a is load_model(path, -5) and b is load_model(path, 0)
+    assert a.stats.source == "ezdxf" and b.stats.source == "stream"
+    capped = load_model(path, 0, max_entity_records=1)
+    assert capped is not b and len(capped.entities) == 1 and capped.stats.entity_records_truncated
+    assert not load_model(path, 0).stats.entity_records_truncated
+    assert load_model(path, None, max_entity_records=1) is a  # ezdxf không bị trần, dùng chung mục
+
+
+def test_records_capped_flag(ctx):
+    capped = _ctx_with(ctx.workspace.root, 0, max_records=2)
+    a = audit(capped, "bad_layers.dxf")
+    s = get_model_summary(capped, "bad_layers.dxf")
+    q = query_model(capped, "bad_layers.dxf", {})
+    assert a["records_capped"] is s["records_capped"] is q["records_capped"] is True
+    assert q["total_matched"] == 2 and sum(s["entities_by_type"].values()) == 2
+    full = _ctx_with(ctx.workspace.root, 0)
+    assert query_model(full, "bad_layers.dxf", {})["records_capped"] is False
+    encoded = json.dumps([a, s, q])
+    assert "bad_layers" not in encoded

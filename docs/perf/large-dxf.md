@@ -44,6 +44,7 @@ Không đo ezdxf ở 100 MiB vì máy còn rất ít RAM trống. **Ước tính
 
 - Trên tệp tổng hợp, đọc theo dòng nhanh hơn ezdxf khoảng 3–5 lần và dùng ít bộ nhớ hơn khoảng 2–3 lần; khoảng cách tăng theo cỡ tệp.
 - Bộ nhớ chủ yếu là danh sách `entities` (khoảng 1,2 KB mỗi bản ghi). Đối tượng trong khối chỉ được đếm, không giữ bản ghi. Trần mặc định `max_entity_records = 300 000` (khoảng 350 MB); quá trần thì `stats.entity_records_truncated = True` và `audit` in lưu ý.
+- Máy chủ MCP (`python -m cadguard mcp`) chọn bộ đọc cùng quy tắc với `audit --reader auto` (hàm chung `cadguard/reader_select.py`): `--stream-threshold-mb` (mặc định 50; 0 = luôn theo dòng, âm = luôn ezdxf) và `--max-entity-records`. Khi bị cắt ở trần, kết quả `audit`, `get_model_summary`, `query_model` có `records_capped: true`.
 - Dữ liệu tổng hợp đơn giản hơn bản thật (không có HATCH lớn, khối động, OLE/IMAGE nhúng), nên số trên bản thật có thể khác. Chưa chạy trên bản thật (agent không được đọc dữ liệu khách). Người có quyền có thể chạy cục bộ `cadguard audit <thư mục> --reader stream` trên M1–M5 rồi ghi thêm số tổng hợp vào đây.
 
 ## Chạy lại
