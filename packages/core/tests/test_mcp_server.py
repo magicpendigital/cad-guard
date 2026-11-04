@@ -336,6 +336,82 @@ def test_bad_max_entity_records_rejected(tmp_path):
     assert "không âm" in proc.stderr.decode("utf-8", "replace")
 
 
+@pytest.mark.parametrize("bad", ["nan", "inf", "-inf"])
+def test_non_finite_threshold_refuses_to_start(tmp_path, bad):
+    proc = _run_cli(["mcp", "--workspace", str(tmp_path), f"--stream-threshold-mb={bad}"], _env(tmp_path))
+    err = proc.stderr.decode("utf-8", "replace")
+    assert proc.returncode == 2 and proc.stdout == b"", err
+    assert "--stream-threshold-mb" in err and "hữu hạn" in err
+
+
+EXAMPLE_PROFILE = CORE.parents[1] / "standards" / "company-profile.example.yaml"
+
+
+def _bad_profiles(tmp_path: Path) -> list[Path]:
+    base = "schema: cg.company-profile/1\nname: cong-ty-thu\nversion: 0.0.1\nstandard: design-hygiene-v0\n"
+    cases = {
+        "sai_kieu.yaml": base + "overrides:\n  VS-02:\n    max_text_styles: nhieu\n",
+        "luat_la.yaml": base + "overrides:\n  VS-99:\n    x: 1\n",
+        "truong_la.yaml": base + "bi_an: 1\n",
+        "khong_yaml.yaml": "a: [1,\n",
+    }
+    out = []
+    for name, text in cases.items():
+        p = tmp_path / name
+        p.write_text(text, encoding="utf-8")
+        out.append(p)
+    out.append(tmp_path / "khong_co.yaml")
+    return out
+
+
+def test_bad_profile_refuses_to_start(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    for p in _bad_profiles(tmp_path):
+        proc = _run_cli(["mcp", "--workspace", str(ws), "--profile", str(p)], _env(tmp_path))
+        err = proc.stderr.decode("utf-8", "replace")
+        assert proc.returncode == 2 and proc.stdout == b"", (p.name, err)
+        assert "Không khởi động máy chủ MCP" in err and "hồ sơ" in err.lower(), (p.name, err)
+        assert str(tmp_path) not in err  # chỉ tên tệp, không đường dẫn đầy đủ
+    # Hồ sơ đúng nhưng --standard khác chuẩn của hồ sơ
+    proc = _run_cli(["mcp", "--workspace", str(ws), "--profile", str(EXAMPLE_PROFILE), "--standard", "furniture-v0"], _env(tmp_path))
+    assert proc.returncode == 2 and proc.stdout == b""
+    assert "design-hygiene-v0" in proc.stderr.decode("utf-8", "replace")
+
+
+@needs_sdk
+def test_profile_changes_audit_over_protocol(ws_env):
+    async def body(s):
+        return {
+            "hygiene": _data(await s.call_tool("audit", {"file": "bad_layers.dxf", "standard": "design-hygiene-v0"})),
+            "default": _data(await s.call_tool("audit", {"file": "bad_layers.dxf"})),
+            "furniture": _data(await s.call_tool("audit", {"file": "bad_layers.dxf", "standard": "furniture-v0"})),
+            "explain": _data(await s.call_tool("explain_rule", {"rule_id": "VS-02", "standard": "design-hygiene-v0"})),
+        }
+
+    plain, _ = _session(ws_env, body, errlog_name="server_noprofile.err")
+    prof, err = _session(ws_env, body, args=["--profile", str(EXAMPLE_PROFILE)], errlog_name="server_profile.err")
+
+    # Không hồ sơ: chọn được design-hygiene-v0 qua tham số; mặc định vẫn furniture-v0.
+    assert plain["hygiene"]["standard"] == "design-hygiene-v0" and plain["hygiene"]["profile"] is None
+    assert plain["default"]["standard"] == "furniture-v0" and plain["default"]["profile"] is None
+    # Có hồ sơ: chuẩn mặc định thành chuẩn của hồ sơ, kết quả ghi tên/phiên bản hồ sơ.
+    expected = {"name": "cong-ty-mau", "version": "0.1.0"}
+    assert prof["hygiene"]["profile"] == expected and prof["default"]["standard"] == "design-hygiene-v0"
+    assert prof["default"]["profile"] == expected
+    assert prof["hygiene"]["counts"] != plain["hygiene"]["counts"] or prof["hygiene"]["findings"] != plain["hygiene"]["findings"]
+    # Chuẩn khác chuẩn của hồ sơ: không áp hồ sơ.
+    assert prof["furniture"]["profile"] is None and prof["furniture"]["counts"] == plain["default"]["counts"]
+    assert prof["explain"]["profile"] == expected and plain["explain"]["profile"] is None
+    assert prof["explain"]["rule_params"]["max_text_styles"] == 20
+    assert prof["explain"]["rule_params"] != plain["explain"]["rule_params"]
+    # Không lộ đường dẫn hồ sơ.
+    text = json.dumps(prof, ensure_ascii=False)
+    for leak in (str(EXAMPLE_PROFILE), EXAMPLE_PROFILE.as_posix(), "company-profile.example"):
+        assert leak not in text
+    assert "cong-ty-mau" in err
+
+
 @needs_sdk
 def test_query_model_pagination_and_caps(ws_env):
     async def body(s):

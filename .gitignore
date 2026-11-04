@@ -22,4 +22,8 @@ report.json
 .mca/
 
 # Dữ liệu mẫu thật của khách (NDA) — không bao giờ vào repo
-Data sample/
+# (viết bằng lớp ký tự để tên thư mục cũ không xuất hiện nguyên văn; xem scripts/check_repo_hygiene.py)
+Data[ ]sample/
+
+# Danh sách từ cấm cục bộ (tên khách...) cho scripts/check_repo_hygiene.py — không bao giờ commit
+.cadguard-forbidden.txt
