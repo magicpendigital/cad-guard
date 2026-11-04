@@ -5,6 +5,8 @@
   python scripts/bench.py --answerer goi.mo_dun:ham        # cắm người trả lời khác (CLI agent, LLM...)
   python scripts/bench.py --task B02-vs-hygiene-bad --json # chạy một tác vụ, in JSON
   python scripts/bench.py --threshold 80                   # ngưỡng % đúng để thoát mã 0
+  python scripts/bench.py --engine claude-cli --out kq.json # trợ lý THẬT qua engine cad-guard (tốn token), ghi JSON
+  python scripts/bench.py --engine anthropic --model claude-sonnet-5-5 --threshold 0
 
 Tác vụ: `bench/tasks/*.yaml`. Mỗi tác vụ chạy trong một thư mục làm việc tạm, rỗng, chỉ chứa DXF tổng hợp do
 `cadguard.fixtures` sinh (và hồ sơ công ty nếu tác vụ cần). Không đọc bản vẽ thật, không gọi mạng hay LLM ở chế độ mặc định.
@@ -38,6 +40,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CORE = ROOT / "packages" / "core"
 TASKS_DIR = ROOT / "bench" / "tasks"
 DEFAULT_ANSWERER = "bench.reference:answer"
+ENGINE_ANSWERER = "bench.engine_answerer:answer"
 DEFAULT_THRESHOLD = 100.0
 
 REQUIRED_KEYS = ("id", "mo_ta", "dang", "fixture", "cau_hoi", "tra_loi", "kiem_tra")
@@ -270,6 +273,24 @@ def format_table(results: list[TaskResult], answerer: str) -> str:
     return "\n".join(out)
 
 
+def write_summary(path: Path, results: list[TaskResult], args, pct: float) -> None:
+    """Kết quả tổng hợp: mã tác vụ, đúng/sai, thời gian, token, USD, lý do trượt. Không đường dẫn, không tên tệp khách."""
+    data = {
+        "answerer": args.answerer,
+        "engine": args.engine,
+        "model": args.model,
+        "score_pct": pct,
+        "threshold_pct": args.threshold,
+        "totals": {"tasks": len(results), "ok": sum(r.ok for r in results),
+                   "seconds": round(sum(r.seconds for r in results), 3), "tokens": sum(r.tokens for r in results),
+                   "usd": round(sum(r.usd for r in results), 6)},
+        "results": [asdict(r) for r in results],
+        "date": time.strftime("%Y-%m-%d"),
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Đã ghi kết quả: {path.name}", file=sys.stderr)
+
+
 def _ensure_deps(argv: list[str]) -> int | None:
     """Thiếu ezdxf/yaml thì chạy lại script trong venv dùng chung của scripts/test.py."""
     try:
@@ -299,7 +320,28 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--task", action="append", default=[], metavar="ID", help="chỉ chạy tác vụ này (lặp được)")
     p.add_argument("--tasks-dir", default=str(TASKS_DIR), metavar="THU_MUC", help="thư mục tác vụ YAML")
     p.add_argument("--json", action="store_true", help="in kết quả dạng JSON thay cho bảng")
+    p.add_argument("--engine", default=None, metavar="TÊN",
+                   help="chấm trợ lý THẬT qua engine cad-guard (claude-cli, codex-cli, agy-cli, anthropic, openai, gemini, "
+                   "openrouter, ollama); thay cho --answerer. GỌI MÔ HÌNH, TỐN TOKEN")
+    p.add_argument("--model", default=None, help="mô hình cho --engine")
+    p.add_argument("--account", default=None, choices=["business", "api-key"], help="agy-cli: loại tài khoản (bắt buộc)")
+    p.add_argument("--experimental", action="store_true", help="cho phép engine thử nghiệm (codex-cli)")
+    p.add_argument("--allow-openrouter", action="store_true", help="cho phép OpenRouter (bên trung gian thứ ba)")
+    p.add_argument("--task-timeout", type=float, default=None, metavar="GIÂY", help="thời hạn mỗi tác vụ cho --engine")
+    p.add_argument("--out", default=None, metavar="TỆP", help="ghi kết quả tổng hợp JSON (không tên tệp khách)")
     args = p.parse_args(argv)
+    if args.engine:
+        # Truyền cấu hình cho bench/engine_answerer.py qua biến môi trường (cả khi script chạy lại trong venv).
+        os.environ["CADGUARD_BENCH_ENGINE"] = args.engine
+        for key, val in (("CADGUARD_BENCH_MODEL", args.model), ("CADGUARD_BENCH_ACCOUNT", args.account),
+                         ("CADGUARD_BENCH_TIMEOUT", None if args.task_timeout is None else str(args.task_timeout))):
+            if val:
+                os.environ[key] = val
+        if args.experimental:
+            os.environ["CADGUARD_BENCH_EXPERIMENTAL"] = "1"
+        if args.allow_openrouter:
+            os.environ["CADGUARD_ALLOW_OPENROUTER"] = "1"
+        args.answerer = ENGINE_ANSWERER
 
     rerun = _ensure_deps(argv)
     if rerun is not None:
@@ -325,11 +367,14 @@ def main(argv: list[str] | None = None) -> int:
     answerer = resolve_answerer(args.answerer)
     results = run_bench(answerer, tasks)
     pct = score(results)
+    label = f"{args.answerer} (engine {args.engine}, mô hình {args.model or 'mặc định'})" if args.engine else args.answerer
+    if args.out:
+        write_summary(Path(args.out), results, args, pct)
     if args.json:
         print(json.dumps({"answerer": args.answerer, "score_pct": pct, "threshold_pct": args.threshold,
                           "results": [asdict(r) for r in results]}, ensure_ascii=False, indent=2))
     else:
-        print(format_table(results, args.answerer))
+        print(format_table(results, label))
     return 0 if pct >= args.threshold else 1
 
 
