@@ -14,6 +14,7 @@ class AuditResult:
     findings: list[Finding] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)  # (mã luật, lý do)
     rules_run: int = 0
+    internal_errors: set[str] = field(default_factory=set)
 
 
 def audit_model(model: DrawingModel, standard: Standard) -> AuditResult:
@@ -31,6 +32,7 @@ def audit_model(model: DrawingModel, standard: Standard) -> AuditResult:
             res.skipped.append((spec.id, str(s)))
             continue
         except Exception as exc:  # noqa: BLE001 - luật hỏng được báo, không làm sập
+            res.internal_errors.add(spec.id)
             res.skipped.append((spec.id, f"lỗi nội bộ của luật: {type(exc).__name__}: {exc}"))
             continue
         res.rules_run += 1
