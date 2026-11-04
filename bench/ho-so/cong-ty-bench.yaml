@@ -1,0 +1,13 @@
+# Hồ sơ công ty DÙNG CHO BỘ CHẤM (dữ liệu minh hoạ, không phải của công ty thật nào).
+# Tác vụ B06 áp hồ sơ này lên hygiene_bad.dxf để kiểm trợ lý hiểu hồ sơ làm đổi kết quả thế nào.
+schema: cg.company-profile/1
+name: cong-ty-bench
+version: 0.1.0
+standard: design-hygiene-v0
+description: Hồ sơ thử cho bộ chấm; nới ngưỡng kiểu chữ/kích thước và tắt VS-05.
+overrides:
+  VS-02:
+    max_text_styles: 30
+    max_dim_styles: 12
+disabled:
+- VS-05

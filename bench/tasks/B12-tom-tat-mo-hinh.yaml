@@ -1,0 +1,35 @@
+id: B12-tom-tat-mo-hinh
+mo_ta: Khảo sát nhanh bản vẽ bằng get_model_summary (số layer, số đối tượng, layout, đơn vị, phiên bản DXF).
+dang: tom_tat_mo_hinh
+fixture: hygiene_bad.dxf
+cau_hoi: >-
+  Tóm tắt bản vẽ: bao nhiêu layer, bao nhiêu đối tượng (mọi không gian), bao nhiêu layout giấy,
+  mã đơn vị INSUNITS, phiên bản DXF, loại đối tượng nhiều nhất.
+  Trả lời JSON với các trường so_layer, so_doi_tuong, so_layout, insunits, phien_ban_dxf, loai_nhieu_nhat, records_capped.
+tra_loi:
+  so_layer: so_nguyen
+  so_doi_tuong: so_nguyen
+  so_layout: so_nguyen
+  insunits: so_nguyen
+  phien_ban_dxf: chuoi
+  loai_nhieu_nhat: chuoi
+  records_capped: dung_sai
+kiem_tra:
+- loai: bang
+  truong: so_layer
+  gia_tri: 8
+- loai: bang
+  truong: so_doi_tuong
+  gia_tri: 32
+- loai: bang
+  truong: so_layout
+  gia_tri: 1
+- loai: bang
+  truong: insunits
+  gia_tri: 4
+- loai: bang
+  truong: phien_ban_dxf
+  gia_tri: AC1032
+- loai: bang
+  truong: loai_nhieu_nhat
+  gia_tri: IMAGE

@@ -1,0 +1,28 @@
+id: B05-hygiene-ok-sach
+mo_ta: Xác nhận bản vẽ thiết kế sạch theo design-hygiene-v0 (mọi luật chạy, không phát hiện, không luật nào bị bỏ qua).
+dang: xac_nhan_sach
+fixture: hygiene_ok.dxf
+tham_so:
+  chuan: design-hygiene-v0
+cau_hoi: >-
+  Bản vẽ trong thư mục làm việc có sạch theo chuẩn design-hygiene-v0 không?
+  "Sạch" nghĩa là không có phát hiện nào, không luật nào bị bỏ qua và dữ liệu không bị cắt.
+  Trả lời JSON với các trường sach (đúng/sai), so_phat_hien, so_luat_da_chay, so_luat_bo_qua.
+tra_loi:
+  sach: dung_sai
+  so_phat_hien: so_nguyen
+  so_luat_da_chay: so_nguyen
+  so_luat_bo_qua: so_nguyen
+kiem_tra:
+- loai: bang
+  truong: sach
+  gia_tri: true
+- loai: bang
+  truong: so_phat_hien
+  gia_tri: 0
+- loai: bang
+  truong: so_luat_da_chay
+  gia_tri: 7
+- loai: bang
+  truong: so_luat_bo_qua
+  gia_tri: 0

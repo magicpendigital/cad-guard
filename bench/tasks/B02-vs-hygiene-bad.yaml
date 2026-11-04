@@ -1,0 +1,20 @@
+id: B02-vs-hygiene-bad
+mo_ta: Liệt kê đúng tập mã luật VS-* mà bản vẽ thiết kế bẩn vi phạm theo design-hygiene-v0.
+dang: tap_ma_luat
+fixture: hygiene_bad.dxf
+tham_so:
+  chuan: design-hygiene-v0
+cau_hoi: >-
+  Kiểm bản vẽ trong thư mục làm việc theo chuẩn vệ sinh design-hygiene-v0.
+  Liệt kê mọi mã luật có phát hiện (mỗi mã một lần) và số luật đã chạy.
+  Trả lời JSON với các trường ma_luat (danh sách), so_luat_da_chay.
+tra_loi:
+  ma_luat: danh_sach
+  so_luat_da_chay: so_nguyen
+kiem_tra:
+- loai: tap
+  truong: ma_luat
+  gia_tri: [VS-01, VS-02, VS-03, VS-04, VS-05, VS-06, VS-07]
+- loai: bang
+  truong: so_luat_da_chay
+  gia_tri: 7
