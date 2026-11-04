@@ -31,7 +31,8 @@ Cài SDK (extras `[agent]`): `pip install cadguard[agent]`, hoặc trong repo `p
 python -m cadguard mcp --workspace D:\CadGuardData\phien-01
 ```
 
-- Máy chủ nói MCP qua stdio (stdout chỉ có JSON-RPC, thông báo ra stderr), có đúng 5 công cụ chỉ đọc: `list_drawings`, `audit`, `explain_rule`, `get_model_summary`, `query_model`.
+- Máy chủ nói MCP qua stdio (stdout chỉ có JSON-RPC, thông báo ra stderr), mặc định có 6 công cụ chỉ đọc: `list_drawings`, `audit`, `explain_rule`, `get_model_summary`, `query_model`, `diff`. `--allow-propose` thêm `propose_changeset` (chạy khô, chỉ ghi changeset JSON); **không** có công cụ áp dụng qua MCP.
+- Sửa bản vẽ an toàn: `cadguard propose <tệp> --ops ops.json` → xem trước; `cadguard apply <mã>` (hỏi xác nhận) → tệp mới `<tên>.cg-<mã>.dxf`, tệp gốc giữ nguyên; `cadguard undo <mã>` hoàn tác; `cadguard diff a b`, `cadguard validate a b --changeset <mã>`. Chi tiết: `docs/changeset.md`.
 - `--workspace` **bắt buộc** (không mặc định thư mục hiện tại): chỉ đọc tệp `.dxf` nằm trong thư mục này; đường dẫn `..`, tuyệt đối, UNC hay trỏ ra ngoài đều bị từ chối. Nên dùng một thư mục phiên chỉ chứa bản vẽ cần kiểm.
 - Mặc định ẩn danh Bậc 1 (tên tệp/layer/khối/kiểu chữ thành mã phiên). `--no-anonymize` tắt ẩn danh, chỉ dùng khi khách đã đồng ý; `--standard` chọn chuẩn mặc định. Xem `python -m cadguard mcp --help`.
 - Mẫu cấu hình cho từng CLI agent: làm ở hạng mục riêng.

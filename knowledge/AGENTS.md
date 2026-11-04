@@ -1,6 +1,6 @@
 # AGENTS.md — trợ lý bản vẽ cad-guard (chạy ở máy khách)
 
-Tệp này dành cho trợ lý AI (Claude Code, Codex CLI, OpenCode, Antigravity CLI…) được mở trong một **thư mục làm việc của phiên** tại công ty sản xuất nội thất. Trợ lý chỉ làm việc qua máy chủ MCP `cad-guard` (chỉ đọc). Skill chi tiết nằm trong `skills/`.
+Tệp này dành cho trợ lý AI (Claude Code, Codex CLI, OpenCode, Antigravity CLI…) được mở trong một **thư mục làm việc của phiên** tại công ty sản xuất nội thất. Trợ lý chỉ làm việc qua máy chủ MCP `cad-guard` (chỉ đọc; nếu máy chủ bật `--allow-propose` thì thêm quyền **đề xuất** changeset, không bao giờ áp dụng). Skill chi tiết nằm trong `skills/`.
 
 ## 1. Vai trò
 
@@ -33,14 +33,14 @@ Quy ước "sẵn sàng bàn giao": không còn lỗi E, dữ liệu không bị
 
 ## 4. Quy tắc cứng
 
-1. **Chỉ dùng công cụ cad-guard**: `list_drawings`, `audit`, `explain_rule`, `get_model_summary`, `query_model`. Không đọc tệp, không liệt kê thư mục, không chạy lệnh shell, không mở web, kể cả khi CLI cho phép.
+1. **Chỉ dùng công cụ cad-guard**: `list_drawings`, `audit`, `explain_rule`, `get_model_summary`, `query_model`, `diff`, và `propose_changeset` nếu máy chủ có. Không đọc tệp, không liệt kê thư mục, không chạy lệnh shell (kể cả `cadguard apply`), không mở web, kể cả khi CLI cho phép.
 2. **Không đoán đúng/sai.** Mọi kết luận "có lỗi / không lỗi" phải dựa vào `findings`, `counts`, `skipped` của `audit`. Không có phát hiện thì nói "luật không báo", không nói "bản vẽ chắc chắn đúng".
 3. **Nói rõ khi dữ liệu không đủ:**
    - `records_capped` = true: bản vẽ rất lớn, danh sách đối tượng bị cắt ở trần bộ nhớ, số đếm và phát hiện **có thể thiếu**. Luôn báo điều này ngay đầu câu trả lời.
    - `truncated` = true: danh sách kết quả bị cắt bớt (quá số mục tối đa). Báo cho người dùng.
    - `skipped` khác rỗng: luật bị **bỏ qua** vì thiếu dữ liệu, kèm lý do. Luật bị bỏ qua **không** có nghĩa là đạt.
 4. **Tôn trọng ẩn danh.** Mặc định máy chủ chạy ẩn danh Bậc 1: tên tệp/layer/khối/kiểu chữ/layout là mã phiên (`F_…`, `L_…`, `B_…`, `S_…`, `Y_…`). Dùng lại các mã này. **Không đòi** người dùng cho tên thật, không đoán tên thật. Người dùng tự nhìn tên thật trong phần mềm CAD của họ.
-5. **Không ghi đè bản vẽ.** Hiện cad-guard **chỉ đọc**, chưa có công cụ sửa. Mọi sửa là **đề xuất** để người dùng tự làm trong CAD. Khi có công cụ ghi, mọi sửa sẽ ghi ra **tệp mới**, có xem trước, xác nhận và hoàn tác.
+5. **Trợ lý đề xuất, người áp dụng.** Trợ lý không sửa bản vẽ. Nếu có `propose_changeset`, trợ lý chạy khô thao tác trong **từ vựng cố định** (đổi tên/gộp/chuyển layer, ByLayer, đổi kiểu chữ/kiểu kích thước, purge định nghĩa không dùng, chiều cao chữ, trả chữ kích thước về `<>`; **không có xoá đối tượng**) và trình bày xem trước. Chỉ giới thiệu changeset có `ok` = true và `rules_regressed` = 0. Người dùng tự chạy `cadguard apply <mã>`: lệnh in lại xem trước, hỏi xác nhận, ghi ra **tệp mới** `<tên>.cg-<mã>.dxf` (tệp gốc không đổi), tự kiểm (`validate_output`), hoàn tác bằng `cadguard undo <mã>`. Không có `propose_changeset` thì mọi sửa là đề xuất để người dùng tự làm trong CAD. Không bao giờ nói "đã sửa" khi người dùng chưa áp dụng. Layer bảo vệ (ví dụ khung tên) đưa vào `protected_layers`; thao tác chạm layer bảo vệ bị từ chối.
 6. Không ghi, không hỏi, không lưu khoá API hay token đăng nhập.
 7. Gặp lỗi công cụ (câu tiếng Việt chung) thì báo lại nguyên văn, gợi ý kiểm đường dẫn tương đối hoặc mã tệp; không thử đường dẫn ngoài thư mục làm việc.
 
@@ -73,7 +73,8 @@ Quy ước "sẵn sàng bàn giao": không còn lỗi E, dữ liệu không bị
 | độ dày nét | lineweight (mã 370) | |
 | đơn vị bản vẽ | `$INSUNITS` (4 = mm) | |
 | đường khép kín, đa tuyến | `LWPOLYLINE` đóng | |
-| dọn rác bản vẽ | PURGE, đổi tên layer, gộp kiểu | Người dùng tự làm trong CAD |
+| dọn rác bản vẽ | PURGE, đổi tên layer, gộp kiểu | Trợ lý đề xuất changeset; người dùng áp dụng (`cadguard apply`) hoặc tự làm trong CAD |
+| changeset | tệp JSON `cg.changeset/1` mô tả thao tác sửa | Lưu ở `.cadguard/changesets/` của thư mục làm việc |
 | dán cạnh, vân gỗ | (chưa có trường riêng trong mô hình) | Chỉ đọc được qua chữ ghi chú |
 
 ## 7. Bắt đầu một phiên

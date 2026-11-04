@@ -22,7 +22,7 @@ from cadguard.agent.tools import MAX_QUERY_BYTES, MAX_QUERY_RECORDS
 
 CORE = Path(cadguard.__file__).resolve().parents[1]
 TIMEOUT = 90  # giây cho mỗi phiên/tiến trình con, để test không treo
-TOOL_NAMES = {"list_drawings", "audit", "explain_rule", "get_model_summary", "query_model"}
+TOOL_NAMES = {"list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff"}
 PRIVATE_NAMES = ("PRIVATE_LAYER", "PRIVATE_STYLE", "PRIVATE_BLOCK", "PRIVATE_VALUE", "private_file", "Du_an_PRIVATE")
 PRIVATE_REL = "Du_an_PRIVATE/private_file.dxf"
 
@@ -166,12 +166,13 @@ def test_missing_sdk_exits_2_with_vietnamese_hint(tmp_path):
 
 
 @needs_sdk
-def test_list_tools_exactly_five_read_only(ws_env):
+def test_list_tools_default_six_read_only_no_write(ws_env):
     async def body(s):
         return (await s.list_tools()).tools
 
     tools, _ = _session(ws_env, body)
-    assert {t.name for t in tools} == TOOL_NAMES and len(tools) == 5
+    assert {t.name for t in tools} == TOOL_NAMES and len(tools) == 6
+    assert "propose_changeset" not in {t.name for t in tools} and "apply_changeset" not in {t.name for t in tools}
     for t in tools:
         assert t.description and t.inputSchema["type"] == "object"
         assert t.annotations is not None and t.annotations.readOnlyHint is True and t.annotations.destructiveHint is False
@@ -544,3 +545,82 @@ def test_stdout_carries_only_jsonrpc(ws_env):
         if line.strip():
             assert json.loads(line)["jsonrpc"] == "2.0"
     assert "đang phục vụ qua stdio" in err.decode("utf-8", "replace")
+
+
+# ---------- A2: propose_changeset (--allow-propose) và diff ----------
+
+
+@pytest.fixture
+def hyg_env(tmp_path):
+    """Thư mục làm việc riêng: hygiene_bad.dxf + một tệp ra do NGƯỜI áp dụng (gọi lõi trong tiến trình test)."""
+    from cadguard import fixtures
+    from cadguard.agent.workspace import Workspace
+    from cadguard.changeset import apply, propose
+
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    fixtures.make_hygiene_bad(ws / "hygiene_bad.dxf")
+    w = Workspace(ws)
+    cs, _ = propose(w, "hygiene_bad.dxf", [{"op": "set_bylayer", "filter": {"layers": ["SYN-TUONG"]}}])
+    out = apply(w, cs.id, confirm=True)["output"]["path"]
+    home = tmp_path / "home"
+    home.mkdir()
+    return {"ws": ws, "base": tmp_path, "home": home, "out": out}
+
+
+@needs_sdk
+def test_allow_propose_tools_tokens_and_diff(hyg_env):
+    import re
+
+    async def body(s):
+        tools = (await s.list_tools()).tools
+        aud = _data(await s.call_tool("audit", {"file": "hygiene_bad.dxf", "standard": "design-hygiene-v0"}))
+        vs07 = next(f for f in aud["findings"] if f["rule_id"] == "VS-07")
+        bad_style = re.search(r"S_[0-9a-f]{10}", vs07["message"]).group()
+        texts = _data(await s.call_tool("query_model", {"file": "hygiene_bad.dxf", "filter": {"type": "TEXT"}}))["items"]
+        good_style = next(t["text_style"] for t in texts if t["text_style"] != bad_style)
+        ops = [{"op": "replace_text_style", "from": [bad_style], "to": good_style},
+               {"op": "move_to_layer", "filter": {"layers": ["0"], "spaces": ["Model"]}, "target": texts[0]["layer"]}]
+        return {
+            "tools": tools,
+            "propose": await s.call_tool("propose_changeset", {"file": "hygiene_bad.dxf", "ops": ops}),
+            "bad_token": await s.call_tool("propose_changeset", {"file": "hygiene_bad.dxf",
+                                                                 "ops": [{"op": "move_to_layer", "target": "L_0123456789"}]}),
+            "bad_op": await s.call_tool("propose_changeset", {"file": "hygiene_bad.dxf", "ops": [{"op": "delete_all"}]}),
+            "diff": await s.call_tool("diff", {"a": "hygiene_bad.dxf", "b": hyg_env["out"]}),
+        }
+
+    r, err = _session(hyg_env, body, args=["--allow-propose"], errlog_name="server_propose.err")
+    names = {t.name for t in r["tools"]}
+    assert names == TOOL_NAMES | {"propose_changeset"} and "apply_changeset" not in names
+    ann = {t.name: t.annotations for t in r["tools"]}
+    assert ann["propose_changeset"].readOnlyHint is False and ann["propose_changeset"].destructiveHint is False
+    assert ann["diff"].readOnlyHint is True
+    assert "đề xuất changeset" in err
+
+    p = _data(r["propose"])
+    assert p["ok"] and p["rules_regressed"] == 0 and {"VS-03", "VS-07"} <= set(p["rules"]["resolved"])
+    assert p["file"].startswith("F_") and "cadguard apply" in p["apply"]
+    d = _data(r["diff"])
+    assert d["summary"]["changed"] == 4 and set(d["summary"]["changed_by_attr"]) == {"color", "lineweight"}
+    text = r["propose"].content[0].text + r["diff"].content[0].text
+    for secret in ("SYN-", "hygiene_bad", str(hyg_env["ws"]), "OpenSans"):
+        assert secret not in text, secret
+    assert "không khớp tên nào" in _error_text(r["bad_token"])
+    assert "không có trong từ vựng" in _error_text(r["bad_op"])
+
+    stored = json.loads((hyg_env["ws"] / ".cadguard" / "changesets" / f"{p['changeset_id']}.json").read_text(encoding="utf-8"))
+    assert stored["created_by"] == "agent" and stored["source"]["path"] == "hygiene_bad.dxf"
+    assert stored["ops"][0]["from"] == ["SYN-VN-SHX"] and stored["ops"][0]["to"] == "SYN-CHU"
+    assert stored["ops"][1]["target"] == "SYN-CHU"
+    assert len(list(hyg_env["ws"].glob("*.dxf"))) == 2  # MCP không ghi DXF: chỉ gốc + tệp người dùng đã áp
+
+
+@needs_sdk
+def test_propose_absent_without_flag(hyg_env):
+    async def body(s):
+        return await s.call_tool("propose_changeset", {"file": "hygiene_bad.dxf", "ops": [{"op": "purge_unused"}]})
+
+    res, _ = _session(hyg_env, body, errlog_name="server_noprop.err")
+    assert res.isError
+    assert not (hyg_env["ws"] / ".cadguard" / "changesets").exists() or len(list((hyg_env["ws"] / ".cadguard" / "changesets").glob("*.json"))) == 2

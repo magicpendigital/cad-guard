@@ -1,6 +1,12 @@
-"""Máy chủ MCP stdio CHỈ ĐỌC: bọc 5 hàm trong `cadguard.agent.tools` cho trợ lý AI ở máy khách.
+"""Máy chủ MCP stdio cho trợ lý AI ở máy khách: bọc các hàm trong `cadguard.agent.tools`.
 
 Chạy: `python -m cadguard mcp --workspace <thư mục>`.
+
+- Mặc định CHỈ ĐỌC: 6 công cụ (list_drawings, audit, explain_rule, get_model_summary, query_model, diff).
+- `--allow-propose` (mặc định TẮT) thêm `propose_changeset`: chạy khô và ghi changeset JSON vào
+  `<thư mục làm việc>/.cadguard/changesets/`; không bao giờ ghi DXF.
+- KHÔNG có `apply_changeset` qua MCP: áp dụng (ghi tệp mới) chỉ do người dùng qua `cadguard apply`, sau khi xem trước
+  và xác nhận. Lý do: trợ lý không được tự quyết sửa bản vẽ sản xuất (docs/changeset.md mục 5).
 
 - SDK `mcp` chỉ được import khi chạy lệnh này (extras `[agent]`); thiếu SDK thì báo ra stderr, thoát mã 2.
 - stdout chỉ dành cho JSON-RPC: trước khi phục vụ, fd 1 và `sys.stdout` được chuyển sang stderr;
@@ -28,7 +34,8 @@ from .standard import ProfileError, find_standards_dir, load_profile
 
 SERVER_NAME = "cad-guard"
 DEFAULT_STANDARD = "furniture-v0"
-TOOL_NAMES = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model")
+TOOL_NAMES = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff")
+PROPOSE_TOOL = "propose_changeset"  # chỉ có khi --allow-propose
 
 INSTALL_HINT = (
     "Thiếu SDK MCP cho Python (gói `mcp`), nên chưa chạy được máy chủ MCP của cad-guard.\n"
@@ -45,7 +52,9 @@ INSTRUCTIONS = (
     "Khi bật ẩn danh, tên tệp/layer/khối/kiểu chữ là mã phiên (L_…, B_…, F_…), dùng lại được trong cùng phiên. "
     "Kết luận đúng/sai lấy từ kết quả luật, không tự suy đoán. "
     "Nếu kết quả có records_capped = true: bản vẽ rất lớn, danh sách đối tượng đã bị cắt ở trần bộ nhớ, "
-    "nên số đối tượng/phát hiện có thể thiếu; hãy nói rõ điều này với người dùng."
+    "nên số đối tượng/phát hiện có thể thiếu; hãy nói rõ điều này với người dùng. "
+    "Không có công cụ áp dụng sửa: nếu máy chủ bật propose_changeset, trợ lý chỉ ĐỀ XUẤT changeset (xem trước); "
+    "người dùng tự áp dụng bằng `cadguard apply`, kết quả ghi ra tệp mới."
 )
 
 
@@ -88,6 +97,12 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
         "như `cadguard audit --reader auto`); 0 = luôn đọc theo dòng, số âm = luôn dùng ezdxf. DXF nhị phân luôn dùng ezdxf.",
     )
     p.add_argument(
+        "--allow-propose",
+        action="store_true",
+        help="BẬT công cụ propose_changeset (mặc định TẮT): trợ lý được chạy khô thao tác sửa và ghi changeset JSON "
+        "vào <thư mục làm việc>/.cadguard/changesets/. Không bao giờ ghi DXF; áp dụng chỉ do người qua `cadguard apply`.",
+    )
+    p.add_argument(
         "--max-entity-records",
         type=_non_negative_int,
         default=DEFAULT_MAX_ENTITY_RECORDS,
@@ -124,8 +139,8 @@ def _import_sdk():
     return mcp
 
 
-def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0"):
-    """Tạo FastMCP với đúng 5 công cụ chỉ đọc. Cần SDK đã cài."""
+def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0", allow_propose: bool = False):
+    """Tạo FastMCP: 6 công cụ chỉ đọc, thêm propose_changeset khi `allow_propose`. Không bao giờ có apply. Cần SDK."""
     from typing import Annotated
 
     from mcp.server.fastmcp import FastMCP
@@ -241,6 +256,46 @@ def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0")
         flt = filter.model_dump(exclude_none=True) if filter is not None else {}
         return call(tools.query_model, file, flt, limit, cursor)
 
+    @server.tool(
+        name="diff",
+        description="So hai bản vẽ DXF trong thư mục làm việc theo handle (như git diff): đối tượng thêm/xoá/đổi "
+        "(thuộc tính nào), định nghĩa layer/kiểu chữ/kiểu kích thước/khối thêm/xoá, tóm tắt số liệu. Đã ẩn danh; "
+        "chữ trong bản vẽ bị che. JSON tối đa 64 KB, 'truncated' báo danh sách bị cắt (số tổng trong 'summary' luôn đủ).",
+        annotations=read_only,
+        structured_output=False,
+    )
+    def diff(
+        a: Annotated[str, Field(description="Tệp trước (thường là bản gốc): đường dẫn tương đối hoặc mã tệp.")],
+        b: Annotated[str, Field(description="Tệp sau (vd. tệp .cg-<mã>.dxf do người dùng áp dụng).")],
+        max_items: Annotated[int, Field(ge=1, le=500, description="Số mục tối đa mỗi danh sách (1–500).")] = 100,
+    ) -> CallToolResult:
+        return call(tools.diff, a, b, max_items)
+
+    if allow_propose:
+        from .changeset.ops import OP_HELP
+
+        propose_ann = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
+        ops_doc = "; ".join(f"{k}: {v}" for k, v in OP_HELP.items())
+
+        @server.tool(
+            name="propose_changeset",
+            description="ĐỀ XUẤT sửa bản vẽ bằng từ vựng thao tác cố định, CHẠY KHÔ trên bản sao trong bộ nhớ: kiểm schema, "
+            "đếm đối tượng bị ảnh hưởng, dự báo luật hết/xuất hiện (rules_regressed phải = 0), trả xem trước. Lưu changeset "
+            "JSON vào thư mục phiên; KHÔNG ghi DXF và KHÔNG áp dụng — người dùng tự áp bằng `cadguard apply <changeset_id>`. "
+            "Không có thao tác xoá đối tượng hình học. Tên layer/kiểu chữ dùng mã phiên (L_…, S_…, D_…, Y_…) như các công cụ khác. "
+            f"Thao tác: {ops_doc}. Bộ lọc 'filter': {{layers, exclude_layers, types, spaces}} (AND giữa khoá, OR trong danh sách).",
+            annotations=propose_ann,
+            structured_output=False,
+        )
+        def propose_changeset(
+            file: FileArg,
+            ops: Annotated[list[dict], Field(description="Danh sách thao tác, mỗi mục có 'op' và tham số; tối đa 50.", min_length=1, max_length=50)],
+            standard: Annotated[str, Field(description="Chuẩn dùng để dự báo luật (mặc định design-hygiene-v0).",
+                                           pattern=r"^[a-z0-9][a-z0-9.\-]*$")] = "design-hygiene-v0",
+            protected_layers: Annotated[list[str] | None, Field(description="Layer bảo vệ thêm (tên/mã L_…); thao tác chạm bị từ chối.")] = None,
+        ) -> CallToolResult:
+            return call(tools.propose_changeset, file, ops, standard, protected_layers)
+
     return server
 
 
@@ -333,8 +388,10 @@ def run_from_args(args: argparse.Namespace) -> int:
             "CẢNH BÁO: đã TẮT ẩn danh (--no-anonymize). Trợ lý AI sẽ thấy tên tệp, layer, khối và kiểu chữ thật "
             "(ngoài Bậc 1). Chỉ dùng khi khách đã đồng ý bằng văn bản."
         )
-    server = build_server(ctx, standard)
-    _err("cad-guard MCP: đang phục vụ qua stdio (chỉ đọc). Dừng bằng cách đóng stdin hoặc Ctrl+C.")
+    allow_propose = bool(getattr(args, "allow_propose", False))
+    server = build_server(ctx, standard, allow_propose=allow_propose)
+    mode = "chỉ đọc + đề xuất changeset (không áp dụng)" if allow_propose else "chỉ đọc"
+    _err(f"cad-guard MCP: đang phục vụ qua stdio ({mode}). Dừng bằng cách đóng stdin hoặc Ctrl+C.")
     try:
         serve(server)
     except KeyboardInterrupt:
@@ -342,4 +399,4 @@ def run_from_args(args: argparse.Namespace) -> int:
     return 0
 
 
-__all__ = ["TOOL_NAMES", "add_arguments", "build_server", "run_from_args"]
+__all__ = ["PROPOSE_TOOL", "TOOL_NAMES", "add_arguments", "build_server", "run_from_args"]
