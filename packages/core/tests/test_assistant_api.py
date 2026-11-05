@@ -133,6 +133,70 @@ def test_anthropic_tool_loop_uses_cadguard_tools_and_anonymizes(provider, ws):
     assert len(usage) == 3 and usage[0].cost_usd == pytest.approx((1000 * 2 + 100 * 10) / 1e6)
 
 
+PRIVATE_CONTENT = ["PRIVATE_NOTE", "PRIVATE_MTEXT", "PRIVATE_ATTR", "riêng tư", "424242.4242", "454545.4545"]
+
+
+def _private_content_doc(path):
+    """DXF tổng hợp có chữ "riêng tư", giá trị thuộc tính và toạ độ dễ nhận (các trường mới text/pos/pts/insert)."""
+    import ezdxf
+
+    doc = ezdxf.new("R2018")
+    blk = doc.blocks.new("SYN-KHUNG")
+    blk.add_attdef("SYN_TAG", (0, 0))
+    msp = doc.modelspace()
+    msp.add_text("PRIVATE_NOTE riêng tư", dxfattribs={"insert": (424242.4242, 1)})
+    msp.add_mtext("PRIVATE_MTEXT riêng tư", dxfattribs={"insert": (454545.4545, 2)})
+    msp.add_line((424242.4242, 0), (454545.4545, 1))
+    msp.add_lwpolyline([(424242.4242, 0), (454545.4545, 5), (0, 5)])
+    msp.add_circle((454545.4545, 3), 7)
+    msp.add_blockref("SYN-KHUNG", (424242.4242, 9)).add_auto_attribs({"SYN_TAG": "PRIVATE_ATTR riêng tư"})
+    doc.saveas(path)
+
+
+def test_anonymized_tool_results_never_carry_drawing_content(provider, ws):
+    """Bậc 1 mặc định: chữ, giá trị thuộc tính, toạ độ trong bản vẽ không có trong body gửi API (giả)."""
+    _private_content_doc(ws / "noi_dung.dxf")
+    import ezdxf
+
+    doc = ezdxf.readfile(ws / "noi_dung.dxf")  # bản sửa: đổi chữ và dời điểm chèn, để diff có thuộc tính đổi
+    for e in doc.modelspace():
+        if e.dxftype() == "TEXT":
+            e.dxf.text = "PRIVATE_NOTE riêng tư sửa"
+        if e.dxftype() == "INSERT":
+            e.dxf.insert = (454545.4545, 9)
+    doc.saveas(ws / "noi_dung_sua.dxf")
+
+    def script(i, body):
+        if i == 0:
+            return 200, {"content": [{"type": "tool_use", "id": "t0", "name": "list_drawings", "input": {}}],
+                         "stop_reason": "tool_use", "usage": {}}
+        if i == 1:
+            ids = [d["id"] for d in json.loads(_last_tool_result_text(body))["drawings"]]
+            calls = [{"type": "tool_use", "id": f"q{k}", "name": n, "input": {"file": f, **extra}}
+                     for k, (f, (n, extra)) in enumerate((f, c) for f in ids for c in (
+                         ("query_model", {"limit": 500}), ("get_model_summary", {}), ("audit", {})))]
+            calls.append({"type": "tool_use", "id": "d0", "name": "diff", "input": {"a": ids[1], "b": ids[2]}})
+            calls.append({"type": "tool_use", "id": "d1", "name": "diff", "input": {"a": ids[0], "b": ids[1]}})
+            return 200, {"content": calls, "stop_reason": "tool_use", "usage": {}}
+        return 200, {"content": [{"type": "text", "text": "xong"}], "stop_reason": "end_turn", "usage": {}}
+
+    p = provider(script)
+    events = _run(AnthropicEngine(api_key=FAKE_KEY, base_url=p.url), ws)
+    results = [e for e in events if e.type == "tool_result"]
+    assert len(results) == 1 + 3 * 3 + 2 and all(not r.data["is_error"] for r in results)
+    changed = json.loads(results[-2].data["content"])["entities"]["changed"]
+    assert {k for c in changed for k in c["attrs"]} >= {"text", "insert"}  # có đổi, nhưng giá trị bị che
+    queried = [json.loads(r.data["content"]) for r in results if '"items"' in r.data["content"]]
+    assert queried and all(item["type"] for q in queried for item in q["items"])
+    assert any(item["type"] == "TEXT" for q in queried for item in q["items"])
+    for req in p.requests:
+        sent = req["raw"] + json.dumps(req["body"], ensure_ascii=False)
+        for word in PRIVATE_CONTENT:
+            assert word not in sent, word
+        for key in ('"pts"', '"pos"', '"insert"', '"attribs"', '"dup_key"'):
+            assert key not in sent, key
+
+
 def test_propose_only_when_allowed_never_apply(provider, ws):
     p = provider(lambda i, b: (200, {"content": [{"type": "text", "text": "ok"}], "stop_reason": "end_turn", "usage": {}}))
     eng = AnthropicEngine(api_key=FAKE_KEY, base_url=p.url)

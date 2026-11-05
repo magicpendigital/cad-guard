@@ -26,7 +26,11 @@ import math
 import re
 from pathlib import Path
 
-from .dxf_reader import TEXT_TYPES, _block_depth, _font_kind, is_non_ascii_text
+from ezdxf.entities.dimension import angle_between, linear_measurement
+from ezdxf.math import OCS, Vec3
+from ezdxf.tools.text import escape_dxf_line_endings, fast_plain_mtext
+
+from .dxf_reader import MAX_PTS, TEXT_MAX, TEXT_TYPES, _block_depth, _font_kind, is_non_ascii_text
 from .model import BlockRec, DrawingModel, EntityRec, LayerRec, LayoutRec, ModelStats, SpaceStats, StyleRec, ViewportRec
 
 DEFAULT_MAX_ENTITY_RECORDS = 300_000  # ~1,2 KB/bản ghi -> khoảng 350 MB ở trần
@@ -48,7 +52,9 @@ Z_CODES: dict[str, tuple[int, ...]] = {
     **{t: (32,) for t in ("DIMENSION", "ARC_DIMENSION", "LARGE_RADIAL_DIMENSION")},
 }
 # Mã nhóm riêng của đối tượng mà mô hình cần (ngoài phần chung AcDbEntity).
-SPEC_CODES = frozenset({1, 2, 7, 10, 11, 20, 21, 30, 31, 32, 38, 40, 41, 45, 50, 51, 66, 69, 70})
+# 13..35 = điểm định nghĩa DIMENSION, 42 = INSERT.yscale, 210..230 = pháp tuyến (OCS của DIMENSION).
+SPEC_CODES = frozenset({1, 2, 7, 10, 11, 13, 14, 15, 20, 21, 23, 24, 25, 30, 31, 32, 33, 34, 35, 38, 40, 41, 42,
+                        45, 50, 51, 66, 69, 70, 210, 220, 230})
 
 
 class DXFStreamError(ValueError):
@@ -266,7 +272,59 @@ def _polyline_metrics(pts: list[tuple[float, float]], closed: bool) -> tuple[flo
     return length, area, closed
 
 
-def _entity_rec(t: str, handle: str, layer: str, color, lw, tc, spec: dict, xs: list, ys: list) -> EntityRec:
+def _vec(spec: dict, code: int) -> Vec3:
+    return Vec3(_float(spec, code), _float(spec, code + 10), _float(spec, code + 20))
+
+
+def _dim_measurement(spec: dict) -> float | None:
+    """Số đo DIMENSION như `ezdxf` `Dimension.get_measurement()` (dùng chính hàm toán của ezdxf để khớp từng bit).
+
+    Kích thước toạ độ (ordinate) trả về vectơ nên đường ezdxf bỏ trống trường này; ở đây cũng vậy.
+    """
+    dimtype = (_int(spec.get(70, "0")) or 0) & 15
+    if dimtype == 0:  # thẳng (xoay)
+        extrusion = Vec3(_float(spec, 210), _float(spec, 220), _float(spec, 230, 1.0))
+        return linear_measurement(_vec(spec, 13), _vec(spec, 14), math.radians(_float(spec, 50)), OCS(extrusion))
+    if dimtype == 1:  # thẳng hàng
+        return (_vec(spec, 14) - _vec(spec, 13)).magnitude
+    if dimtype == 2:  # góc giữa hai đường
+        return angle_between(_vec(spec, 14) - _vec(spec, 13), _vec(spec, 10) - _vec(spec, 15))
+    if dimtype in (3, 4):  # đường kính, bán kính
+        return (_vec(spec, 15) - _vec(spec, 10)).magnitude
+    if dimtype == 5:  # góc ba điểm
+        center = _vec(spec, 15)
+        return angle_between(_vec(spec, 13) - center, _vec(spec, 14) - center)
+    return None
+
+
+def _mtext_plain(tags: list) -> str:
+    """Nội dung MTEXT như `MText.plain_text()` của ezdxf: các khúc mã 3 + khúc mã 1 cuối của lớp con AcDbMText."""
+    parts: list[str] = []
+    tail = ""
+    n100 = 0
+    in102 = False
+    for code, val in tags:
+        if code >= 1000 or code == 101:
+            break
+        if code == 102:
+            in102 = val.startswith("{")
+            continue
+        if in102:
+            continue
+        if code == 100:
+            n100 += 1
+            continue
+        if n100 == 2 or (n100 == 0 and code in (1, 3)):
+            if code == 1:
+                tail = val
+            elif code == 3:
+                parts.append(val)
+    parts.append(tail)
+    return fast_plain_mtext(escape_dxf_line_endings("".join(parts)))
+
+
+def _entity_rec(t: str, handle: str, layer: str, color, lw, tc, spec: dict, xs: list, ys: list,
+                tags: list | None = None) -> EntityRec:
     f: dict = {"handle": handle, "type": t, "layer": layer, "space": "Model", "length": None, "area": None,
                "closed": None, "has_nonzero_z": False, "dup_key": None, "text_style": None, "dim_text": None,
                "block": None, "attribs": None, "is_proxy": t in PROXY_TYPES, "color": color, "lineweight": lw,
@@ -285,21 +343,37 @@ def _entity_rec(t: str, handle: str, layer: str, color, lw, tc, spec: dict, xs: 
             dx, dy, dz = ex - sx, ey - sy, ez - sz
             f["length"] = math.sqrt(dx * dx + dy * dy + dz * dz)
             f["dup_key"] = f"LINE|{layer}|{sorted([(_r(sx), _r(sy)), (_r(ex), _r(ey))])}"
+            f["pts"] = [(_r(sx), _r(sy)), (_r(ex), _r(ey))]
         elif t == "LWPOLYLINE":
             flags = _int(spec.get(70, "0")) or 0
-            f["length"], f["area"], f["closed"] = _polyline_metrics(list(zip(xs, ys)), bool(flags & 1))
+            pts = list(zip(xs, ys))
+            f["length"], f["area"], f["closed"] = _polyline_metrics(pts, bool(flags & 1))
+            if len(pts) <= MAX_PTS:
+                f["pts"] = [(_r(x), _r(y)) for x, y in pts]
         elif t == "CIRCLE":
             f["dup_key"] = f"CIRCLE|{layer}|{(_r(_float(spec, 10)), _r(_float(spec, 20)))}|{_r(_float(spec, 40, 1.0))}"
+            f["pts"], f["radius"] = [(_r(_float(spec, 10)), _r(_float(spec, 20)))], _r(_float(spec, 40, 1.0))
         elif t == "ARC":
             f["dup_key"] = (f"ARC|{layer}|{(_r(_float(spec, 10)), _r(_float(spec, 20)))}|{_r(_float(spec, 40, 1.0))}"
                             f"|{_r(_float(spec, 50))}|{_r(_float(spec, 51, 360.0))}")
         elif t in ("TEXT", "MTEXT"):
             f["text_style"] = spec.get(7, "Standard")
+            f["text"] = (_mtext_plain(tags or []) if t == "MTEXT" else spec.get(1, ""))[:TEXT_MAX]
+            f["pos"] = (_r(_float(spec, 10)), _r(_float(spec, 20)))
         elif t == "DIMENSION":
             f["dim_text"] = spec.get(1, "") or ""
+            try:
+                value = _dim_measurement(spec)
+                f["dim_value"] = None if value is None else _r(value)
+            except (ArithmeticError, TypeError):  # như đường ezdxf: số đo không tính được thì bỏ trống
+                pass
         elif t == "INSERT":
             f["block"] = spec.get(2, "")
             f["attribs"] = {}
+            f["insert"] = (_r(_float(spec, 10)), _r(_float(spec, 20)))
+            f["rotation"] = _r(_float(spec, 50) or 0.0)
+            f["xscale"] = _r(_float(spec, 41, 1.0))
+            f["yscale"] = _r(_float(spec, 42, 1.0))
     except ValueError:  # số hỏng trong tệp: giữ phần đã đọc được, như đường ezdxf
         pass
     return EntityRec.model_construct(**f)
@@ -527,7 +601,7 @@ class _Parser:
         if self.n_records >= self.max_records:
             self.truncated = True
             return
-        rec = _entity_rec(t, handle, layer, color, lw, tc, spec, xs, ys)
+        rec = _entity_rec(t, handle, layer, color, lw, tc, spec, xs, ys, tags)
         self.n_records += 1
         self.records.setdefault(container, []).append(rec)
         if attribs_follow:

@@ -25,6 +25,9 @@ TIMEOUT = 90  # giây cho mỗi phiên/tiến trình con, để test không treo
 TOOL_NAMES = {"list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff"}
 PRIVATE_NAMES = ("PRIVATE_LAYER", "PRIVATE_STYLE", "PRIVATE_BLOCK", "PRIVATE_VALUE", "private_file", "Du_an_PRIVATE")
 PRIVATE_REL = "Du_an_PRIVATE/private_file.dxf"
+# Nội dung bản vẽ (chữ, toạ độ) trong tệp riêng tư: Bậc 1 không được đưa ra cho trợ lý (trường mới text/pos/pts/insert).
+PRIVATE_CONTENT = ("PRIVATE_NOTE", "PRIVATE_MTEXT", "riêng tư", "424242.4242", "434343.4343",
+                   "454545.4545", "464646.4646")
 
 needs_sdk = pytest.mark.skipif(importlib.util.find_spec("mcp") is None, reason="chưa cài SDK MCP (extras [agent])")
 
@@ -70,6 +73,11 @@ def ws_env(tmp_path_factory):
     insert = msp.add_blockref("PRIVATE_BLOCK", (0, 0), dxfattribs={"layer": "PRIVATE_LAYER"})
     insert.add_attrib("TAG", "PRIVATE_VALUE", (0, 0))
     msp.add_text("text", dxfattribs={"style": "PRIVATE_STYLE", "layer": "PRIVATE_LAYER"})
+    msp.add_text("PRIVATE_NOTE riêng tư", dxfattribs={"insert": (424242.4242, 434343.4343)})
+    msp.add_mtext("PRIVATE_MTEXT riêng tư", dxfattribs={"insert": (454545.4545, 464646.4646)})
+    msp.add_line((424242.4242, 0), (454545.4545, 1))
+    msp.add_lwpolyline([(434343.4343, 0), (464646.4646, 5), (0, 5)])
+    msp.add_blockref("PRIVATE_BLOCK", (464646.4646, 424242.4242), dxfattribs={"rotation": 30})
     (ws / "Du_an_PRIVATE").mkdir()
     doc.saveas(ws / PRIVATE_REL)
 
@@ -251,8 +259,9 @@ def _all_outputs(ws_env, args=(), errlog_name="server.err"):
 def test_anonymized_by_default(ws_env):
     text, err = _all_outputs(ws_env)
     ws = str(ws_env["ws"])
-    for secret in (*PRIVATE_NAMES, ws, json.dumps(ws)[1:-1], ws.replace("\\", "/")):
+    for secret in (*PRIVATE_NAMES, *PRIVATE_CONTENT, ws, json.dumps(ws)[1:-1], ws.replace("\\", "/")):
         assert secret not in text, secret
+    assert '"pts"' not in text and '"pos"' not in text and '"insert"' not in text
     assert "CẢNH BÁO" not in err
 
 
@@ -260,6 +269,7 @@ def test_anonymized_by_default(ws_env):
 def test_no_anonymize_shows_names_and_warns(ws_env):
     text, err = _all_outputs(ws_env, args=["--no-anonymize"], errlog_name="server_plain.err")
     assert "PRIVATE_LAYER" in text and "private_file.dxf" in text and "PRIVATE_BLOCK" in text
+    assert "PRIVATE_NOTE" in text and "424242.4242" in text  # tắt ẩn danh (Bậc 2, có cảnh báo): thấy cả chữ, toạ độ
     assert "CẢNH BÁO" in err and "--no-anonymize" in err
 
 
@@ -327,7 +337,7 @@ def test_stream_records_capped_and_anonymized_over_protocol(ws_env):
 def test_anonymized_on_stream_path(ws_env):
     text, _ = _all_outputs(ws_env, args=["--stream-threshold-mb", "0"], errlog_name="server_stream_anon.err")
     ws = str(ws_env["ws"])
-    for secret in (*PRIVATE_NAMES, ws, json.dumps(ws)[1:-1], ws.replace("\\", "/")):
+    for secret in (*PRIVATE_NAMES, *PRIVATE_CONTENT, ws, json.dumps(ws)[1:-1], ws.replace("\\", "/")):
         assert secret not in text, secret
 
 

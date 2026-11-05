@@ -52,14 +52,30 @@ Tiêu chí xong tầng A: GLB mở được bằng trình xem glTF bất kỳ; k
 
 ## 3c. Studio: LLM đọc/phân tích → chuẩn hoá → xem 3D hoặc bổ sung (quyết định 05/11/2026)
 
-Quyết định của người dùng: (1) LLM **được xem toàn bộ nội dung bản vẽ** của phiên đang làm; (2) nhà cung cấp: khoá API (`ANTHROPIC_API_KEY`) hoặc CLI `claude` nguyên bản, người dùng tự đăng nhập; (3) giao diện: ứng dụng web cục bộ nhỏ, **đồng bộ với `design/ui-mockup.html`**; (4) LLM chỉ đề xuất **thao tác cố định**, ghi **tệp mới**.
+Quyết định của người dùng: (1) LLM **được xem toàn bộ nội dung bản vẽ** của phiên đang làm; (2) nhà cung cấp: khoá API Anthropic (biến `ANTHROPIC_API_KEY` hoặc kho khoá hệ điều hành qua `cadguard keys set anthropic`) hoặc CLI `claude` nguyên bản, người dùng tự đăng nhập; (3) giao diện: ứng dụng web cục bộ nhỏ, **đồng bộ với `design/ui-mockup.html`**; (4) LLM chỉ đề xuất **thao tác cố định**, ghi **tệp mới**.
 
 - Vòng làm việc: LLM đọc bản tóm tắt (cụm hình học C1.., hình chữ nhật, chữ, số đo, INSERT, kết quả dựng 3D, phần thiếu) → trả JSON gồm nhận xét + đề xuất + câu hỏi → **mã kiểm từng đề xuất** (cụm/tay cầm/khoá phải tồn tại, giá trị hợp lệ; sai thì loại kèm lý do) → người dùng duyệt → áp dụng → dựng lại 3D → vòng tiếp theo.
 - 4 loại đề xuất: `set_views` (gán cụm = mặt đứng/bên/bằng, cho bản vẽ không theo quy ước layer), `set_value` (điền phần thiếu), `set_attrib` (thêm/sửa thuộc tính khối), `change_layer` (chuẩn hoá layer). Hoàn tác được; xuất ra `<mã>-chuan-hoa.dxf` mới, nguồn không bị ghi đè.
 - Nhận xét của LLM luôn gắn nhãn "LLM · chưa kiểm"; đúng/sai về kích thước vẫn do mã tất định quyết định (giữ nguyên tắc AGENTS.md).
-- Dữ liệu: người dùng phải tích đồng ý **trong từng phiên** trước khi bất cứ nội dung nào rời máy; không gửi đường dẫn/tên tệp; CLI chạy trong thư mục rỗng với mọi công cụ file/shell tắt; khoá API chỉ đọc từ biến môi trường, không ghi ra tệp.
+- Dữ liệu: người dùng phải tích đồng ý **trong từng phiên** (mỗi lần mở bản vẽ là phiên mới, đồng ý trở về tắt) trước khi bất cứ nội dung nào rời máy; không gửi đường dẫn/tên tệp; CLI chạy trong thư mục rỗng với mọi công cụ file/shell tắt.
+- Khoá API: đọc bằng `assistant/keys.py` như trợ lý (biến môi trường trước, rồi kho khoá hệ điều hành); không ghi ra tệp, không in trong `repr`/lỗi/ghi chú phiên (lỗi HTTP đi qua `post_json`, đã che khoá). Gọi Messages API bằng thư viện chuẩn (`assistant/api_engines.post_json`), **không cần SDK `anthropic`** (bỏ extras `llm`, xem `docs/licenses.md`). Mô hình: `CADGUARD_MODEL` hoặc `CADGUARD_ANTHROPIC_MODEL`, mặc định `claude-sonnet-5-5`; địa chỉ: `CADGUARD_ANTHROPIC_BASE_URL`.
+
+### 3c.1 Studio gửi gì cho LLM (sau khi đồng ý)
+
+Studio **không** dùng chế độ ẩn danh Bậc 1 của trợ lý (`cadguard mcp`/`ask`/`app`): đây là mức Bậc 2 (`plans/cad-guard-agent.md` mục 5.1), chỉ bật khi người dùng tích đồng ý trong phiên. Mỗi lượt gửi `SYSTEM_PROMPT` cố định + tối đa 10 lượt hội thoại trước + bản tóm tắt `studio/clusters.digest()`:
+
+| Phần | Nội dung |
+| --- | --- |
+| `units` | đơn vị bản vẽ (`mm` hoặc `INSUNITS=…`) |
+| `layers` | **tên layer thật** và số đối tượng |
+| `clusters[]` | mã cụm C1…, khung bao và kích thước (toạ độ thật), số đối tượng, tên layer, hình chữ nhật (tay cầm + toạ độ, tối đa `MAX_RECTS`), **chữ TEXT/MTEXT trong cụm** (tay cầm, nội dung, vị trí), số đo DIMENSION |
+| `inserts[]` | tay cầm, **tên khối thật**, điểm chèn, góc xoay, **giá trị thuộc tính** (tối đa 300 khối) |
+| `scene` | kết quả dựng 3D: số tường/mô-đun, tấm (toạ độ), phần thiếu (`gaps`), phần bỏ qua |
+| hội thoại | câu người dùng gõ, câu trả lời trước của LLM |
+
+Không gửi: đường dẫn, tên tệp, mã băm tệp, khoá API, nội dung ngoài phiên. Test: `test_requires_consent_and_no_path_leak`, `test_anthropic_backend_key_from_os_keyring_and_http`, `test_anthropic_backend_env_wins_and_errors_hide_key` (`tests/test_studio.py`).
 - Máy chủ chỉ nghe 127.0.0.1, kiểm Host, mã truy cập ngẫu nhiên mỗi lần chạy, không cho bind chồng cổng.
-- Chưa làm: thao tác "viết kịch bản ezdxf trong sandbox" (đã quyết để sau), đưa kết quả kiểm luật `audit` vào bản tóm tắt, bộ chấm chất lượng LLM, đo chi phí token, kiểm gói `anthropic` thật (mới kiểm lớp CLI).
+- Chưa làm: thao tác "viết kịch bản ezdxf trong sandbox" (đã quyết để sau), đưa kết quả kiểm luật `audit` vào bản tóm tắt, bộ chấm chất lượng LLM, đo chi phí token (đường API đã có test với máy chủ giả, chưa thử với Anthropic thật).
 
 ## 4. Tầng B và C — chỉ phác
 

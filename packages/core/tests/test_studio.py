@@ -179,8 +179,92 @@ def test_server_auth_and_flow(server, synthetic):
 
 
 def test_cli_studio_none_backend_rejects_bad(monkeypatch):
+    import sys
+
     from cadguard.studio import llm
 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    with pytest.raises(llm.LlmError):
+    monkeypatch.setitem(sys.modules, "keyring", None)  # khoá còn có thể đến từ kho khoá HĐH (assistant/keys.py): tắt
+    with pytest.raises(llm.LlmError, match="cadguard keys set anthropic"):
         llm.AnthropicBackend()
+
+
+# ---- khoá và đường HTTP của AnthropicBackend (máy chủ giả, không gọi mạng thật) ----------------------------------
+FAKE_KEY = "test-fake-studio-key-0123456789"
+
+
+@pytest.fixture
+def fake_anthropic():
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+    seen: list = []
+    status = {"code": 200}
+
+    class H(BaseHTTPRequestHandler):
+        def do_POST(self):  # noqa: N802
+            raw = self.rfile.read(int(self.headers.get("content-length", 0))).decode("utf-8")
+            seen.append({"path": self.path, "headers": {k.lower(): v for k, v in self.headers.items()}, "body": json.loads(raw)})
+            if status["code"] == 200:
+                payload = {"content": [{"type": "text", "text": json.dumps(VIEWS)}], "stop_reason": "end_turn"}
+            else:
+                payload = {"error": {"message": f"bad key {FAKE_KEY}"}}
+            data = json.dumps(payload).encode("utf-8")
+            self.send_response(status["code"])
+            self.send_header("content-type", "application/json")
+            self.send_header("content-length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def log_message(self, *a):
+            pass
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    yield {"url": f"http://127.0.0.1:{srv.server_address[1]}", "seen": seen, "status": status}
+    srv.shutdown()
+    srv.server_close()
+
+
+def _keyring_with(monkeypatch, value):
+    import sys
+    import types
+
+    mod = types.ModuleType("keyring")
+    mod.get_password = lambda service, user: value if (service, user) == ("cad-guard", "anthropic") else None
+    monkeypatch.setitem(sys.modules, "keyring", mod)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+
+def test_anthropic_backend_key_from_os_keyring_and_http(monkeypatch, fake_anthropic, synthetic, tmp_path):
+    """Studio dùng chung kho khoá (assistant/keys.py) và đường HTTP của trợ lý; không cần SDK `anthropic`."""
+    from cadguard.studio import llm
+
+    _keyring_with(monkeypatch, FAKE_KEY)
+    backend = llm.AnthropicBackend(base_url=fake_anthropic["url"])
+    assert FAKE_KEY not in repr(backend)
+    s = _sess(synthetic, "cabinet_nolayers.dxf", tmp_path)
+    s.backend = backend
+    s.ask(None)
+    assert [p.kind for p in s.proposals] == ["set_views"]
+    req = fake_anthropic["seen"][0]
+    assert req["path"] == "/v1/messages" and req["headers"]["x-api-key"] == FAKE_KEY
+    assert req["body"]["system"] == llm.SYSTEM_PROMPT and req["body"]["messages"][-1]["role"] == "user"
+    sent = json.dumps(req["body"], ensure_ascii=False)
+    assert str(tmp_path) not in sent and "source.dxf" not in sent and FAKE_KEY not in sent
+    assert not list(tmp_path.rglob("*key*"))  # không ghi khoá ra tệp
+
+
+def test_anthropic_backend_env_wins_and_errors_hide_key(monkeypatch, fake_anthropic, synthetic, tmp_path):
+    from cadguard.studio import llm
+
+    _keyring_with(monkeypatch, "khoa-trong-kho-khong-dung")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", FAKE_KEY)
+    backend = llm.AnthropicBackend(base_url=fake_anthropic["url"])
+    fake_anthropic["status"]["code"] = 500  # máy chủ trả lỗi kèm khoá trong chi tiết
+    s = _sess(synthetic, "cabinet_nolayers.dxf", tmp_path)
+    s.backend = backend
+    s.ask("hỏi")
+    assert fake_anthropic["seen"][0]["headers"]["x-api-key"] == FAKE_KEY
+    notes = " | ".join(s.notes)
+    assert "LLM lỗi" in notes and "HTTP 500" in notes and FAKE_KEY not in notes
+    assert FAKE_KEY not in json.dumps(s.state(), ensure_ascii=False)

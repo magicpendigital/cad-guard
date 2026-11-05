@@ -13,7 +13,8 @@ from .model import BlockRec, DrawingModel, EntityRec, LayerRec, LayoutRec, Model
 
 Z_TOL = 1e-6
 PROXY_TYPES = {"ACAD_PROXY_ENTITY", "PROXY", "ACAD_PROXY_OBJECT"}
-MAX_PTS = 10000
+MAX_PTS = 10000  # LWPOLYLINE nhiều đỉnh hơn: không ghi `pts` (giữ mô hình gọn)
+TEXT_MAX = 300  # TEXT/MTEXT: cắt nội dung ở số ký tự này
 POINT_ATTRS = ("start", "end", "center", "insert", "location")
 
 
@@ -83,7 +84,7 @@ def _entity_rec(e, space: str) -> EntityRec:
         elif t in ("TEXT", "MTEXT"):
             rec.text_style = str(e.dxf.get("style", "Standard"))
             try:
-                rec.text = (e.plain_text() if t == "MTEXT" else str(e.dxf.get("text", "")))[:300]
+                rec.text = (e.plain_text() if t == "MTEXT" else str(e.dxf.get("text", "")))[:TEXT_MAX]
                 rec.pos = _pt(e.dxf.insert)
             except Exception:  # noqa: BLE001
                 pass

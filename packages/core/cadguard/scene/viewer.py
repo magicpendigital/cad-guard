@@ -27,7 +27,7 @@ const L=(a,b,t)=>[a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t],P=(u
 for(let i=0;i<nu;i++)for(let j=0;j<nw;j++)cells.push({v:[P(i/nu,j/nw),P((i+1)/nu,j/nw),P((i+1)/nu,(j+1)/nw),P(i/nu,(j+1)/nw)],n:f.n,c:f.c,k:f.k})}
 faces.length=0;cells.forEach(x=>faces.push(x));
 for(const f of faces){f.p=f.v.map(pr);f.d=f.p.reduce((s,p)=>s+p[2],0)/f.p.length;const nx=f.n[0]*cy-f.n[1]*sy,ny=f.n[0]*sy+f.n[1]*cy,nz=f.n[2];f.vis=(ny*cp-nz*sp)<=0.0001;f.l=0.45+0.55*Math.max(0,(nx*-0.4+(nz*cp-ny*sp)*0.8+0.3))}
-faces.filter(f=>f.vis).sort((x,y)=>y.d-x.d).forEach(f=>{cx.beginPath();f.p.forEach((p,i)=>i?cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1]));cx.closePath();
+faces.filter(f=>f.vis).sort((x,y)=>y.d-x.d).forEach(f=>{cx.beginPath();f.p.forEach((p,i)=>i ? cx.lineTo(p[0],p[1]):cx.moveTo(p[0],p[1]));cx.closePath();
 cx.globalAlpha=(f.k==='wall'&&f.n[2]===0)?0.22:1;cx.fillStyle='rgb('+f.c.map(v=>Math.round(v*255*Math.min(1,f.l))).join(',')+')';cx.fill();cx.strokeStyle=cx.fillStyle;cx.lineWidth=0.7;cx.stroke()});cx.globalAlpha=1}
 let drag=null;cv.onmousedown=e=>drag=[e.clientX,e.clientY];addEventListener('mouseup',()=>drag=null);
 addEventListener('mousemove',e=>{if(!drag)return;yaw+=(e.clientX-drag[0])*0.01;pitch=Math.max(0.05,Math.min(1.5,pitch+(e.clientY-drag[1])*0.01));drag=[e.clientX,e.clientY];draw()});

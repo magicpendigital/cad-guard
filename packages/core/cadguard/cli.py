@@ -570,7 +570,8 @@ def main(argv: list[str] | None = None) -> int:
 
     st = sub.add_parser("studio", help="ứng dụng web cục bộ: trao đổi với LLM, xem 3D, bổ sung dữ liệu thiếu")
     st.add_argument("--port", type=int, default=8770)
-    st.add_argument("--backend", choices=["auto", "api", "cli", "none"], default="auto", help="api = ANTHROPIC_API_KEY; cli = lệnh claude nguyên bản")
+    st.add_argument("--backend", choices=["auto", "api", "cli", "none"], default="auto", help="api = khoá Anthropic của bạn (biến ANTHROPIC_API_KEY hoặc `cadguard keys set anthropic`); "
+                    "cli = lệnh claude nguyên bản; none = không LLM")
     st.add_argument("--open", action="store_true", help="mở trình duyệt")
     st.set_defaults(fn=cmd_studio)
 

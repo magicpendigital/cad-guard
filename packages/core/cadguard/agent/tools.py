@@ -19,6 +19,13 @@ from .workspace import Workspace
 
 MAX_QUERY_RECORDS = 500
 MAX_QUERY_BYTES = 65536
+# Trường `EntityRec` mà query_model trả về khi bật ẩn danh (Bậc 1): danh sách TRẮNG, nên trường mới thêm vào mô hình
+# không tự lọt ra cho trợ lý. Không có nội dung chữ (`text`, `attribs`, `dim_text`), không có toạ độ (`pts`, `pos`,
+# `insert`, `dup_key` chứa toạ độ); chỉ số liệu vô hướng. Tắt ẩn danh (--no-anonymize) thì trả mọi trường như trước.
+QUERY_FIELDS_ANON = frozenset({"handle", "type", "layer", "space", "length", "area", "closed", "has_nonzero_z",
+                               "text_style", "block", "is_proxy", "color", "lineweight", "true_color",
+                               "rotation", "xscale", "yscale", "radius", "dim_value"})
+QUERY_EXCLUDE = frozenset({"attribs", "dim_text", "dup_key"})
 
 
 class ToolError(ValueError):
@@ -218,7 +225,7 @@ def query_model(ctx: ToolContext, file: str, filter: dict, limit: int = 100, cur
     limit = max(1, min(MAX_QUERY_RECORDS, int(limit)))
     items = []
     for e in matched[offset:offset + limit]:
-        item = e.model_dump(exclude={"attribs", "dim_text", "dup_key"})
+        item = e.model_dump(include=set(QUERY_FIELDS_ANON)) if anon.enabled else e.model_dump(exclude=set(QUERY_EXCLUDE))
         item["layer"] = anon.token("layer", e.layer)
         item["space"] = anon.token("layout", e.space)
         item["block"] = anon.token("block", e.block) if e.block else None
@@ -264,7 +271,7 @@ def _attr_value(anon, attr, value):
     kind = _ATTR_KIND.get(attr)
     if kind and isinstance(value, str):
         return anon.token(kind, value)
-    if isinstance(value, str):
+    if isinstance(value, (str, list, tuple, dict)):  # chữ và toạ độ (điểm chèn, đỉnh...) bị che; số vô hướng giữ
         return REDACTED
     return value
 

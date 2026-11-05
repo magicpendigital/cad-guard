@@ -117,7 +117,8 @@ def changed_attrs(a: EntSnap, b: EntSnap) -> dict[str, tuple[Any, Any]]:
     out = {}
     for k in sorted(set(a.attrs) | set(b.attrs)):
         va, vb = a.attrs.get(k), b.attrs.get(k)
-        if va != vb:
+        # Vec3 của ezdxf so với None (thuộc tính chỉ có ở một bên, vd. cùng handle khác loại) ném TypeError.
+        if (va is None) != (vb is None) or (va is not None and va != vb):
             out[k] = (va, vb)
     if not out and a.tags != b.tags:
         out["data"] = (None, None)

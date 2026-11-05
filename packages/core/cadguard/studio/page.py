@@ -169,7 +169,7 @@ const T=new URLSearchParams(location.search).get('t');let S=null,tab='chat',fnam
 const V=makeViewer(document.getElementById('c'));
 const $=id=>document.getElementById(id);
 function h(tag,attrs,...kids){const e=document.createElement(tag);for(const[k,v]of Object.entries(attrs||{})){if(k==='class')e.className=v;else if(k.startsWith('on'))e[k]=v;else e.setAttribute(k,v)}
-for(const c of kids)if(c!=null)e.append(c instanceof Node?c:document.createTextNode(String(c)));return e}
+for(const c of kids)if(c!=null)e.append(c instanceof Node ? c : document.createTextNode(String(c)));return e}
 const ICON={file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>',warn:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>',chat:'<path d="M21 12a8 8 0 01-11.5 7.2L4 20l1-4.6A8 8 0 1121 12z"/>',chg:'<path d="M7 4v12a3 3 0 003 3h7M17 4v8M14 7l3-3 3 3"/>',eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'};
 function ic(n){const s=document.createElementNS('http://www.w3.org/2000/svg','svg');s.setAttribute('class','i');s.setAttribute('viewBox','0 0 24 24');s.innerHTML=ICON[n]||'';return s}
 async function call(path,opts){const r=await fetch(path,Object.assign({headers:{'X-CG-Token':T}},opts||{}));if(!r.ok){let m=await r.text();try{m=JSON.parse(m).error||m}catch(e){}throw new Error(m)}return r}
@@ -181,11 +181,11 @@ function render(){
   const sc=S.scene,pend=S.proposals.filter(p=>p.status==='pending');
   $('bk').textContent=S.backend||'LLM (chưa có)';$('chatEng').textContent=S.backend||'chưa có LLM';$('consent').checked=S.consent;$('consent').disabled=!S.backend;
   $('dataMode').textContent=S.consent?'Toàn bộ nội dung bản vẽ':'Chưa đồng ý';$('editCnt').textContent=S.edits;
-  $('undo').disabled=!S.can_undo||busy;$('cvTitle').textContent=fname;$('glb').href='/api/glb?t='+T;
+  $('undo').disabled=!S.can_undo||busy;$('cvTitle').textContent=fname;$('glb').href='/api/glb?'+'t='+T;
   $('cvInfo').textContent=sc.panels.length+' tấm · '+sc.modules+' mô-đun · '+sc.walls+' đoạn tường · '+S.clusters.length+' cụm hình học';
   $('empty3d').style.display=sc.boxes.length?'none':'grid';V.set(sc.boxes);
   const files=$('files');files.replaceChildren(h('button',{class:'file','aria-current':'true'},h('span',{class:'n'},ic('file'),fname),h('span',{class:'m'},
-    h('span',{class:'pill '+(sc.gaps.length||!sc.boxes.length?'warn':'ok')},sc.gaps.length?sc.gaps.length+' phần thiếu':!sc.boxes.length?'Chưa dựng được 3D':'Đủ dữ liệu'),h('span',{class:'pill neu'},'#'+S.hash.slice(0,6)))));
+    h('span',{class:'pill '+(sc.gaps.length||!sc.boxes.length?'warn':'ok')},sc.gaps.length ? sc.gaps.length+' phần thiếu':!sc.boxes.length?'Chưa dựng được 3D':'Đủ dữ liệu'),h('span',{class:'pill neu'},'#'+S.hash.slice(0,6)))));
   for(const c of S.clusters)files.append(h('div',{class:'file child'},h('span',{class:'n'},c.id),h('span',{class:'m'},h('span',{class:'pill neu'},c.size[0]+'×'+c.size[1]),h('span',{class:'pill neu'},c.entities+' nét'),...c.layers.slice(0,3).map(l=>h('span',{class:'pill info'},l)))));
   const tabs=[['chat','chat','Trợ lý',0],['gaps','warn','Thiếu',sc.gaps.length],['props','chg','Thay đổi',pend.length],['obs','eye','Nhận xét',S.observations.length]];
   $('tabs').replaceChildren(...tabs.map(([k,i,t,n])=>{const b=h('button',{role:'tab','aria-selected':k===tab},ic(i),t);if(k!=='chat')b.append(h('span',{class:'cnt'+(k==='gaps'&&n?' hot':'')},n));b.onclick=()=>setTab(k);return b}));
@@ -199,7 +199,7 @@ function render(){
   log.scrollTop=log.scrollHeight;
   const ok=S.backend&&S.consent&&!busy;const sug=$('sug');sug.replaceChildren();
   for(const[t,q,pr]of[['Phân tích bản vẽ',null,true],['Tìm điểm bất hợp lý','Tìm các điểm bất hợp lý hoặc lỗ hổng kỹ thuật trong bản vẽ này.'],['Cần bổ sung gì để dựng 3D?','Để dựng 3D đầy đủ và chính xác, còn thiếu thông tin gì? Hãy hỏi tôi.']]){
-    const b=h('button',{class:pr?'primary':''},t);b.disabled=!ok;b.onclick=()=>q?post('/api/chat',{message:q}):post('/api/analyze');sug.append(b)}
+    const b=h('button',{class:pr?'primary':''},t);b.disabled=!ok;b.onclick=()=>q ? post('/api/chat',{message:q}):post('/api/analyze');sug.append(b)}
   $('send').disabled=!ok;
   // thiếu
   const gl=$('gaps');gl.replaceChildren();const inputs=[];

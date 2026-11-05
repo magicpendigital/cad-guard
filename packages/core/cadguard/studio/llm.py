@@ -1,6 +1,8 @@
 """Các lớp nối LLM. Mỗi lớp chỉ có `complete(system, messages) -> str` (văn bản, kỳ vọng là JSON).
 
-- AnthropicBackend: khoá từ biến môi trường ANTHROPIC_API_KEY (không ghi ra tệp); cần `pip install -e .[llm]`.
+- AnthropicBackend: Messages API qua `assistant.api_engines.post_json` (thư viện chuẩn, không cần SDK `anthropic`);
+  khoá lấy bằng `assistant.keys.get_key("anthropic")`: biến môi trường ANTHROPIC_API_KEY, rồi kho khoá hệ điều hành
+  (`cadguard keys set anthropic`). Không ghi khoá ra tệp; lỗi HTTP đã che khoá.
 - ClaudeCliBackend: chạy nguyên bản CLI `claude -p` trong thư mục rỗng, TẮT mọi công cụ file/shell; người dùng tự đăng nhập.
 - FakeBackend: cho test, trả kịch bản có sẵn.
 """
@@ -14,7 +16,12 @@ import subprocess
 import tempfile
 from typing import Protocol
 
+from ..assistant.api_engines import ANTHROPIC_VERSION, PROVIDERS, HttpError, post_json, provider_base_url
+from ..assistant.keys import get_key
+
 DEFAULT_MODEL = "claude-sonnet-5-5"
+MAX_OUTPUT_TOKENS = 4096
+NETWORK_TIMEOUT = 300.0
 
 
 class Backend(Protocol):
@@ -40,22 +47,31 @@ class FakeBackend:
 
 
 class AnthropicBackend:
+    """Gọi Anthropic Messages API bằng khoá của người dùng; dùng chung đường HTTP và kho khoá với trợ lý (`assistant/`)."""
+
     name = "anthropic-api"
 
-    def __init__(self, model: str | None = None) -> None:
-        try:
-            import anthropic
-        except ImportError as exc:
-            raise LlmError("Chưa cài gói anthropic: pip install -e .[llm]") from exc
-        key = os.environ.get("ANTHROPIC_API_KEY")
+    def __init__(self, model: str | None = None, base_url: str | None = None) -> None:
+        key = get_key("anthropic")
         if not key:
-            raise LlmError("Chưa đặt biến môi trường ANTHROPIC_API_KEY.")
-        self.client = anthropic.Anthropic(api_key=key)
-        self.model = model or os.environ.get("CADGUARD_MODEL", DEFAULT_MODEL)
+            raise LlmError("Chưa có khoá API Anthropic: đặt biến môi trường ANTHROPIC_API_KEY hoặc chạy "
+                           "`cadguard keys set anthropic` (lưu trong kho khoá hệ điều hành, không ghi ra tệp).")
+        self._key = key
+        self.model = (model or os.environ.get("CADGUARD_MODEL") or os.environ.get("CADGUARD_ANTHROPIC_MODEL")
+                      or DEFAULT_MODEL)
+        self.base_url = provider_base_url(PROVIDERS["anthropic"], base_url)
+
+    def __repr__(self) -> str:  # không bao giờ in khoá
+        return f"<AnthropicBackend model={self.model}>"
 
     def complete(self, system: str, messages: list[dict]) -> str:
-        r = self.client.messages.create(model=self.model, max_tokens=4096, system=system, messages=messages)
-        return "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
+        body = {"model": self.model, "max_tokens": MAX_OUTPUT_TOKENS, "system": system, "messages": messages}
+        headers = {"x-api-key": self._key, "anthropic-version": ANTHROPIC_VERSION}
+        try:
+            resp = post_json(f"{self.base_url}/v1/messages", body, headers, NETWORK_TIMEOUT, self._key)
+        except HttpError as exc:  # thông điệp tiếng Việt, đã che khoá
+            raise LlmError(str(exc)) from None
+        return "".join(b.get("text", "") for b in resp.get("content") or [] if isinstance(b, dict) and b.get("type") == "text")
 
 
 class ClaudeCliBackend:

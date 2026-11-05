@@ -19,7 +19,8 @@ dev = ["pytest>=8"]
 agent = ["mcp>=1.10,<2"]
 # Kho khoá hệ điều hành cho `cadguard keys` (tuỳ chọn; MIT, xem docs/licenses.md). Không có thì dùng biến môi trường.
 keyring = ["keyring>=25,<26"]
-llm = ["anthropic>=0.40"]
+# Studio (`cadguard studio`) gọi Anthropic qua thư viện chuẩn như trợ lý (assistant/api_engines.py): không cần
+# SDK `anthropic`, nên không có extras `llm` (xem docs/licenses.md mục SDK anthropic).
 
 [project.scripts]
 cadguard = "cadguard.cli:main"

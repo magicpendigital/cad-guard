@@ -31,6 +31,10 @@ FLOAT_FIELDS = {"length", "area"}
 REL_TOL = 1e-9
 
 
+# Mọi fixture do `fixtures.make_all` sinh: bộ chính ở thư mục gốc, bộ dựng 3D (scene/studio) ở thư mục con scene/.
+ALL_FIXTURES = sorted(fixtures.ALL) + [f"scene/{n}" for n in sorted(fixtures.SCENE_FIXTURES)]
+
+
 def _diff(a, b, path: str = "") -> list[str]:
     if isinstance(a, dict) and isinstance(b, dict):
         out = [] if set(a) == set(b) else [f"{path}: khoá khác {sorted(set(a) ^ set(b))}"]
@@ -66,15 +70,16 @@ def _findings(model, standard) -> Counter:
 
 def test_synthetic_set_is_complete(synthetic):
     assert {p.name for p in synthetic.glob("*.dxf")} == set(fixtures.ALL)
+    assert {p.name for p in (synthetic / "scene").glob("*.dxf")} == set(fixtures.SCENE_FIXTURES)
     assert "model_features.dxf" in fixtures.ALL
 
 
-@pytest.mark.parametrize("name", sorted(fixtures.ALL))
+@pytest.mark.parametrize("name", ALL_FIXTURES)
 def test_stream_model_matches_ezdxf(synthetic, name):
     assert_same_model(synthetic / name)
 
 
-@pytest.mark.parametrize("name", sorted(fixtures.ALL))
+@pytest.mark.parametrize("name", ALL_FIXTURES)
 def test_stream_audit_matches_ezdxf(synthetic, standard, name):
     path = synthetic / name
     assert _findings(read_dxf_stream(path), standard) == _findings(read_dxf(path), standard)
@@ -158,6 +163,37 @@ def test_cp1258_r2000_match_ezdxf(tmp_path):
     assert "SYN-ĐƯƠNG" in {la.name for la in read_dxf_stream(path).layers}
 
 
+def test_geometry_and_content_fields_match_ezdxf(tmp_path):
+    """Trường hình học/nội dung (pts, insert, rotation, xscale, yscale, text, pos, dim_value, radius) khớp ezdxf
+    trên đủ loại DIMENSION, MTEXT nhiều khúc có mã định dạng, INSERT xoay/co giãn."""
+    doc = ezdxf.new("R2018", setup=True)
+    blk = doc.blocks.new("SYN-B")
+    blk.add_line((0, 0), (1, 1))
+    msp = doc.modelspace()
+    msp.add_blockref("SYN-B", (12.34567, -8.5), dxfattribs={"rotation": 33.3, "xscale": 2.5, "yscale": -1.25})
+    msp.add_mtext("{\\fArial|b1;Đậm} dòng 1\\Pdòng 2 " +"chữ dài SYN " * 40, dxfattribs={"insert": (3, 4)})
+    msp.add_text("Chữ SYN", dxfattribs={"insert": (7.123456, 8.5)})
+    msp.add_circle((1.5, 2.25), 3.125)
+    msp.add_lwpolyline([(0, 0), (1.23456789, 0), (1, 1)])
+    msp.add_linear_dim(base=(0, 5), p1=(0, 0), p2=(10, 3), angle=30).render()
+    msp.add_aligned_dim(p1=(0, 0), p2=(7, 7), distance=2).render()
+    msp.add_radius_dim(center=(20, 20), radius=4.5, angle=45).render()
+    msp.add_diameter_dim(center=(30, 20), radius=2.75, angle=10).render()
+    msp.add_angular_dim_2l(base=(5, 5), line1=((0, 0), (10, 0)), line2=((0, 0), (10, 10))).render()
+    msp.add_angular_dim_3p(base=(5, 5), center=(0, 0), p1=(10, 0), p2=(0, 10)).render()
+    msp.add_ordinate_x_dim(feature_location=(3, 4), offset=(2, 2)).render()
+    path = tmp_path / "fields.dxf"
+    doc.saveas(path)
+    assert_same_model(path)
+    ents = read_dxf_stream(path).entities
+    dims = [e.dim_value for e in ents if e.type == "DIMENSION"]
+    assert len(dims) == 7 and sum(v is not None for v in dims) == 6  # kích thước toạ độ: không có số đo vô hướng
+    mtext = next(e for e in ents if e.type == "MTEXT")
+    assert mtext.text.startswith("Đậm dòng 1\ndòng 2") and len(mtext.text) == 300
+    ins = next(e for e in ents if e.type == "INSERT")
+    assert (ins.insert, ins.rotation, ins.xscale, ins.yscale) == ((12.3457, -8.5), 33.3, 2.5, -1.25)
+
+
 def test_bad_bytes_are_replaced_not_raised(tmp_path, synthetic):
     data = (synthetic / "ok_sheet.dxf").read_bytes()
     path = tmp_path / "bad_utf8.dxf"
@@ -231,7 +267,7 @@ def test_cli_reader_stream_on_fixture_dir(synthetic, capsys):
     code_s, rep_s, _ = _cli_json(capsys, str(synthetic), "--reader", "stream")
     code_e, rep_e, _ = _cli_json(capsys, str(synthetic), "--reader", "ezdxf")
     assert code_s == code_e == 1
-    assert len(rep_s["files"]) == len(fixtures.ALL)
+    assert len(rep_s["files"]) == len(ALL_FIXTURES)  # thư mục được quét đệ quy, gồm cả scene/
     assert _strip(rep_s) == _strip(rep_e)
 
 

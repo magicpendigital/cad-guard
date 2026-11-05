@@ -10,21 +10,24 @@ Windows (PowerShell):
 
 - Cài và thử một lượt: `scripts\bootstrap.ps1`
 - Cài tay: `cd packages\core; python -m venv .venv; .venv\Scripts\pip install -e .[dev]`
-- Test: `cd packages\core; .venv\Scripts\pytest -q`
+- Test: `cd packages\core; .venv\Scripts\pytest -q`; agent/CI dùng venv chung: `python scripts/test.py [--extras agent]`. Kiểm thêm: `python scripts/bench.py` (12 tác vụ), `python scripts/check_repo_hygiene.py`
 - Quét thử: `.venv\Scripts\python -m cadguard audit ..\..\fixtures\synthetic --out report.html`
 - Liệt kê luật và tình trạng: `python -m cadguard rules`
 - Số tổng hợp cho MCA: `python -m cadguard stats --json`
 - Sinh lại DXF tổng hợp: `python -m cadguard fixtures fixtures/synthetic`
+- Sửa an toàn (xem trước → xác nhận → tệp mới → hoàn tác): `propose`, `apply`, `undo`, `diff`, `validate` (`docs/changeset.md`)
+- Trợ lý AI ẩn danh Bậc 1: máy chủ MCP chỉ đọc `python -m cadguard mcp --workspace <thư mục>` (extras `[agent]`); hỏi một lần `cadguard ask`, trò chuyện `cadguard chat`, `cadguard engines`, khoá API `cadguard keys set|status|delete <nhà cung cấp>` (`docs/assistant.md`)
+- Giao diện cục bộ kiểm luật + trợ lý: `python -m cadguard app --workspace <thư mục>` (`docs/app.md`)
 - Dựng 3D tất định: `python -m cadguard scene <dxf> --out cảnh.glb|.html|.json [--form form.html] [--supplement x.cgsup.json] [--with khac.dxf]`
-- Studio (web cục bộ + LLM): `python -m cadguard studio [--backend auto|api|cli|none]` (xem `plans/cad-guard-3d.md` mục 3c)
+- Studio (web cục bộ, LLM xem nội dung bản vẽ sau khi đồng ý từng phiên, dựng 3D, bổ sung phần thiếu): `python -m cadguard studio [--backend auto|api|cli|none]` (`plans/cad-guard-3d.md` mục 3c)
 
 macOS/Linux: thay `.venv\Scripts\` bằng `.venv/bin/`.
 
 ## Cấu trúc
 
-- `packages/core/cadguard/`: `model.py` (Drawing Model `cg.drawing/1`), `dxf_reader.py` (DXF → mô hình), `rules/` (mỗi luật một hàm `@rule("<mã>")`), `standard.py` (nạp `standards/*.yaml`), `runner.py`, `report.py` (JSON + HTML tiếng Việt), `telemetry.py`, `stats.py`, `fixtures.py`, `cli.py`.
-- `standards/furniture-v0.yaml`: luật + tham số có phiên bản. `furniture-v0.md`: nội dung chuẩn.
-- `fixtures/synthetic/`: DXF **tổng hợp** do `fixtures.py` sinh. Không phải bản vẽ khách.
+- `packages/core/cadguard/`: `model.py` (Drawing Model `cg.drawing/1`, `docs/drawing-model.md`), `dxf_reader.py` (DXF → mô hình qua ezdxf), `dxf_stream.py` (bộ đọc theo dòng cho tệp rất lớn, phải khớp `dxf_reader` trên mọi fixture: trường mới thêm vào mô hình phải cài ở **cả hai** bộ đọc), `rules/` (mỗi luật một hàm `@rule("<mã>")`), `standard.py` (nạp `standards/*.yaml`, hồ sơ công ty), `runner.py`, `report.py` (JSON + HTML tiếng Việt), `changeset/` (đề xuất/áp dụng/hoàn tác), `agent/` (công cụ trợ lý + ẩn danh), `mcp_server.py`, `assistant/` (engine CLI/API, khoá), `app/` (giao diện cục bộ), `scene/` (dựng 3D), `studio/` (web cục bộ + LLM), `telemetry.py`, `stats.py`, `fixtures.py`, `cli.py`.
+- `standards/furniture-v0.yaml`, `design-hygiene-v0.yaml`: luật + tham số có phiên bản; `*.md`: nội dung chuẩn; `company-profile.example.yaml`: mẫu hồ sơ công ty.
+- `fixtures/synthetic/`: DXF **tổng hợp** do `fixtures.py` sinh (bộ chính `ALL`; bộ dựng 3D `SCENE_FIXTURES` trong `scene/`). Không phải bản vẽ khách.
 - `scripts/metrics.mjs`: đưa số tổng hợp cho MCA (nguồn `cmd` của điều lệ).
 
 ## Thêm một luật (quy trình bắt buộc)
@@ -45,5 +48,6 @@ macOS/Linux: thay `.venv\Scripts\` bằng `.venv/bin/`.
 - Không bật `realtime_ok` cho luật chưa đo độ chính xác (P1c).
 - Không sửa bản vẽ nếu thiếu bước xem trước + xác nhận + hoàn tác; chỉnh sửa luôn ghi ra tệp **mới**.
 - Telemetry và số xuất ra ngoài chỉ là số tổng hợp, không tên tệp/khách/thợ vẽ, không đường dẫn (dùng mã băm).
-- Không ghi khoá API/token ra tệp. Không dùng thư viện đọc DWG có giấy phép copyleft hoặc phi thương mại (xem `docs/licenses.md`).
+- Trợ lý (MCP, `ask`, `app`) mặc định ẩn danh Bậc 1: kết quả công cụ không có tên thật, chữ, giá trị thuộc tính hay toạ độ (`agent/tools.py` dùng danh sách trắng trường). Trường mới chứa nội dung bản vẽ không được tự lọt ra; có test chặn.
+- Không ghi khoá API/token ra tệp; mọi khoá đọc qua `assistant/keys.py` (biến môi trường hoặc kho khoá hệ điều hành). Không dùng thư viện đọc DWG có giấy phép copyleft hoặc phi thương mại (xem `docs/licenses.md`).
 - Không `git push`. Thông báo cho người dùng bằng tiếng Việt; tên hàm/biến bằng tiếng Anh.
