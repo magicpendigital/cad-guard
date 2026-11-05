@@ -15,6 +15,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8"]
+llm = ["anthropic>=0.40"]
 
 [project.scripts]
 cadguard = "cadguard.cli:main"

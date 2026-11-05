@@ -123,6 +123,67 @@ def cmd_fixtures(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_scene(args: argparse.Namespace) -> int:
+    import json
+
+    from .dxf_reader import read_dxf
+    from .scene import build_scene, load_supplement, render_form, render_html, write_glb
+
+    model = read_dxf(args.path)
+    for extra in args.with_ or []:  # bổ sung hình chiếu còn thiếu từ DXF khác; mã tay cầm thêm tiền tố để khỏi trùng
+        for e in read_dxf(extra).entities:
+            e.handle = f"x{len(model.entities)}-{e.handle}"
+            model.entities.append(e)
+    supp: dict = {}
+    notes: list[str] = []
+    if args.supplement:
+        supp, note = load_supplement(json.loads(Path(args.supplement).read_text(encoding="utf-8")), model.file_hash)
+        if note:
+            notes.append(note)
+    sc = build_scene(model, supp)
+    sc.notes.extend(notes)
+    out = Path(args.out)
+    if out.suffix.lower() == ".html":
+        out.write_text(render_html(sc), encoding="utf-8")
+    elif out.suffix.lower() == ".json":
+        out.write_text(sc.model_dump_json(by_alias=True, indent=2), encoding="utf-8")
+    else:
+        write_glb(sc, out)
+    if args.form and sc.gaps:
+        Path(args.form).write_text(render_form(sc), encoding="utf-8")
+    print(f"{len(sc.walls)} đoạn tường, {len(sc.modules)} mô-đun, {len(sc.panels)} tấm, {len(sc.gaps)} phần thiếu, {len(sc.skipped)} bỏ qua -> {out}")
+    for note in sc.notes:
+        print(note, file=sys.stderr)
+    for g in sc.gaps:
+        print(f"thiếu [{g.kind}] {g.message}", file=sys.stderr)
+    for sk in sc.skipped:
+        print(f"bỏ qua {sk.handle}: {sk.reason}", file=sys.stderr)
+    if sc.gaps and args.form:
+        print(f"Form bổ sung: {args.form}", file=sys.stderr)
+    if sc.gaps:
+        return 3  # đã ghi phần dựng được; còn phần thiếu cần bổ sung
+    return 0 if (sc.walls or sc.modules or sc.panels) else 2
+
+
+def cmd_studio(args: argparse.Namespace) -> int:
+    from .studio.llm import AnthropicBackend, ClaudeCliBackend, LlmError, auto_backend
+    from .studio.server import serve
+
+    backend = None
+    try:
+        if args.backend == "auto":
+            backend = auto_backend()
+        elif args.backend == "api":
+            backend = AnthropicBackend()
+        elif args.backend == "cli":
+            backend = ClaudeCliBackend()
+    except LlmError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    serve(args.port, backend, open_browser=args.open)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     _utf8()
     p = argparse.ArgumentParser(prog="cadguard", description="cad-guard: kiểm tra bản vẽ theo luật tất định")
@@ -158,6 +219,20 @@ def main(argv: list[str] | None = None) -> int:
     f = sub.add_parser("fixtures", help="sinh lại DXF tổng hợp")
     f.add_argument("out_dir", nargs="?", default="fixtures/synthetic")
     f.set_defaults(fn=cmd_fixtures)
+
+    sc = sub.add_parser("scene", help="dựng 3D tất định từ DXF (.glb, .html hoặc .json)")
+    sc.add_argument("path")
+    sc.add_argument("--out", required=True, help="tệp đầu ra: .glb, .html hoặc .json")
+    sc.add_argument("--form", help="nếu còn phần thiếu: ghi form HTML để nhập bổ sung")
+    sc.add_argument("--supplement", help="tệp .cgsup.json (tải từ form) chứa giá trị bổ sung")
+    sc.add_argument("--with", dest="with_", action="append", help="DXF bổ sung hình chiếu còn thiếu (có thể lặp)")
+    sc.set_defaults(fn=cmd_scene)
+
+    st = sub.add_parser("studio", help="ứng dụng web cục bộ: trao đổi với LLM, xem 3D, bổ sung dữ liệu thiếu")
+    st.add_argument("--port", type=int, default=8770)
+    st.add_argument("--backend", choices=["auto", "api", "cli", "none"], default="auto", help="api = ANTHROPIC_API_KEY; cli = lệnh claude nguyên bản")
+    st.add_argument("--open", action="store_true", help="mở trình duyệt")
+    st.set_defaults(fn=cmd_studio)
 
     args = p.parse_args(argv)
     try:
