@@ -37,13 +37,20 @@ class Workspace:
             raise PathDenied("Chỉ cho phép tệp DXF thông thường")
         return path
 
-    def list_dxf(self, rel_dir: str = ".") -> list[Path]:
-        """Liệt kê tệp DXF an toàn trong thư mục con."""
+    def list_dxf(self, rel_dir: str = ".", *, limit: int | None = None, max_dirs: int | None = None) -> list[Path]:
+        """Liệt kê tệp DXF an toàn trong thư mục con.
+
+        `limit`: dừng khi đã thấy đủ số tệp; `max_dirs`: dừng sau số thư mục đã duyệt (trần cho thư mục rất lớn).
+        """
         directory = self._resolve(rel_dir)
         if not directory.is_dir():
             raise PathDenied("Cần một thư mục hợp lệ")
         result = []
+        walked = 0
         for base, dirs, files in os.walk(directory, followlinks=False):
+            walked += 1
+            if (limit is not None and len(result) >= limit) or (max_dirs is not None and walked > max_dirs):
+                break
             base_path = Path(base)
             safe_dirs = []
             for name in dirs:
@@ -54,7 +61,9 @@ class Workspace:
                 except (OSError, RuntimeError):
                     continue
             dirs[:] = safe_dirs
-            for name in files:
+            for name in sorted(files):
+                if limit is not None and len(result) >= limit:
+                    break
                 p = base_path / name
                 try:
                     if p.suffix.lower() == ".dxf":

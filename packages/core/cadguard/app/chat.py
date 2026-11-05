@@ -4,6 +4,8 @@
 - Một lượt = `Engine.run(...)` trong luồng nền; sự kiện đi qua hàng đợi tới luồng HTTP (NDJSON). Dừng = `CancelToken`.
 - Trợ lý chỉ có `propose_changeset` khi người dùng bật công tắc; áp dụng LUÔN do người bấm trong giao diện.
 - Ẩn danh Bậc 1 mặc định (`server_options={"anonymize": True}`); tắt chỉ bằng cờ dòng lệnh `--no-anonymize`.
+- Cấu hình hiệu lực = cờ dòng lệnh HOẶC cấu hình trên giao diện (màn Kết nối AI, `settings.py`): bật thử nghiệm Codex,
+  OpenRouter, loại tài khoản agy, mô hình mặc định, trần chi phí mỗi phiên (truyền vào engine API).
 """
 from __future__ import annotations
 
@@ -17,7 +19,8 @@ from typing import Any, Callable
 
 from ..assistant import API_ENGINES, CLI_ENGINES, CancelToken, EngineError, create_engine, engine_infos
 from ..assistant.events import Usage
-from .api import ApiError, AppData
+from .api import ApiError, AppConfig, AppData
+from .settings import DEFAULT_AI, connection
 
 MAX_MESSAGES = 60
 MAX_MESSAGE_CHARS = 20000
@@ -25,7 +28,8 @@ MAX_TOOL_TEXT = 4000
 MODEL_RE = re.compile(r"^[A-Za-z0-9._:/@\-]{1,120}$")
 STOP_GRACE_S = 5.0
 
-AGY_HINT = "Chỉ tài khoản doanh nghiệp hoặc khoá API: khởi động lại với `cadguard app ... --account business` (hoặc api-key)."
+AGY_HINT = ("Chỉ tài khoản doanh nghiệp hoặc khoá API: chọn loại tài khoản ở màn Kết nối AI "
+            "(hoặc khởi động với `cadguard app ... --account business`/api-key).")
 
 
 def _default_detect(name: str) -> dict:
@@ -41,11 +45,14 @@ class ChatRun:
 
 
 class Assistant:
-    """Engine + lượt trò chuyện của một phiên ứng dụng."""
+    """Engine + lượt trò chuyện của một phiên ứng dụng (dự án có thể đổi lúc chạy: `self.data`)."""
 
-    def __init__(self, data: AppData, *, engine_factory: Callable[..., Any] | None = None,
+    def __init__(self, data: AppData | None, *, config: AppConfig | None = None,
+                 ai_settings: Callable[[], dict] | None = None, engine_factory: Callable[..., Any] | None = None,
                  engine_lister: Callable[[], list] | None = None, cli_detect: Callable[[str], dict] | None = None):
         self.data = data
+        self.config = config or (data.config if data is not None else AppConfig())
+        self.ai_settings = ai_settings or (lambda: dict(DEFAULT_AI))
         self.engine_factory = engine_factory or create_engine
         self.engine_lister = engine_lister or engine_infos
         self.cli_detect = cli_detect or _default_detect
@@ -53,18 +60,29 @@ class Assistant:
         self._runs: dict[str, ChatRun] = {}
         self._lock = threading.Lock()
 
+    # ---------- cấu hình hiệu lực ----------
+
+    def effective(self) -> dict:
+        cfg, ai = self.config, self.ai_settings()
+        return {"experimental": bool(cfg.experimental or ai.get("codex_experimental")),
+                "allow_openrouter": bool(cfg.allow_openrouter or ai.get("allow_openrouter")),
+                "account": cfg.account or ai.get("agy_account"),
+                "max_cost_usd": ai.get("max_cost_usd"), "ollama_base_url": ai.get("ollama_base_url"),
+                "default_engine": ai.get("default_engine"), "ai": ai}
+
     # ---------- danh sách engine ----------
 
     def engines(self, refresh: bool = False) -> dict:
         from ..assistant.api_engines import PROVIDERS, provider_model
         from ..assistant.keys import key_status
 
-        cfg = self.data.config
+        eff = self.effective()
         out = []
         for info in self.engine_lister():
             row = {"name": info.name, "mode": info.mode, "title": info.title, "terms": info.terms,
                    "experimental": bool(info.experimental), "default_off": bool(info.default_off),
-                   "available": True, "reason": "", "status": "", "model": None, "needs_model": False, "hint": ""}
+                   "available": True, "reason": "", "status": "", "model": None, "needs_model": False, "hint": "",
+                   "installed": None, "logged_in": None, "version": None}
             if info.mode == "cli":
                 if refresh or info.name not in self._detect_cache:
                     try:
@@ -72,6 +90,9 @@ class Assistant:
                     except Exception:  # noqa: BLE001 — kiểm hỏng: coi như chưa cài
                         self._detect_cache[info.name] = {"installed": False, "version": None, "logged_in": None}
                 d = self._detect_cache[info.name]
+                row.update(installed=d.get("installed"), logged_in=d.get("logged_in"),
+                           version=(str(d.get("version"))[:80] if d.get("version") else None))
+                row["model"] = connection(eff["ai"], info.name).get("model")
                 if d.get("installed") is None:
                     row.update(available=False, reason="Chưa kiểm CLI (--no-detect).", status="chưa kiểm",
                                hint="Khởi động lại không có --no-detect để cad-guard kiểm CLI đã cài/đăng nhập chưa.")
@@ -83,16 +104,16 @@ class Assistant:
                                      None: "đã cài, không rõ đăng nhập"}[login]
                     if login is False:
                         row.update(available=False, reason="Chưa đăng nhập CLI.",
-                                   hint={"claude-cli": "Mở terminal, chạy `claude auth login`.",
-                                         "codex-cli": "Mở terminal, chạy `codex login`."}.get(info.name, "Mở CLI để đăng nhập."))
-                if info.name == "codex-cli" and not cfg.experimental:
-                    row.update(available=False, reason="Thử nghiệm: cần khởi động với --experimental.",
+                                   hint="Bấm “Đăng nhập” ở màn Kết nối AI (mở cửa sổ đăng nhập của chính CLI).")
+                if info.name == "codex-cli" and not eff["experimental"]:
+                    row.update(available=False,
+                               reason="Thử nghiệm: bật ở màn Kết nối AI (hoặc khởi động với --experimental).",
                                hint="Điều khoản dùng đăng nhập ChatGPT cho ứng dụng bên thứ ba chưa rõ.")
-                if info.name == "agy-cli" and cfg.account not in ("business", "api-key"):
+                if info.name == "agy-cli" and eff["account"] not in ("business", "api-key"):
                     row.update(available=False, reason="Chỉ tài khoản doanh nghiệp/khoá API.", hint=AGY_HINT)
             else:
                 p = PROVIDERS.get(info.name)
-                row["model"] = provider_model(p, None) if p else None
+                row["model"] = connection(eff["ai"], info.name).get("model") or (provider_model(p, None) if p else None)
                 row["needs_model"] = p is not None and not row["model"]
                 if p is not None and p.key_env is not None:
                     st = key_status(info.name)
@@ -101,28 +122,35 @@ class Assistant:
                     row["status"] = f"có khoá ({src})" if has else "chưa có khoá"
                     if not has:
                         row.update(available=False, reason="Chưa có khoá API.",
-                                   hint=f"Chạy `cadguard keys set {info.name}` trong terminal (hoặc đặt biến {p.key_env}).")
+                                   hint=f"Nhập khoá ở màn Kết nối AI (hoặc chạy `cadguard keys set {info.name}` "
+                                        f"trong terminal, hoặc đặt biến {p.key_env}).")
                 elif p is not None:
                     row["status"] = "cục bộ, không cần khoá"
-                if info.default_off and not cfg.allow_openrouter:
+                if info.default_off and not eff["allow_openrouter"]:
                     row.update(available=False, reason="Mặc định tắt (bên trung gian thứ ba).",
-                               hint="Chỉ bật khi khách đồng ý: khởi động lại với `cadguard app ... --allow-openrouter`.")
+                               hint="Chỉ bật khi khách đồng ý: bật công tắc ở màn Kết nối AI "
+                                    "(hoặc khởi động với `cadguard app ... --allow-openrouter`).")
             out.append(row)
         groups = [
             {"mode": "cli", "title": "Dùng hạn mức tài khoản (CLI)",
              "note": "CLI bạn đã cài và tự đăng nhập; cad-guard không đọc, không lưu token. Chi phí tính vào gói/tài khoản của bạn."},
             {"mode": "api", "title": "Dùng API (khoá của bạn)",
-             "note": "Gọi thẳng nhà cung cấp bằng khoá của bạn; tính cước theo token. Khoá không bao giờ đi qua trình duyệt."},
+             "note": "Gọi thẳng nhà cung cấp bằng khoá của bạn; tính cước theo token. Khoá không bao giờ quay lại trình duyệt."},
         ]
-        return {"engines": out, "groups": groups, "anonymize": cfg.anonymize}
+        return {"engines": out, "groups": groups, "anonymize": self.config.anonymize,
+                "default_engine": eff["default_engine"], "max_cost_usd": eff["max_cost_usd"]}
 
     # ---------- một lượt trò chuyện ----------
 
     def start(self, body: dict) -> tuple[ChatRun, dict]:
+        if self.data is None:
+            raise ApiError("Chưa mở dự án: chọn thư mục dự án trước khi hỏi trợ lý.", 409)
+        data = self.data
         name = body.get("engine")
         if not isinstance(name, str) or name not in {i.name for i in self.engine_lister()}:
             raise ApiError("Chưa chọn engine hợp lệ.")
-        model = body.get("model") or None
+        eff = self.effective()
+        model = body.get("model") or connection(eff["ai"], name).get("model") or None
         if model is not None and (not isinstance(model, str) or not MODEL_RE.fullmatch(model)):
             raise ApiError("Tên mô hình không hợp lệ.")
         messages = body.get("messages")
@@ -131,22 +159,27 @@ class Assistant:
         for m in messages:
             if not isinstance(m, dict) or not isinstance(m.get("content"), str) or len(m["content"]) > MAX_MESSAGE_CHARS:
                 raise ApiError(f"Mỗi lượt là một chuỗi tối đa {MAX_MESSAGE_CHARS} ký tự.")
-        standard = self.data.check_standard(body.get("standard"))
+        standard = data.check_standard(body.get("standard"))
         allow_propose = body.get("allow_propose") is True
-        cfg = self.data.config
-        kwargs: dict = {"model": model, "experimental": cfg.experimental, "account": cfg.account}
+        cfg = self.config
+        kwargs: dict = {"model": model, "experimental": eff["experimental"], "account": eff["account"]}
         if name in API_ENGINES:
-            kwargs["allow_openrouter"] = cfg.allow_openrouter
+            kwargs["allow_openrouter"] = eff["allow_openrouter"]
+            if eff["max_cost_usd"] is not None:
+                kwargs["max_cost_usd"] = float(eff["max_cost_usd"])
+            if name == "ollama" and eff["ollama_base_url"]:
+                kwargs["base_url"] = eff["ollama_base_url"]
         try:
             engine = self.engine_factory(name, **kwargs)
         except EngineError as exc:
             raise ApiError(str(exc)) from None
-        profile = cfg.profile_path if self.data.profile_for(standard) is not None else None
+        profile = data.config.profile_path if data.profile_for(standard) is not None else None
         run = ChatRun(secrets.token_hex(8), CancelToken())
         meta = {"type": "start", "run_id": run.run_id, "engine": name,
                 "mode": "cli" if name in CLI_ENGINES else ("api" if name in API_ENGINES else getattr(engine.info, "mode", "")),
                 "standard": standard, "allow_propose": allow_propose, "anonymize": cfg.anonymize,
-                "profile": {"name": self.data.profile.name, "version": self.data.profile.version} if profile else None}
+                "max_cost_usd": kwargs.get("max_cost_usd"),
+                "profile": {"name": data.profile.name, "version": data.profile.version} if profile else None}
         with self._lock:
             self._runs[run.run_id] = run
 
@@ -154,7 +187,7 @@ class Assistant:
             total = Usage(cost_usd=None)
             saw_done = False
             try:
-                for ev in engine.run(messages, workspace=self.data.ws.root, standard=standard, profile=profile,
+                for ev in engine.run(messages, workspace=data.ws.root, standard=standard, profile=profile,
                                      allow_propose=allow_propose, server_options={"anonymize": cfg.anonymize},
                                      cancel=run.cancel):
                     if ev.type == "usage" and isinstance(ev.data.get("usage"), Usage):
@@ -183,6 +216,14 @@ class Assistant:
         run.stop_requested_at = time.monotonic()
         run.cancel.cancel()
         return True
+
+    def stop_all(self) -> int:
+        with self._lock:
+            runs = list(self._runs.values())
+        for r in runs:
+            r.stop_requested_at = time.monotonic()
+            r.cancel.cancel()
+        return len(runs)
 
     def finish(self, run: ChatRun) -> None:
         with self._lock:

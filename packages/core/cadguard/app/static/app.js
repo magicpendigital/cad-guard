@@ -1,36 +1,52 @@
-/* cad-guard app — JS thuần, không thư viện, không tài nguyên ngoài.
- * An toàn: mọi dữ liệu chèn bằng textContent/createElement (không chèn chuỗi HTML); mọi API gửi header X-CadGuard-Token.
+/* cad-guard app — JS thuần, không thư viện, không tài nguyên ngoài. Bố cục, chữ và tên màn theo bản mẫu chốt
+ * design/ui-mockup.html; dữ liệu lấy từ API cục bộ (không có số minh hoạ).
+ * An toàn: mọi dữ liệu chèn bằng textContent/createElement (không chèn chuỗi HTML); mọi API gửi header X-CadGuard-Token;
+ * không có mã/kiểu nội tuyến (CSP); khoá API chỉ gửi đi một chiều, ô nhập bị xoá ngay sau khi gửi.
  */
 "use strict";
 (() => {
-  // ---------- biểu tượng (SVG dựng bằng DOM) ----------
+  // ---------- biểu tượng (SVG dựng bằng DOM, nét theo bản mẫu) ----------
   const ICONS = {
     shield: [["path", "M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"], ["path", "M9 12l2 2 4-4"]],
+    home: [["path", "M4 11l8-7 8 7v9H4z"], ["path", "M10 20v-6h4v6"]],
     pen: [["path", "M4 20h4L19 9l-4-4L4 16z"], ["path", "M13.5 6.5l4 4"]],
+    bars: [["path", "M4 20V10M10 20V4M16 20v-7M22 20H2"]],
     list: [["path", "M9 6h11M9 12h11M9 18h11"], ["path", "M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"]],
     plug: [["path", "M9 7V3M15 7V3M7 7h10v4a5 5 0 01-10 0zM12 16v5"]],
     lock: [["rect", {x: 5, y: 11, width: 14, height: 9, rx: 2}], ["path", "M8 11V8a4 4 0 018 0v3"]],
-    doc: [["path", "M6 3h9l4 4v14H6z"], ["path", "M14 3v5h5M9 13h6M9 17h6"]],
     building: [["path", "M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"]],
-    moon: [["path", "M20 14.5A8 8 0 019.5 4 8 8 0 1020 14.5z"]],
-    sun: [["circle", {cx: 12, cy: 12, r: 4}], ["path", "M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"]],
-    search: [["circle", {cx: 11, cy: 11, r: 7}], ["path", "M21 21l-4.3-4.3"]],
-    file: [["path", "M6 3h9l4 4v14H6z"], ["path", "M14 3v5h5"]],
+    bot: [["rect", {x: 4, y: 7, width: 16, height: 12, rx: 3}], ["path", "M12 3v4M9 13h.01M15 13h.01"]],
+    chev: [["path", "M6 9l6 6 6-6"]],
+    chat: [["path", "M21 12a8 8 0 01-11.5 7.2L4 20l1-4.6A8 8 0 1121 12z"]],
+    alert: [["path", "M12 3l10 18H2z"], ["path", "M12 10v5M12 18h.01"]],
+    alertc: [["path", "M12 8v5M12 17h.01"], ["circle", {cx: 12, cy: 12, r: 9}]],
+    branch: [["path", "M7 4v12a3 3 0 003 3h7M17 4v8M14 7l3-3 3 3"]],
     send: [["path", "M4 12l16-8-6 16-3-7z"]],
     stop: [["rect", {x: 6, y: 6, width: 12, height: 12, rx: 2}]],
-    info: [["circle", {cx: 12, cy: 12, r: 9}], ["path", "M12 11v5M12 8h.01"]],
     check: [["path", "M5 12l5 5 9-10"]],
     x: [["path", "M6 6l12 12M18 6L6 18"]],
-    warn: [["path", "M12 3l10 18H2z"], ["path", "M12 10v5M12 18h.01"]],
-    refresh: [["path", "M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"]],
-    tool: [["path", "M14.7 6.3a4 4 0 00-5.4 5.4L4 17l3 3 5.3-5.3a4 4 0 005.4-5.4l-2.5 2.5-2.5-2.5z"]],
+    info: [["circle", {cx: 12, cy: 12, r: 9}], ["path", "M12 11v5M12 8h.01"]],
+    file: [["path", "M7 3h7l5 5v13H7z"], ["path", "M14 3v5h5"]],
+    sun: [["circle", {cx: 12, cy: 12, r: 4}], ["path", "M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"]],
+    moon: [["path", "M20 14A8 8 0 0110 4a8 8 0 1010 10z"]],
+    gear: [["circle", {cx: 12, cy: 12, r: 3}], ["path", "M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"]],
+    copy: [["rect", {x: 8, y: 8, width: 12, height: 12, rx: 2}], ["path", "M4 16V6a2 2 0 012-2h10"]],
     undo: [["path", "M9 14L4 9l5-5"], ["path", "M4 9h10a6 6 0 010 12h-3"]],
+    search: [["circle", {cx: 11, cy: 11, r: 7}], ["path", "M21 21l-4.3-4.3"]],
+    hand: [["path", "M8 13V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v8a6 6 0 01-6 6h-1a5 5 0 01-4-2l-3-4a1.5 1.5 0 012.3-1.9L8 14"]],
+    inbox: [["path", "M4 13l2-8h12l2 8v6H4z"], ["path", "M4 13h5l1 2h4l1-2h5"]],
+    arrow: [["path", "M5 12h14M13 6l6 6-6 6"]],
+    users: [["circle", {cx: 9, cy: 8, r: 3.5}], ["path", "M2.5 20a6.5 6.5 0 0113 0M16 4.5a3.5 3.5 0 010 7M18 14a6 6 0 013.5 6"]],
+    folder: [["path", "M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"]],
+    refresh: [["path", "M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"]],
+    key: [["circle", {cx: 8, cy: 15, r: 4}], ["path", "M11 12l9-9M17 6l3 3"]],
+    trash: [["path", "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"]],
+    cube: [["path", "M12 3l8 4.5v9L12 21l-8-4.5v-9z"], ["path", "M12 12l8-4.5M12 12v9M12 12L4 7.5"]],
   };
-  // Không ghi URL nào trong mã: lấy namespace SVG từ phần tử <svg id="svgns"> do trình phân tích HTML tạo.
   const SVGNS = document.getElementById("svgns").namespaceURI;
-  function icon(name) {
+  function icon(name, cls) {
     const svg = document.createElementNS(SVGNS, "svg");
-    svg.setAttribute("class", "i");
+    svg.setAttribute("class", "i" + (cls ? " " + cls : ""));
     svg.setAttribute("viewBox", "0 0 24 24");
     svg.setAttribute("aria-hidden", "true");
     for (const [tag, spec] of ICONS[name] || []) {
@@ -40,6 +56,11 @@
       svg.appendChild(node);
     }
     return svg;
+  }
+  function svgEl(tag, attrs) {
+    const n = document.createElementNS(SVGNS, tag);
+    for (const [k, v] of Object.entries(attrs || {})) if (v !== null && v !== undefined) n.setAttribute(k, String(v));
+    return n;
   }
 
   // ---------- tạo phần tử an toàn ----------
@@ -52,14 +73,9 @@
       else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
       else node.setAttribute(k, v === true ? "" : String(v));
     }
-    append(node, kids);
-    return node;
-  }
-  // replaceChildren() biến null thành chữ "null": luôn thay con qua append (bỏ null/false).
-  function fill(node, ...kids) {
-    node.replaceChildren();
     return append(node, kids);
   }
+  function fill(node, ...kids) { node.replaceChildren(); return append(node, kids); }
   function append(node, kids) {
     for (const kid of kids.flat(Infinity)) {
       if (kid === null || kid === undefined || kid === false) continue;
@@ -68,20 +84,38 @@
     return node;
   }
   const $ = (id) => document.getElementById(id);
+  const $$ = (sel, root) => [...(root || document).querySelectorAll(sel)];
   const nf = new Intl.NumberFormat("vi-VN");
   const fmt = (n) => nf.format(Number(n) || 0);
   const pill = (cls, text, ic) => el("span", {class: "pill " + cls}, ic ? icon(ic) : null, text);
-  const SEV = {E: ["err", "Lỗi"], W: ["warn", "Cảnh báo"], I: ["info", "Thông tin"]};
+  const SEV = {E: ["err", "Lỗi", "x"], W: ["warn", "Cảnh báo", "alert"], I: ["neu", "Gợi ý", "info"]};
+  const b = (t) => el("b", {text: t});
 
   function toast(msg) {
     const t = $("toast");
     t.textContent = msg;
     t.classList.add("on");
     clearTimeout(toast._t);
-    toast._t = setTimeout(() => t.classList.remove("on"), 4200);
+    toast._t = setTimeout(() => t.classList.remove("on"), 3600);
   }
 
-  // ---------- mã phiên ----------
+  function when(ts) {
+    if (!ts) return "";
+    const d = new Date(ts);
+    if (isNaN(d)) return "";
+    const now = new Date();
+    const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diff = Math.round((day(now) - day(d)) / 86400000);
+    if (diff === 0) return d.toLocaleTimeString("vi-VN", {hour: "2-digit", minute: "2-digit"});
+    if (diff === 1) return "Hôm qua";
+    return d.toLocaleDateString("vi-VN", {day: "2-digit", month: "2-digit"});
+  }
+  function greeting() {
+    const h = new Date().getHours();
+    return h < 11 ? "Chào buổi sáng" : h < 14 ? "Chào buổi trưa" : h < 18 ? "Chào buổi chiều" : "Chào buổi tối";
+  }
+
+  // ---------- mã phiên + gọi API ----------
   const qs = new URLSearchParams(location.search);
   let TOKEN = qs.get("t") || sessionStorage.getItem("cg-token") || "";
   if (qs.get("t")) {
@@ -99,59 +133,49 @@
     let data = null;
     try { data = await r.json(); } catch (_) { data = null; }
     if (r.status === 401) $("tokenBanner").hidden = false;
-    if (!r.ok) throw new Error((data && data.error) || ("Lỗi máy chủ " + r.status));
+    if (!r.ok) {
+      const err = new Error((data && data.error) || ("Lỗi máy chủ " + r.status));
+      err.status = r.status;
+      throw err;
+    }
     return data;
   }
 
   // ---------- trạng thái ----------
   const S = {
-    session: null, dept: null, standard: null, files: [], file: null, audit: null, scan: {},
-    suggest: null, preview: null, changesets: [],
-    engines: [], groups: [], engine: null, history: [], run: null, busy: false,
+    session: null, dept: null, screen: "home",
+    files: [], file: null, geo: null, geoOut: null, audits: {}, findings: [], sel: null, stat: {},
+    suggest: null, suggestStd: null, preview: null, applied: null, changesets: [], cmp: "after", recheck: null,
+    engines: [], groups: [], engine: null, history: [], run: null, busy: false, ai: null,
     sessionUsage: {input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, cost_usd: null},
+    home: null, rules: null, ruleFilter: {dept: "", q: "", kind: "", sev: ""},
   };
+  const hasProject = () => !!(S.session && S.session.project);
+  const deptById = (id) => (S.session ? S.session.departments.find((d) => d.id === id) : null);
+  const deptStd = () => (S.dept && S.dept.standards.length ? S.dept.standards : []);
+  const chatStd = () => deptStd()[deptStd().length - 1] || (S.session && S.session.standards.includes("furniture-v0") ? "furniture-v0" : (S.session ? S.session.standards[0] : null));
+  const nextNames = (d) => (d.next || []).map((n) => (deptById(n) || {name: n}).name);
 
   // ---------- giao diện chung ----------
   function initIcons(root) {
-    for (const span of root.querySelectorAll("[data-icon]")) {
-      span.replaceWith(icon(span.getAttribute("data-icon")));
+    for (const span of $$("[data-icon]", root)) {
+      const svg = icon(span.getAttribute("data-icon"), span.getAttribute("class") || "");
+      span.replaceWith(svg);
     }
   }
 
-  function setupTablist(container, onSelect) {
-    const tabs = [...container.querySelectorAll('[role="tab"]')];
-    const select = (tab, focus) => {
-      for (const t of tabs) {
-        const on = t === tab;
-        t.setAttribute("aria-selected", on ? "true" : "false");
-        t.tabIndex = on ? 0 : -1;
-      }
-      if (focus) tab.focus();
-      onSelect(tab);
-    };
-    for (const t of tabs) {
-      t.addEventListener("click", () => select(t, false));
-      t.addEventListener("keydown", (e) => {
-        const i = tabs.indexOf(t);
-        if (e.key === "ArrowRight") { e.preventDefault(); select(tabs[(i + 1) % tabs.length], true); }
-        if (e.key === "ArrowLeft") { e.preventDefault(); select(tabs[(i - 1 + tabs.length) % tabs.length], true); }
-      });
-    }
-    return (name) => { const t = tabs.find((x) => x.dataset.go === name || x.dataset.p === name); if (t) select(t, false); };
-  }
-
-  function confirmDialog({title, body, yes, danger}) {
+  function confirmDialog({title, body, yes, danger, no}) {
     return new Promise((resolve) => {
       const bg = $("modal");
       $("mTitle").textContent = title;
-      const text = $("mText");
-      fill(text, ...body.map((p) => (p instanceof Node ? p : el("p", {text: p}))));
+      fill($("mText"), ...body.map((p) => (p instanceof Node ? p : el("p", {text: p}))));
       const y = $("mYes"), n = $("mNo");
       y.textContent = yes || "Đồng ý";
+      n.textContent = no || "Huỷ";
       y.className = danger ? "btn-d" : "btn-p";
       const prev = document.activeElement;
       bg.classList.add("on");
-      y.focus();
+      n.focus();
       const done = (v) => {
         bg.classList.remove("on");
         y.removeEventListener("click", onY); n.removeEventListener("click", onN); bg.removeEventListener("keydown", onK);
@@ -168,14 +192,6 @@
     });
   }
 
-  function openDrawer(title, nodes) {
-    $("drTitle").textContent = title;
-    fill($("drBody"), ...nodes);
-    $("drawer").classList.add("on");
-    $("drClose").focus();
-  }
-  function closeDrawer() { $("drawer").classList.remove("on"); }
-
   function kv(pairs) {
     const dl = el("dl", {class: "kv"});
     for (const [k, v] of pairs) {
@@ -185,258 +201,969 @@
     return dl;
   }
 
-  // ---------- phiên, phòng, giao diện sáng/tối ----------
+  function emptyBox(title, ...rest) { return el("div", {class: "empty"}, el("b", {text: title}), ...rest); }
+
+  // ---------- giao diện sáng/tối ----------
   function applyTheme(t) {
     document.documentElement.setAttribute("data-theme", t);
     fill($("themeBtn"), icon(t === "dark" ? "sun" : "moon"));
     localStorage.setItem("cg-theme", t);
+    if (S.v3d) S.v3d.redraw();
   }
 
-  function profileLabel(std) {
-    const p = S.session && S.session.profile;
-    if (!p) return "Mặc định của chuẩn (không có hồ sơ)";
-    if (std && p.standard !== std) return `${p.name} ${p.version} (viết cho ${p.standard}, không áp cho chuẩn này)`;
-    return `${p.name} ${p.version}`;
+  // ---------- menu thả xuống ----------
+  function closeMenus() {
+    for (const id of ["deptMenu", "engineMenu"]) $(id).hidden = true;
+    $("deptBtn").setAttribute("aria-expanded", "false");
+    $("engineBtn").setAttribute("aria-expanded", "false");
+  }
+  function toggleMenu(btn, menu) {
+    return (e) => {
+      e.stopPropagation();
+      const open = $(menu).hidden;
+      closeMenus();
+      $(menu).hidden = !open;
+      $(btn).setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) { const first = $(menu).querySelector("button:not([disabled])"); if (first) first.focus(); }
+    };
+  }
+  function menuItem(checked, title, desc, onclick, disabled) {
+    return el("button", {type: "button", role: "menuitemradio", "aria-checked": checked ? "true" : "false", disabled: !!disabled,
+      onclick: (e) => { e.stopPropagation(); closeMenus(); onclick(); }},
+    el("span", {class: "ck"}, checked ? icon("check") : null),
+    el("span", {}, el("span", {class: "t", text: title}), el("br"), el("span", {class: "d", text: desc})));
   }
 
+  // ---------- điều hướng màn ----------
+  const NEED_PROJECT = new Set(["home", "work", "overview", "rules"]);
+  function go(name) {
+    if (NEED_PROJECT.has(name) && !hasProject()) name = "project";
+    S.screen = name;
+    for (const s of $$(".screen")) s.classList.toggle("on", s.id === "s-" + name);
+    for (const t of $$(".nav [data-go]")) {
+      const on = t.dataset.go === name;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+    }
+    closeDrawer();
+    if (name === "home") loadHome();
+    else if (name === "overview") loadOverview();
+    else if (name === "rules") loadRules();
+    else if (name === "connect") loadConnect();
+    else if (name === "project") loadProjects();
+    else if (name === "work") renderSheet();
+  }
+
+  function renderNav() {
+    for (const t of $$(".nav [data-go]")) t.disabled = NEED_PROJECT.has(t.dataset.go) && !hasProject();
+  }
+
+  // ---------- phiên ----------
   function renderSession() {
     const s = S.session;
-    $("wsName").textContent = "Thư mục: " + s.workspace_name;
-    $("dataMode").textContent = s.anonymize ? "Ẩn danh Bậc 1 (mặc định)" : "KHÔNG ẩn danh";
+    $("projTop").textContent = s.project ? s.project.name : "chưa mở";
+    $("dataMode").textContent = s.anonymize ? "Bậc 1" : "KHÔNG ẩn danh";
     $("dataChip").classList.toggle("danger", !s.anonymize);
     $("dataChip").title = s.anonymize
-      ? "Trợ lý chỉ thấy mã băm (F_…, L_…), không thấy tên layer/tệp/chữ."
+      ? "Bậc 1: trợ lý chỉ thấy kết quả công cụ đã ẩn danh (mã F_…, L_…), không thấy tên layer/tệp/chữ."
       : "Đã khởi động với --no-anonymize: trợ lý thấy tên layer/tệp/chữ thật.";
-    if (!s.anonymize) {
-      const b = $("anonBanner");
-      b.textContent = "Cảnh báo: ẩn danh đã TẮT (khởi động với --no-anonymize). Trợ lý thấy tên layer, tên tệp và chữ thật trong bản vẽ. Chỉ dùng khi khách đã đồng ý; muốn bật lại thì khởi động lại không có cờ này.";
-      b.hidden = false;
+    const ab = $("anonBanner");
+    ab.hidden = s.anonymize;
+    if (!s.anonymize) ab.textContent = "Cảnh báo: ẩn danh đã TẮT (khởi động với --no-anonymize). Trợ lý thấy tên layer, tên tệp và chữ thật trong bản vẽ. Chỉ dùng khi khách đã đồng ý; muốn bật lại thì khởi động lại không có cờ này.";
+    const saved = localStorage.getItem("cg-dept");
+    S.dept = deptById(S.dept && S.dept.id) || deptById(saved) || deptById(s.default) || s.departments[0];
+    renderDeptMenu();
+    renderNav();
+  }
+
+  function renderDeptMenu() {
+    $("deptName").textContent = S.dept ? S.dept.name : "–";
+    fill($("deptMenu"), ...S.session.departments.map((d) => menuItem(d.id === S.dept.id,
+      d.name + (d.priority ? " · ưu tiên khảo sát" : ""),
+      (d.role || d.description) + (d.standards.length ? ` · chuẩn: ${d.standards.join(" + ")}` : d.view === "scene" ? " · xem 3D (chỉ xem)" : ""),
+      () => setDept(d.id))));
+  }
+
+  function setDept(id) {
+    const d = deptById(id);
+    if (!d || (S.dept && d.id === S.dept.id)) return;
+    S.dept = d;
+    localStorage.setItem("cg-dept", d.id);
+    renderDeptMenu();
+    resetDrawing(false);
+    renderWorkSide();
+    if (S.file) openFile(S.file, {scan: false});
+    else renderSheet();
+    if (S.screen === "home") loadHome();
+    if (S.screen === "rules") renderRules();
+    renderSuggestions();
+  }
+
+  // ---------- chọn dự án ----------
+  async function loadProjects() {
+    let r;
+    try { r = await api("/api/projects"); } catch (e) { toast(e.message); return; }
+    $("pickBtn").disabled = !r.dialog_available;
+    $("pickNote").textContent = r.dialog_available ? "Mở hộp thoại chọn thư mục của hệ điều hành."
+      : "Máy này không có hộp thoại chọn thư mục (thiếu tkinter): hãy dán đường dẫn bên dưới.";
+    const box = $("recentList");
+    if (!r.recent.length) {
+      fill(box, el("div", {class: "card"}, emptyBox("Chưa có dự án gần đây", "Mở một thư mục chứa bản vẽ DXF để bắt đầu. Lần sau dự án sẽ hiện ở đây.")));
+      return;
     }
-    $("profileName").textContent = s.profile ? `${s.profile.name} ${s.profile.version}` : "không có";
-    const sel = $("deptSel");
-    fill(sel, ...s.departments.map((d) => el("option", {value: d.id, text: d.name})));
-    const saved = sessionStorage.getItem("cg-dept");
-    S.dept = s.departments.find((d) => d.id === saved) || s.departments.find((d) => d.id === s.default) || s.departments[0];
-    sel.value = S.dept.id;
-    fill($("ruleStd"), ...s.standards.map((n) => el("option", {value: n, text: n})));
-    applyDept();
+    fill(box, ...r.recent.map((p) => {
+      const cur = r.current && r.current.name === p.name && hasProject();
+      return el("article", {class: "dwg recent-card"},
+        el("div", {class: "dwg-h"}, el("span", {class: "nm"}, icon("folder"), p.name),
+          el("span", {class: "stage"}, !p.exists ? pill("err", "Không còn thư mục này", "x") : cur ? pill("info", "Đang mở") : null)),
+        el("div", {class: "path", text: p.path}),
+        el("div", {class: "dwg-f"},
+          el("button", {class: "btn-p", type: "button", disabled: !p.exists, onclick: () => openProject(p.path)}, "Mở"),
+          el("button", {class: "btn-s", type: "button", onclick: async () => {
+            try { await api("/api/project/forget", {path: p.path}); loadProjects(); } catch (e) { toast(e.message); }
+          }}, "Bỏ khỏi danh sách"),
+          el("span", {class: "why", text: p.opened_at ? "Mở lần cuối: " + new Date(p.opened_at).toLocaleString("vi-VN") : ""})));
+    }));
   }
 
-  function applyDept() {
-    const d = S.dept;
-    S.standard = d.standard_ok ? d.standard : (S.session.standards[0] || null);
-    $("stdName").textContent = S.standard + (d.standard_ok ? "" : " (chuẩn của phòng không có, dùng tạm)");
-    $("stdProfile").textContent = profileLabel(S.standard);
-    $("ruleStd").value = S.standard;
-    S.scan = {};
-    $("handoff").hidden = true;
+  async function pickProject() {
+    const btn = $("pickBtn");
+    btn.disabled = true;
+    $("pickNote").textContent = "Đang mở hộp thoại chọn thư mục… (cửa sổ có thể nằm sau trình duyệt)";
+    try {
+      const r = await api("/api/project/pick", {});
+      if (r.unavailable) { $("pickNote").textContent = "Không mở được hộp thoại trên máy này: hãy dán đường dẫn bên dưới."; return; }
+      if (r.cancelled || !r.path) { $("pickNote").textContent = "Đã huỷ chọn thư mục."; return; }
+      $("pickNote").textContent = "";
+      await openProject(r.path);
+    } catch (e) { toast(e.message); $("pickNote").textContent = ""; } finally { btn.disabled = false; }
+  }
+
+  async function openProject(path, confirmed) {
+    let r;
+    try { r = await api("/api/project/open", {path, confirm: !!confirmed}); } catch (e) { toast(e.message); return; }
+    if (r.needs_confirm) {
+      const ok = await confirmDialog({title: `Mở “${r.name}” làm dự án?`, body: [r.warning, "Vẫn mở thư mục này?"], yes: "Vẫn mở", no: "Chọn thư mục khác"});
+      if (ok) await openProject(path, true);
+      return;
+    }
+    if (r.note) toast(r.note);
+    S.session = r.session;
+    onProjectChanged();
+    toast("Đã mở dự án " + S.session.project.name);
+  }
+
+  function onProjectChanged() {
+    renderSession();
+    S.files = []; S.stat = {}; S.changesets = []; S.home = null; S.rules = null;
+    S.history = []; fill($("log"));
+    resetDrawing(true);
+    renderWorkSide();
+    loadFiles();
+    loadChangesets();
+    go("home");
+  }
+
+  // ---------- VIỆC CỦA TÔI ----------
+  async function loadHome() {
+    if (!hasProject()) return;
+    try { S.home = await api("/api/home?dept=" + encodeURIComponent(S.dept.id)); } catch (e) { toast(e.message); return; }
+    for (const d of S.home.drawings) if (d.scanned) S.stat[d.path] = S.stat[d.path] || {E: d.errors, W: d.warnings, I: d.infos, from: "history"};
     renderFiles();
-    if (S.file) openFile(S.file);
-    if (!$("s-rules").hidden && $("s-rules").classList.contains("on")) loadRules();
+    renderHome();
   }
 
-  // ---------- danh sách bản vẽ ----------
+  const ck = (done, ...txt) => el("li", {class: done ? "done" : "todo"}, icon(done ? "check" : "x"), el("span", {}, ...txt));
+
+  function renderPipe(h) {
+    const node = (d) => {
+      const p = h.pipe[d.id] || {in_progress: 0, ready: 0};
+      return el("div", {class: "node" + (d.id === S.dept.id ? " me" : "")}, el("div", {class: "nm", text: d.name}),
+        el("div", {class: "ct", text: `${p.in_progress} bản đang xử lý · ${p.ready} sẵn sàng`}),
+        d.id === S.dept.id ? pill("info", "Bạn ở đây") : null);
+    };
+    const ext = (n, t) => el("div", {class: "node ext"}, el("div", {class: "nm", text: n}), el("div", {class: "ct", text: t}));
+    const arr = () => el("div", {class: "arr"}, icon("arrow"));
+    const ds = S.session.departments;
+    const tk = ds.find((d) => d.id === "ky-thuat");
+    const parts = [];
+    if (tk && ds.length === 4) {
+      parts.push(node(ds[0]), arr(), node(tk), arr(),
+        el("div", {class: "fork"}, node(deptById("thiet-ke-3d")), node(deptById("lap-trinh-san-xuat"))), arr(),
+        el("div", {class: "fork"}, ext("Render", "ngoài cad-guard"), ext("Xưởng", "ngoài cad-guard")));
+    } else {
+      ds.forEach((d, i) => { if (i) parts.push(arr()); parts.push(node(d)); });
+    }
+    fill($("pipe"), ...parts);
+  }
+
+  function drawingCard(d) {
+    const dept = S.dept;
+    const stds = deptStd();
+    const nx = nextNames(dept);
+    const state = !d.scanned ? ["neu", "Chưa quét", null] : d.errors ? ["err", `${d.errors} lỗi mức E còn lại`, "x"]
+      : d.scanned_all ? ["ok", "Sạch lỗi E", "check"] : ["warn", "Chưa quét đủ chuẩn", "alert"];
+    const ready = d.scanned_all && !d.errors;
+    const topRules = Object.entries(d.rules || {}).sort((a, x) => x[1] - a[1]).slice(0, 4);
+    const decide = d.errors ? el("div", {class: "decide"}, icon("hand"), el("div", {}, b("Còn lỗi mức E. Luật vi phạm nhiều nhất:"), el("br"),
+      topRules.map(([r, n], i) => [i ? el("br") : null, `${r} · ${n} chỗ`]))) : null;
+    const gate = el("button", {class: "f-link", type: "button", onclick: () => openCatalog({dept: dept.id})}, `xem luật của phòng ${dept.name}`);
+    const items = stds.length ? [
+      ck(d.scanned_all, `Đã quét theo ${stds.join(" + ")}`),
+      ck(ready, d.scanned ? (d.errors ? `Còn ${d.errors} lỗi mức E, ${d.warnings || 0} cảnh báo` : `Hết lỗi mức E (${d.warnings || 0} cảnh báo)`) : "Chưa quét lỗi", " · ", gate),
+      ck(!!d.handover, nx.length ? `Đã đánh dấu sẵn sàng bàn giao cho ${nx.join(" và ")}` : "Đã đánh dấu sẵn sàng xuất cho xưởng"),
+    ] : [ck(false, "Phòng này chưa có chuẩn kiểm; xem 3D ở màn Bản vẽ")];
+    const packBtn = stds.length ? el("button", {class: "btn-s", type: "button", disabled: !ready || !!d.handover,
+      onclick: () => markHandover(d.path)}, d.handover ? "Đã đánh dấu" : (nx.length ? `Sẵn sàng giao cho ${nx.join(" và ")}` : "Sẵn sàng xuất cho xưởng")) : null;
+    const why = !stds.length ? "" : d.handover ? `Đánh dấu lúc ${when(d.handover)}. cad-guard không gửi tệp đi đâu.`
+      : ready ? "Chưa ghi gì cho tới khi bạn bấm." : !d.scanned ? "Chưa quét." : d.errors ? "Chưa thể bàn giao: còn lỗi mức E." : "Cần quét đủ các chuẩn của phòng.";
+    return el("article", {class: "dwg"},
+      el("div", {class: "dwg-h"}, el("span", {class: "nm"}, icon("file"), d.path),
+        el("span", {class: "stage pill " + state[0]}, state[2] ? icon(state[2]) : null, state[1])),
+      decide,
+      el("ul", {class: "ready"}, items),
+      el("div", {class: "dwg-f"},
+        el("button", {class: "btn-p", type: "button", onclick: () => { go("work"); openFile(d.path, {scan: !d.scanned}); }}, d.scanned ? "Mở và xử lý" : "Mở và quét"),
+        packBtn, el("span", {class: "why", text: why})));
+  }
+
+  async function markHandover(path) {
+    try {
+      const r = await api("/api/handover", {file: path, dept: S.dept.id});
+      toast(r.note);
+      loadHome();
+    } catch (e) { toast(e.message); }
+  }
+
+  function renderHome() {
+    const h = S.home;
+    const d = S.dept;
+    $("homeH").textContent = `${greeting()}, phòng ${d.name}`;
+    const scanned = h.drawings.filter((x) => x.scanned);
+    const need = scanned.filter((x) => x.errors).length;
+    const ready = scanned.filter((x) => x.scanned_all && !x.errors && !x.handover).length;
+    const unscanned = h.drawings_total - scanned.length;
+    $("homeP").textContent = (d.role ? d.role + ". " : "") + (h.drawings_total
+      ? [need ? `Bạn có ${need} bản còn lỗi mức E` : null, `${ready} bản sẵn sàng bàn giao`, unscanned ? `${unscanned} bản chưa quét` : null].filter(Boolean).join(", ") + "."
+      : "Thư mục dự án chưa có tệp DXF.");
+    renderPipe(h);
+    const list = [];
+    if (h.inbox.length) {
+      const prev = h.inbox[0].from;
+      list.push(el("h2", {text: `Nhận từ phòng ${prev}`}));
+      for (const it of h.inbox) {
+        list.push(el("article", {class: "dwg"},
+          el("div", {class: "dwg-h"}, el("span", {class: "nm"}, icon("inbox"), it.file),
+            el("span", {class: "stage pill " + (it.received ? "ok" : "info")}, it.received ? icon("check") : null, it.received ? "Đã nhận và quét" : "Có gói bàn giao")),
+          el("p", {class: "lead small", text: `Từ ${it.from} · ${when(it.ts)}. Phòng ${it.from} đã đánh dấu sẵn sàng (hết lỗi mức E theo chuẩn của họ).`}),
+          el("div", {class: "dwg-f"}, el("button", {class: "btn-s", type: "button", onclick: () => { go("work"); openFile(it.file, {scan: true}); }}, it.received ? "Mở" : "Nhận và mở"),
+            el("span", {class: "why", text: "Mở bản vẽ và quét theo chuẩn của phòng bạn."}))));
+      }
+    }
+    list.push(el("h2", {class: h.inbox.length ? "mt12" : "mt0", text: `Bản vẽ của phòng ${d.name}`}));
+    if (!h.drawings.length) {
+      list.push(el("div", {class: "card"}, emptyBox("Chưa có bản vẽ DXF trong dự án", "Chép tệp .dxf vào thư mục dự án (hoặc mở thư mục khác ở nút Dự án trên cùng), rồi quay lại đây.")));
+    } else {
+      list.push(...h.drawings.map(drawingCard));
+      if (h.drawings_total > h.drawings.length) list.push(el("p", {class: "muted small", text: `Hiện ${h.drawings.length}/${h.drawings_total} bản (mới quét gần đây trước). Xem đủ ở màn Bản vẽ.`}));
+    }
+    fill($("homeList"), ...list);
+
+    const mine = [];
+    mine.push(el("div", {class: "mine"},
+      el("div", {class: "lockline"}, icon("lock", "i14"), "Chỉ mình bạn thấy · lưu trên máy này"),
+      el("h3", {text: "Lỗi tôi hay gặp (30 ngày)"}),
+      h.frequent_rules.length ? h.frequent_rules.map((r) => el("div", {class: "row"},
+        el("span", {}, el("button", {class: "f-rule link", type: "button", onclick: () => openCatalog({rule: r.rule_id})}, r.rule_id), " ", r.title),
+        b(`${r.times} lần`)))
+        : el("p", {class: "empty-s", text: "Chưa có dữ liệu. Mỗi lần quét, cad-guard ghi đếm theo luật vào lịch sử dự án (không tên tệp)."}),
+      h.frequent_rules.length ? el("div", {class: "tip"}, el("span", {}, "Bấm mã luật để xem luật nói gì và tham số đang áp.")) : null));
+    const a = h.assistant;
+    mine.push(el("div", {class: "mine"}, el("h3", {text: "Đề xuất của trợ lý"}),
+      el("div", {class: "row"}, el("span", {text: "Bạn đã áp dụng"}), b(`${a.agent_applied} / ${a.agent_proposed}`)),
+      el("div", {class: "row"}, el("span", {text: "Thay đổi bạn tự đề xuất đã áp dụng"}), b(String(a.user_applied))),
+      el("p", {class: "note", text: "Số đếm từ các changeset trong dự án này. Đúng/sai vẫn do bộ luật kiểm tất định quyết định."})));
+    mine.push(el("div", {class: "mine"}, el("h3", {text: "Gần đây"}),
+      h.recent.length ? el("ul", {class: "tl"}, h.recent.map((r) => el("li", {}, el("time", {text: when(r.ts)}), el("span", {}, ...recentText(r)))))
+        : el("p", {class: "empty-s", text: "Chưa có hoạt động. Lịch sử quét lưu trong .cadguard/history.jsonl của dự án."})));
+    fill($("homeMine"), ...mine);
+  }
+
+  function recentText(r) {
+    const f = r.file ? b(r.file) : "một bản vẽ đã đổi tên/xoá";
+    if (r.event === "audit") return ["Quét ", f, `: ${r.findings} phát hiện (${r.standard})`];
+    if (r.event === "apply") return ["Áp dụng thay đổi trên ", f, r.output ? [" → ", b(r.output)] : ""];
+    if (r.event === "undo") return ["Hoàn tác, xoá ", r.output ? b(r.output) : "tệp mới"];
+    if (r.event === "handover") return ["Đánh dấu ", f, ` sẵn sàng giao cho ${(r.to || []).join(", ") || "xưởng"}`];
+    return [r.event];
+  }
+
+  $("askForm") && $("askForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const v = $("askIn").value.trim();
+    if (!v) return;
+    $("askIn").value = "";
+    go("work");
+    rightTab("chat");
+    $("inp").value = v;
+    $("form").requestSubmit();
+  });
+
+  // ---------- TỔNG QUAN ----------
+  async function loadOverview() {
+    if (!hasProject()) return;
+    let o;
+    try { o = await api("/api/overview"); } catch (e) { toast(e.message); return; }
+    const box = $("ovBody");
+    if (!o.has_data) {
+      fill(box, el("div", {class: "card"}, emptyBox("Chưa có số liệu tuần này", "Số liệu sinh từ lịch sử quét của dự án trên máy này. Quét vài bản vẽ ở màn Bản vẽ (hoặc “Quét cả thư mục”), rồi quay lại.")));
+      return;
+    }
+    const kpi = (v, l, dlt) => el("div", {class: "card kpi"}, el("div", {class: "v", text: v}), el("div", {class: "l", text: l}), el("div", {class: "dlt", text: dlt}));
+    const pct = o.changesets_proposed ? Math.round(o.changesets_applied / o.changesets_proposed * 100) + "%" : "–";
+    const maxBar = Math.max(1, ...o.top_rules.map((r) => r.count));
+    fill(box,
+      el("div", {class: "kpis"},
+        kpi(fmt(o.files_scanned), "Bản vẽ đã quét", `7 ngày gần nhất · ${fmt(o.audits)} lần quét`),
+        kpi(fmt(o.open_errors), "Lỗi mức E đang mở", "theo lần quét mới nhất mỗi bản"),
+        kpi(pct, "Đề xuất sửa được áp dụng", `trên ${o.changesets_proposed} đề xuất`),
+        kpi(fmt(o.handovers), "Bản đánh dấu sẵn sàng bàn giao", "7 ngày gần nhất")),
+      el("h2", {text: "Bàn giao giữa các phòng tuần này"}),
+      el("p", {class: "lead lead-tight", text: "Lỗi bắt ở phòng trước rẻ hơn nhiều so với lỗi lọt sang phòng sau. Đây là chỗ cho thấy cad-guard có đáng không."}),
+      el("div", {class: "flow"}, o.flows.map((f) => el("div", {class: "card"}, el("div", {class: "big", text: fmt(f.handed_over)}),
+        el("div", {text: `${f.from} → ${f.to.join(" / ")}`}),
+        el("div", {class: "kpi"}, el("div", {class: "dlt", text: `${f.blocked} bản còn lỗi mức E, chưa giao được`}))))),
+      el("h2", {text: "Luật bị vi phạm nhiều nhất"}),
+      el("p", {class: "lead lead-tight", text: "Danh sách này quyết định luật nào nên ưu tiên đo độ chính xác và nên đưa vào mẫu bản vẽ chuẩn."}),
+      el("div", {class: "card"},
+        o.top_rules.length ? el("div", {class: "bars"}, o.top_rules.map((r) => {
+          const bar = el("i");
+          bar.style.width = (r.count / maxBar * 100) + "%";
+          return el("div", {class: "bar"}, el("span", {text: `${r.rule_id} · ${r.title}`}), el("span", {class: "tr"}, bar), el("span", {class: "nn", text: fmt(r.count)}));
+        })) : el("p", {class: "muted", text: "Tuần này chưa có vi phạm nào."}),
+        el("div", {class: "privacy"}, icon("lock"), "Số tổng hợp từ lịch sử trên máy này. Lịch sử chỉ chứa mã băm tệp, không tên tệp hay tên khách.")),
+      el("h2", {text: "Độ tin cậy của luật"}),
+      el("div", {class: "card flush"}, el("table", {},
+        el("thead", {}, el("tr", {}, ["Luật", "Nội dung", "Số lần", "Độ chính xác", "Cảnh báo khi đang vẽ"].map((t) => el("th", {text: t})))),
+        el("tbody", {}, o.top_rules.length ? o.top_rules.map((r) => el("tr", {},
+          el("td", {class: "f-rule", text: r.rule_id}), el("td", {text: r.title}), el("td", {text: fmt(r.count)}),
+          el("td", {}, pill("neu", "Chưa đo")),
+          el("td", {}, r.realtime_ok ? pill("ok", "Được bật") : pill("neu", "Chưa đo đủ"))))
+          : el("tr", {}, el("td", {colspan: "5", class: "muted", text: "Chưa có dữ liệu."}))))),
+      el("p", {class: "muted small mt8", text: "Độ chính xác của luật chỉ có sau khi đo trên mẫu đã gắn nhãn (kế hoạch P1c); cảnh báo khi đang vẽ chỉ bật cho luật đã đo đạt ngưỡng."}));
+  }
+
+  // ---------- BẢN VẼ: cột trái ----------
+  const OUT_RE = /\.cg-[0-9a-f]{8}\.dxf$/i;
+  function parentOf(path) { return path.replace(OUT_RE, ".dxf"); }
+
   async function loadFiles() {
+    if (!hasProject()) return;
     try {
       const r = await api("/api/drawings");
       S.files = r.drawings;
+      S.filesTruncated = r.truncated ? r.limit : 0;
       renderFiles();
     } catch (e) { toast(e.message); }
   }
 
-  function countsPills(c) {
-    if (!c) return [];
+  function statPills(st) {
+    if (!st) return [pill("neu", "Chưa quét")];
     const out = [];
-    if (c.E) out.push(pill("err sm", `${c.E} E`));
-    if (c.W) out.push(pill("warn sm", `${c.W} W`));
-    if (c.I) out.push(pill("info sm", `${c.I} I`));
-    if (!c.E && !c.W && !c.I) out.push(pill("ok sm", "Sạch"));
+    if (st.E) out.push(pill("err", `${st.E} lỗi`, "x"));
+    if (st.W) out.push(pill("warn", `${st.W} cảnh báo`, "alert"));
+    if (!st.E && !st.W) out.push(pill("ok", st.I ? `Sạch · ${st.I} gợi ý` : "Sạch", "check"));
     return out;
   }
 
   function renderFiles() {
     const box = $("files");
+    $("projName").textContent = hasProject() ? "Dự án " + S.session.project.name : "Dự án";
     if (!S.files.length) {
-      fill(box, el("div", {class: "empty"}, el("b", {text: "Chưa có tệp DXF"}), "Thư mục làm việc không có tệp .dxf nào."));
+      fill(box, emptyBox("Chưa có tệp DXF", "Thư mục dự án không có tệp .dxf nào. Chép bản vẽ vào thư mục, rồi bấm “Quét cả thư mục”."));
       return;
     }
-    fill(box, ...S.files.map((f) => {
-      const scan = S.scan[f.path];
-      const b = el("button", {class: "file", type: "button", "aria-current": f.path === S.file ? "true" : "false", onclick: () => openFile(f.path)},
-        el("span", {class: "n"}, icon("file"), f.path),
-        el("span", {class: "m"},
-          f.is_output ? pill("info sm", "bản mới (cad-guard)") : null,
-          `${fmt(Math.round(f.size_bytes / 1024))} KB`,
-          scan && scan.counts ? countsPills(scan.counts) : null,
-          scan && scan.error ? pill("neu sm", "không đọc được") : null));
-      return el("div", {role: "listitem"}, b);
-    }));
+    const src = S.files.filter((f) => !f.is_output);
+    const outs = S.files.filter((f) => f.is_output);
+    const btn = (f, child) => el("button", {class: "file" + (child ? " child" : ""), type: "button", role: "listitem",
+      "aria-current": f.path === S.file || (S.applied && S.applied.output === f.path && S.cmp === "after") ? "true" : "false",
+      onclick: () => openFile(f.path, {scan: false})},
+    el("span", {class: "n"}, icon("file"), f.path),
+    el("span", {class: "m"}, child ? pill("info", "Bản mới") : null, statPills(S.stat[f.path]),
+      el("span", {class: "muted small", text: `${fmt(Math.max(1, Math.round(f.size_bytes / 1024)))} KB`})));
+    const nodes = [];
+    for (const f of src) {
+      nodes.push(btn(f, false));
+      for (const o of outs.filter((x) => parentOf(x.path) === f.path)) nodes.push(btn(o, true));
+    }
+    for (const o of outs.filter((x) => !src.some((f) => f.path === parentOf(x.path)))) nodes.push(btn(o, true));
+    if (S.filesTruncated) nodes.push(el("p", {class: "muted small", text: `Chỉ liệt kê ${fmt(S.filesTruncated)} tệp đầu (thư mục quá lớn). Nên mở đúng thư mục dự án.`}));
+    fill(box, ...nodes);
+  }
+
+  function renderWorkSide() {
+    if (!S.session) return;
+    const stds = deptStd();
+    $("stdName").textContent = stds.length ? stds.join(" + ") : (S.dept && S.dept.view === "scene" ? "Chưa có (luật 3D đang phát triển)" : "Chưa gán chuẩn");
+    const res = Object.values(S.audits);
+    $("stdRules").textContent = res.length ? `${res.reduce((a, r) => a + r.rules_run, 0)} / ${res.reduce((a, r) => a + r.rules_total, 0)} luật` : "–";
+    const p = S.session.profile;
+    $("stdProfile").textContent = p ? `${p.name} ${p.version} (cho ${p.standard})` : "Mặc định của chuẩn";
+    $("profileBtn").hidden = !hasProject();
+    $("scanAll").disabled = !stds.length || !hasProject();
   }
 
   async function scanAll() {
     const btn = $("scanAll");
+    const stds = deptStd();
+    if (!stds.length) return;
     btn.disabled = true;
+    const h = $("handoff");
+    h.hidden = false;
+    fill(h, "Đang quét cả thư mục theo ", b(stds.join(" + ")), "…");
+    const agg = {};
     try {
-      const r = await api("/api/audit_all", {standard: S.standard});
-      S.scan = {};
-      for (const x of r.results) S.scan[x.path] = x;
+      for (const std of stds) {
+        const r = await api("/api/audit_all", {standard: std, dept: S.dept.id});
+        for (const x of r.results) {
+          if (!x.counts) continue;
+          const a = agg[x.path] || (agg[x.path] = {E: 0, W: 0, I: 0});
+          for (const k of ["E", "W", "I"]) a[k] += x.counts[k];
+        }
+      }
+      for (const [p, c] of Object.entries(agg)) S.stat[p] = c;
       renderFiles();
-      const next = S.session.departments.find((d) => d.id === S.dept.next);
-      const h = $("handoff");
-      fill(h, el("b", {text: `${r.ready}/${r.total} bản không có lỗi mức E`}), el("br"),
-        next ? `Sẵn sàng bàn giao sang phòng ${next.name} (theo ${r.standard}).` : `Sẵn sàng xuất cho xưởng (theo ${r.standard}).`);
-      h.hidden = false;
-    } catch (e) { toast(e.message); }
+      const total = Object.keys(agg).length;
+      const ready = Object.values(agg).filter((c) => !c.E).length;
+      const nx = nextNames(S.dept);
+      fill(h, b(`${ready}/${total} bản không còn lỗi mức E`), el("br"),
+        nx.length ? `Có thể đánh dấu sẵn sàng giao cho ${nx.join(" và ")} ở màn Việc của tôi.` : "Có thể đánh dấu sẵn sàng xuất cho xưởng ở màn Việc của tôi.");
+    } catch (e) { toast(e.message); h.hidden = true; }
     btn.disabled = false;
   }
 
-  // ---------- một bản vẽ: kiểm ----------
-  let centerTab = null;
-  async function openFile(path) {
-    S.file = path;
-    S.suggest = null;
-    S.preview = null;
-    renderFiles();
-    $("cvTitle").textContent = path;
-    $("cvInfo").hidden = true;
-    fill($("finds"), el("div", {class: "empty"}, "Đang kiểm…"));
-    fill($("chgList"), emptyChg());
-    $("chgFoot").hidden = true;
-    fill($("sumList"), );
-    try {
-      const r = await api("/api/audit", {file: path, standard: S.standard});
-      if (S.file !== path) return;
-      S.audit = r;
-      S.scan[path] = {path, counts: r.counts, ok: r.counts.E === 0};
-      renderFiles();
-      renderAudit();
-    } catch (e) {
-      fill($("finds"), el("div", {class: "empty"}, el("b", {text: "Không kiểm được"}), e.message));
-    }
-    renderHistory();
+  // ---------- BẢN VẼ: mở một tệp ----------
+  function resetDrawing(clearFile) {
+    if (clearFile) S.file = null;
+    S.geo = null; S.geoOut = null; S.audits = {}; S.findings = []; S.sel = null;
+    S.suggest = null; S.preview = null; S.applied = null; S.cmp = "after"; S.recheck = null;
+    if (S.v3d) { S.v3d.stop(); S.v3d = null; }
+    $("cmp").hidden = true; $("cmpLabel").hidden = true;
+    renderFinds(); renderChg();
   }
 
-  function renderAudit() {
-    const a = S.audit;
-    const total = a.counts.E + a.counts.W + a.counts.I;
-    $("cntF").textContent = String(total);
-    $("cntF").classList.toggle("hot", a.counts.E > 0);
-    $("cvInfo").textContent = `${a.standard} ${a.version}` + (a.profile ? ` · hồ sơ ${a.profile.name} ${a.profile.version}` : "");
-    $("cvInfo").hidden = false;
+  async function openFile(path, opts) {
+    const o = opts || {};
+    const isOut = OUT_RE.test(path);
+    resetDrawing(false);
+    S.file = path;
+    $("cvTitle").textContent = path;
+    renderFiles();
+    renderWorkSide();
+    if (!$("log").childElementCount || o.intro !== false) introChat();
+    renderSuggestions();
+    if (S.dept.view === "scene") { load3d(path); return; }
+    loadGeometry(path);
+    if (o.scan && deptStd().length) await doScan(true);
+    if (isOut) toast("Đây là tệp mới do cad-guard tạo; tệp gốc giữ nguyên.");
+  }
+
+  async function loadGeometry(path) {
+    renderSheet();
+    try {
+      const g = await api("/api/geometry", {file: path});
+      if (S.file !== path) return;
+      S.geo = g;
+      S.view = null;
+      renderSheet();
+    } catch (e) {
+      if (S.file !== path) return;
+      S.geo = {error: e.message};
+      renderSheet();
+    }
+  }
+
+  async function doScan(fromOpen) {
+    const path = S.file;
+    const stds = deptStd();
+    if (!path || !stds.length) return;
+    if (!fromOpen) say("me", "Quét bản vẽ này");
+    rightTab("chat");
+    const t0 = performance.now();
+    const typing = showTyping();
+    const results = {};
+    try {
+      for (const std of stds) results[std] = await api("/api/audit", {file: path, standard: std, dept: S.dept.id});
+    } catch (e) { typing.remove(); say("err", "Không quét được: " + e.message); return; }
+    typing.remove();
+    if (S.file !== path) return;
+    S.audits = results;
+    buildFindings();
+    const sec = ((performance.now() - t0) / 1000).toLocaleString("vi-VN", {maximumFractionDigits: 1});
+    const all = Object.values(results);
+    const c = {E: 0, W: 0, I: 0};
+    for (const r of all) for (const k of ["E", "W", "I"]) c[k] += r.counts[k];
+    S.stat[path] = c;
+    for (const r of all) toolCard("cadguard.audit", `{ "file": "${path}", "standard": "${r.standard} ${r.version}" }`, sec + " giây",
+      `${r.rules_run} luật chạy · ${r.counts.E + r.counts.W + r.counts.I} phát hiện · ${r.skipped.length} luật bỏ qua (thiếu dữ liệu)`);
+    const fixable = S.findings.filter((f) => f.fixable).length;
+    const located = S.findings.filter((f) => f.box).length;
+    const total = S.findings.length;
+    sayRich([
+      el("p", {}, `Quét xong trong ${sec} giây. Có `, b(`${total} nhóm phát hiện`), `: ${c.E} lỗi, ${c.W} cảnh báo, ${c.I} gợi ý.`,
+        located ? ` Đã đánh dấu ${located} vị trí trên bản vẽ.` : ""),
+      total ? el("p", {}, fixable ? ["Trong đó ", b(`${fixable} nhóm sửa tự động được`), " bằng thao tác an toàn (xem tab Thay đổi)."]
+        : "Không nhóm nào sửa tự động được; cần sửa trong phần mềm CAD.", total - fixable ? ` ${total - fixable} nhóm cần người sửa.` : "") : null,
+      el("div", {class: "src", text: `Căn cứ: bộ luật ${all.map((r) => r.standard + " " + r.version).join(", ")}. Việc đúng/sai do luật quyết, không phải do mô hình.`}),
+    ]);
+    renderFiles(); renderWorkSide(); renderFinds(); renderSheet(); renderChg(); renderSuggestions();
+    if (total) rightTab("finds");
+  }
+
+  function buildFindings() {
     const out = [];
-    out.push(el("div", {class: "bar-act"}, countsPills(a.counts), el("span", {class: "muted", text: `${a.rules_run} luật đã chạy`}),
-      el("span", {class: "spacer"}),
-      a.fixable_rules.length ? el("button", {class: "btn-p btn-sm", type: "button", onclick: () => { S.suggest = null; S.preview = null; selectCenter("chg"); }}, icon("tool"), "Đề xuất sửa") : null));
-    if (a.records_capped) out.push(el("div", {class: "msg note", text: "Tệp rất lớn: danh sách đối tượng bị cắt ở trần bộ nhớ; số liệu tổng vẫn đủ."}));
-    if (!total) out.push(el("div", {class: "empty"}, el("b", {text: "Không có phát hiện nào"}), `Bản vẽ đạt các luật đang chạy của ${a.standard}.`));
-    for (const g of a.groups) {
-      if (!g.rules.length) continue;
-      out.push(el("div", {class: "sev-h"}, pill(SEV[g.severity][0], `${g.label} (${g.severity})`), el("span", {class: "muted", text: `${g.rules.length} luật`})));
-      for (const r of g.rules) {
-        const fixable = a.fixable_rules.includes(r.rule_id);
-        out.push(el("div", {class: "f-card"},
-          el("div", {class: "f-top"},
-            el("button", {class: "f-rule link", type: "button", title: "Giải thích luật", onclick: () => showExplain(r.rule_id, a.standard)}, r.rule_id),
-            pill(SEV[r.severity][0] + " sm", SEV[r.severity][1]),
-            r.count > 1 ? pill("neu sm", `${fmt(r.count)} chỗ`) : null,
-            fixable ? pill("ok sm", "có thao tác sửa") : null),
-          el("div", {class: "f-title", text: r.title}),
-          el("div", {class: "f-d"}, el("ul", {}, r.items.map((it) => el("li", {},
-            it.message,
-            it.layer ? el("span", {class: "muted", text: ` · layer ${it.layer}`}) : null,
-            it.layout ? el("span", {class: "muted", text: ` · ${it.layout}`}) : null,
-            it.handles && it.handles.length ? el("span", {class: "muted", text: ` · handle ${it.handles.join(", ")}`}) : null)))),
-          el("div", {class: "f-meta"}, el("button", {class: "f-link", type: "button", onclick: () => showExplain(r.rule_id, a.standard)}, "Giải thích luật này"))));
+    const order = ["E", "W", "I"];
+    for (const sev of order) {
+      for (const [std, r] of Object.entries(S.audits)) {
+        const g = r.groups.find((x) => x.severity === sev);
+        if (!g) continue;
+        for (const rule of g.rules) {
+          const handles = [...new Set(rule.items.flatMap((it) => it.handles || []))];
+          out.push({no: out.length + 1, std, rule_id: rule.rule_id, severity: sev, title: rule.title, count: rule.count,
+            items: rule.items, handles, fixable: r.fixable_rules.includes(rule.rule_id), box: null, st: "open"});
+        }
       }
     }
-    if (a.skipped.length) {
-      out.push(el("details", {class: "skipped"}, el("summary", {text: `${a.skipped.length} luật bỏ qua (thiếu dữ liệu)`}),
-        el("ul", {}, a.skipped.map((s) => el("li", {}, el("b", {text: s.rule_id + ": "}), s.reason)))));
+    S.findings = out;
+    locateFindings();
+  }
+
+  // ---------- canvas 2D ----------
+  function geoIndex() {
+    const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
+    if (!g || !g.items) return null;
+    if (g._idx) return g._idx;
+    const idx = new Map();
+    for (const [h, k, d] of g.items) {
+      let xs, ys;
+      if (k === "L" || k === "P" || k === "Q") { xs = d.filter((_, i) => i % 2 === 0); ys = d.filter((_, i) => i % 2 === 1); }
+      else if (k === "C") { xs = [d[0] - d[2], d[0] + d[2]]; ys = [d[1] - d[2], d[1] + d[2]]; }
+      else { const s = g.text_size || 10; xs = [d[0], d[0] + (k === "T" ? s * Math.min(30, String(d[2]).length) * 0.6 : s)]; ys = [d[1] - s, d[1]]; }
+      idx.set(h, [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
     }
-    if (a.truncated) out.push(el("div", {class: "muted", text: "Danh sách phát hiện đã bị cắt bớt."}));
-    fill($("finds"), ...out);
+    g._idx = idx;
+    return idx;
+  }
+
+  function locateFindings() {
+    const idx = geoIndex();
+    for (const f of S.findings) {
+      f.box = null;
+      if (!idx) continue;
+      let bb = null;
+      for (const h of f.handles) {
+        const x = idx.get(h);
+        if (!x) continue;
+        bb = bb ? [Math.min(bb[0], x[0]), Math.min(bb[1], x[1]), Math.max(bb[2], x[2]), Math.max(bb[3], x[3])] : x.slice();
+      }
+      f.box = bb;
+    }
+  }
+
+  function viewOf(g) {
+    if (!S.view) S.view = g.viewbox.slice();
+    return S.view;
+  }
+
+  function renderSheet() {
+    const sheet = $("sheet");
+    if (S.dept && S.dept.view === "scene") return;
+    const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
+    $("viewTag").hidden = true;
+    if (!hasProject()) { fill(sheet, emptyBox("Chưa mở dự án", "Chọn thư mục dự án ở nút Dự án trên cùng.")); return; }
+    if (!S.file) { fill(sheet, emptyBox("Chưa mở bản vẽ", "Chọn một bản vẽ ở cột trái để xem trước và quét.")); $("cvInfo").textContent = ""; return; }
+    if (!g) { fill(sheet, emptyBox("Đang đọc bản vẽ…", "Tệp lớn có thể mất vài giây.")); return; }
+    if (g.error) { fill(sheet, emptyBox("Không đọc được hình bản vẽ", g.error)); return; }
+    const units = {4: "mm", 5: "cm", 6: "m", 1: "inch", 0: "không đơn vị"}[g.insunits];
+    $("viewTag").textContent = "Không gian mô hình" + (units ? " · " + units : "");
+    $("viewTag").hidden = false;
+    const a = Object.values(S.audits)[0];
+    $("cvInfo").textContent = `${fmt(g.model_entities)} đối tượng` + (a && a.dxf_version ? ` · DXF ${a.dxf_version}` : "") + ` · vẽ ${fmt(g.drawn)}` + (units ? ` · ${units}` : "");
+    if (g.empty_reason) { fill(sheet, emptyBox("Không có hình để xem trước", g.empty_reason, el("br"), "Kết quả quét vẫn đầy đủ ở tab Lỗi.")); return; }
+    const vb = viewOf(g);
+    const svg = svgEl("svg", {viewBox: vb.join(" "), role: "img", "aria-label": "Xem trước bản vẽ " + (S.cmp === "after" && S.geoOut ? S.applied.output : S.file),
+      "data-scanned": Object.keys(S.audits).length ? "1" : "0", preserveAspectRatio: "xMidYMid meet"});
+    const scale = Math.max(g.viewbox[2], g.viewbox[3]) / 820;
+    const draw = svgEl("g", {});
+    const ts = g.text_size || 10;
+    for (const [h, k, d] of g.items) {
+      let n;
+      if (k === "L") n = svgEl("line", {class: "ln thin", x1: d[0], y1: d[1], x2: d[2], y2: d[3]});
+      else if (k === "P" || k === "Q") n = svgEl(k === "Q" ? "polygon" : "polyline", {class: "ln thin", points: d.join(" ")});
+      else if (k === "C") n = svgEl("circle", {class: "ln thin", cx: d[0], cy: d[1], r: d[2]});
+      else if (k === "T") { n = svgEl("text", {class: "cv-txt", x: d[0], y: d[1], "font-size": ts}); n.textContent = String(d[2]); }
+      else { const s = ts * 0.7; n = svgEl("path", {class: "cv-ins", d: `M${d[0] - s} ${d[1]}h${2 * s}M${d[0]} ${d[1] - s}v${2 * s}`}); const t = svgEl("title"); t.textContent = "Khối " + d[2]; n.appendChild(t); }
+      draw.appendChild(n);
+    }
+    svg.appendChild(draw);
+    locateFindings();
+    const marks = svgEl("g", {});
+    for (const f of S.findings) if (f.box) marks.appendChild(markerSvg(f, scale));
+    svg.appendChild(marks);
+    const note = [];
+    if (g.truncated) note.push(`Chỉ vẽ ${fmt(g.drawn)} đối tượng đầu.`);
+    if (g.records_capped) note.push("Tệp rất lớn: danh sách đối tượng đã bị cắt ở trần bộ nhớ.");
+    const unlocated = S.findings.filter((f) => !f.box).length;
+    if (Object.keys(S.audits).length && unlocated) note.push(`${unlocated} nhóm phát hiện không có vị trí trên hình (bảng layer, kiểu chữ, khung tên…).`);
+    fill(sheet, svg, note.length ? el("div", {class: "sheet-note", text: note.join(" ")}) : null);
+    attachPanZoom(svg, g);
+  }
+
+  function markerSvg(f, k) {
+    const [x0, y0, x1, y1] = f.box;
+    const pad = 6 * k;
+    const x = x0 - pad, y = y0 - pad, w = x1 - x0 + 2 * pad, h = y1 - y0 + 2 * pad;
+    const dx = x + w + 14 * k, dy = y - 14 * k;
+    const cls = f.st === "fixed" ? "mk fixed" : "mk sev-" + (f.severity === "E" ? "error" : "warn");
+    const g = svgEl("g", {class: cls + (S.sel === f.no ? " sel" : ""), "data-f": f.no, tabindex: "0", role: "button",
+      "aria-label": `${SEV[f.severity][1]} ${f.no}: ${f.title}`});
+    g.appendChild(svgEl("circle", {class: "pulse", cx: x + w / 2, cy: y + h / 2, r: 14 * k}));
+    g.appendChild(svgEl("rect", {class: "ring", x, y, width: w, height: h, rx: 6 * k}));
+    g.appendChild(svgEl("line", {x1: x + w, y1: y, x2: dx, y2: dy, stroke: "currentColor", "stroke-width": 1.5 * k}));
+    g.appendChild(svgEl("circle", {class: "dot", cx: dx, cy: dy, r: 11 * k}));
+    const t = svgEl("text", {class: "num", x: dx, y: dy + 5 * k});
+    t.style.fontSize = (13 * k) + "px";
+    t.textContent = String(f.no);
+    g.appendChild(t);
+    const pick = () => selectFinding(f.no, true);
+    g.addEventListener("click", pick);
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+    return g;
+  }
+
+  function attachPanZoom(svg, g) {
+    const setVB = () => svg.setAttribute("viewBox", S.view.join(" "));
+    const toUser = (cx, cy) => {
+      const r = svg.getBoundingClientRect();
+      const v = S.view;
+      const sc = Math.max(v[2] / r.width, v[3] / r.height);
+      const ox = (r.width * sc - v[2]) / 2, oy = (r.height * sc - v[3]) / 2;
+      return [v[0] - ox + (cx - r.left) * sc, v[1] - oy + (cy - r.top) * sc, sc];
+    };
+    svg.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const [ux, uy] = toUser(e.clientX, e.clientY);
+      zoomAt(e.deltaY < 0 ? 0.8 : 1.25, ux, uy, g);
+      setVB();
+    }, {passive: false});
+    let drag = null;
+    svg.addEventListener("pointerdown", (e) => {
+      if (e.target.closest && e.target.closest(".mk")) return;
+      drag = {x: e.clientX, y: e.clientY, v: S.view.slice()};
+      svg.setPointerCapture(e.pointerId);
+      svg.classList.add("drag");
+    });
+    svg.addEventListener("pointermove", (e) => {
+      if (!drag) return;
+      const [, , sc] = toUser(e.clientX, e.clientY);
+      S.view = [drag.v[0] - (e.clientX - drag.x) * sc, drag.v[1] - (e.clientY - drag.y) * sc, drag.v[2], drag.v[3]];
+      setVB();
+    });
+    const end = () => { drag = null; svg.classList.remove("drag"); };
+    svg.addEventListener("pointerup", end);
+    svg.addEventListener("pointercancel", end);
+  }
+
+  function zoomAt(f, ux, uy, g) {
+    const v = S.view;
+    const full = g.viewbox;
+    const w = Math.min(full[2] * 4, Math.max(full[2] / 400, v[2] * f));
+    const h = w * v[3] / v[2];
+    const cx = ux === undefined ? v[0] + v[2] / 2 : ux, cy = uy === undefined ? v[1] + v[3] / 2 : uy;
+    const rx = (cx - v[0]) / v[2], ry = (cy - v[1]) / v[3];
+    S.view = [cx - rx * w, cy - ry * h, w, h];
+  }
+
+  function zoomButton(f) {
+    const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
+    if (!g || !g.items || !g.items.length) return;
+    if (f === 0) S.view = g.viewbox.slice(); else zoomAt(f, undefined, undefined, g);
+    const svg = $("sheet").querySelector("svg");
+    if (svg) svg.setAttribute("viewBox", S.view.join(" "));
+  }
+
+  function focusBox(bb) {
+    const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
+    if (!g || !bb) return;
+    const full = g.viewbox;
+    const w = Math.max(full[2] * 0.3, (bb[2] - bb[0]) * 3), h = w * full[3] / full[2];
+    const cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2;
+    S.view = [cx - w / 2, cy - h / 2, w, h];
+  }
+
+  function selectFinding(no, openTab) {
+    S.sel = no;
+    const f = S.findings.find((x) => x.no === no);
+    if (f && f.box) focusBox(f.box);
+    renderSheet();
+    renderFinds();
+    if (openTab) rightTab("finds");
+    const card = $("finds").querySelector(`[data-no="${no}"]`);
+    if (card) card.scrollIntoView({block: "nearest"});
+  }
+
+  // ---------- 3D (phòng Thiết kế 3D, chỉ xem) ----------
+  async function load3d(path) {
+    const sheet = $("sheet");
+    $("viewTag").textContent = "3D · chỉ xem";
+    $("viewTag").hidden = false;
+    fill(sheet, emptyBox("Đang dựng 3D…", "Dựng tất định từ bản vẽ (hộp đúng kích thước), không dùng AI."));
+    let r;
+    try { r = await api("/api/scene", {file: path}); } catch (e) { fill(sheet, emptyBox("Không dựng được 3D", e.message)); return; }
+    if (S.file !== path) return;
+    const c = r.counts;
+    $("cvInfo").textContent = `${c.walls} đoạn tường · ${c.modules} mô-đun · ${c.panels} tấm · ${c.gaps} phần thiếu`;
+    if (!r.boxes.length) {
+      fill(sheet, emptyBox("Bản vẽ này chưa dựng được 3D", "Cần khối tủ có thuộc tính kích thước hoặc tường trên layer tường (xem docs/scene). ",
+        r.gaps.length ? el("br") : null, r.gaps.slice(0, 3).join(" · ")));
+      return;
+    }
+    const cv = el("canvas", {"aria-label": "Mô hình 3D dựng từ bản vẽ, kéo chuột để xoay, cuộn để phóng to", role: "img"});
+    fill(sheet, cv, el("div", {class: "sheet-note", text: "Kéo để xoay, cuộn để phóng to. Ảnh minh hoạ từ bản vẽ, không dùng để đo." + (r.truncated ? " Đã cắt bớt hộp." : "")}));
+    S.v3d = makeViewer(cv);
+    S.v3d.set(r.boxes);
+    S.findings = [];
+    renderFinds();
+  }
+
+  // Trình xem 3D canvas 2D (chuyển từ scene/viewer.py, gắn sự kiện bằng addEventListener).
+  function makeViewer(cv) {
+    const cx = cv.getContext("2d");
+    let BOXES = [], yaw = 0.8, pitch = 0.6, zoom = 1, drag = null, alive = true;
+    function fit() { cv.width = Math.max(1, cv.clientWidth * devicePixelRatio); cv.height = Math.max(1, cv.clientHeight * devicePixelRatio); draw(); }
+    function bounds() {
+      const a = [1e18, 1e18, 1e18], bb = [-1e18, -1e18, -1e18];
+      for (const o of BOXES) for (const p of o.b) for (const z of [o.z0, o.z1]) { const v = [p[0], p[1], z]; for (let i = 0; i < 3; i++) { a[i] = Math.min(a[i], v[i]); bb[i] = Math.max(bb[i], v[i]); } }
+      return [a, bb];
+    }
+    function draw() {
+      if (!alive) return;
+      cx.clearRect(0, 0, cv.width, cv.height);
+      if (!BOXES.length) return;
+      const [a, bb] = bounds(), c = [(a[0] + bb[0]) / 2, (a[1] + bb[1]) / 2, (a[2] + bb[2]) / 2];
+      const r = Math.max(bb[0] - a[0], bb[1] - a[1], bb[2] - a[2]) || 1, k = Math.min(cv.width, cv.height) / (r * 1.6) * zoom;
+      const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+      const pr = (p) => { const x = p[0] - c[0], y = p[1] - c[1], z = p[2] - c[2], x1 = x * cy - y * sy, y1 = x * sy + y * cy; return [cv.width / 2 + x1 * k, cv.height / 2 - (z * cp + y1 * sp) * k, y1 * cp - z * sp]; };
+      const faces = [];
+      for (const o of BOXES) {
+        const n = o.b.length, top = o.b.map((p) => [p[0], p[1], o.z1]);
+        faces.push({v: top, n: [0, 0, 1], c: o.c, k: o.k});
+        for (let i = 0; i < n; i++) {
+          const p = o.b[i], q = o.b[(i + 1) % n], e = [q[0] - p[0], q[1] - p[1]], l = Math.hypot(e[0], e[1]) || 1;
+          faces.push({v: [[p[0], p[1], o.z0], [q[0], q[1], o.z0], [q[0], q[1], o.z1], [p[0], p[1], o.z1]], n: [e[1] / l, -e[0] / l, 0], c: o.c, k: o.k});
+        }
+      }
+      for (const f of faces) {
+        f.p = f.v.map(pr);
+        f.d = f.p.reduce((s, p) => s + p[2], 0) / f.p.length;
+        const nx = f.n[0] * cy - f.n[1] * sy, ny = f.n[0] * sy + f.n[1] * cy, nz = f.n[2];
+        f.vis = (ny * cp - nz * sp) <= 0.0001;
+        f.l = 0.45 + 0.55 * Math.max(0, (nx * -0.4 + (nz * cp - ny * sp) * 0.8 + 0.3));
+      }
+      faces.filter((f) => f.vis).sort((x, y) => y.d - x.d).forEach((f) => {
+        cx.beginPath();
+        f.p.forEach((p, i) => (i ? cx.lineTo(p[0], p[1]) : cx.moveTo(p[0], p[1])));
+        cx.closePath();
+        cx.globalAlpha = (f.k === "wall" && f.n[2] === 0) ? 0.22 : 1;
+        cx.fillStyle = "rgb(" + f.c.map((v) => Math.round(v * 255 * Math.min(1, f.l))).join(",") + ")";
+        cx.fill();
+        cx.strokeStyle = cx.fillStyle; cx.lineWidth = 0.7; cx.stroke();
+      });
+      cx.globalAlpha = 1;
+    }
+    const down = (e) => { drag = [e.clientX, e.clientY]; cv.setPointerCapture(e.pointerId); };
+    const move = (e) => { if (!drag) return; yaw += (e.clientX - drag[0]) * 0.01; pitch = Math.max(0.05, Math.min(1.5, pitch + (e.clientY - drag[1]) * 0.01)); drag = [e.clientX, e.clientY]; draw(); };
+    const up = () => { drag = null; };
+    cv.addEventListener("pointerdown", down);
+    cv.addEventListener("pointermove", move);
+    cv.addEventListener("pointerup", up);
+    cv.addEventListener("wheel", (e) => { e.preventDefault(); zoom *= e.deltaY < 0 ? 1.1 : 0.9; draw(); }, {passive: false});
+    window.addEventListener("resize", fit);
+    return {set(bx) { BOXES = bx; fit(); }, redraw: draw, zoom(f) { zoom = f === 0 ? 1 : zoom * f; draw(); },
+      stop() { alive = false; window.removeEventListener("resize", fit); }};
+  }
+
+  // ---------- tab phải ----------
+  function rightTab(p) {
+    for (const t of $$("#rightTabs [role=tab]")) {
+      const on = t.dataset.p === p;
+      t.setAttribute("aria-selected", on ? "true" : "false");
+      t.tabIndex = on ? 0 : -1;
+    }
+    for (const x of ["chat", "finds", "chg"]) $("p-" + x).classList.toggle("on", x === p);
+    if (p === "chg") { loadChangesets(); if (S.file && !S.suggest && !S.preview && !S.applied && S.findings.some((f) => f.fixable)) loadSuggest(); }
+  }
+
+  // ---------- tab Lỗi ----------
+  function renderFinds() {
+    const box = $("finds");
+    const cnt = $("cntF");
+    if (S.dept && S.dept.view === "scene") {
+      cnt.textContent = "–"; cnt.className = "cnt";
+      fill(box, emptyBox("Luật kiểm 3D đang phát triển", "Phòng Thiết kế 3D hiện chỉ xem mô hình dựng từ bản vẽ. Kiểm đơn vị, tên vật thể, va chạm và vật liệu sẽ có ở bản sau."));
+      return;
+    }
+    if (!S.file) { cnt.textContent = "–"; cnt.className = "cnt"; fill(box, emptyBox("Chưa mở bản vẽ", "Chọn một bản vẽ ở cột trái.")); return; }
+    if (!Object.keys(S.audits).length) {
+      cnt.textContent = "–"; cnt.className = "cnt";
+      fill(box, emptyBox("Chưa quét bản vẽ này", `Quét theo ${deptStd().join(" + ") || "chuẩn của phòng"}.`, el("br"), el("br"),
+        el("button", {class: "btn-p", type: "button", disabled: !deptStd().length, onclick: () => doScan(false)}, icon("search"), "Quét bản vẽ này")));
+      return;
+    }
+    const open = S.findings.filter((f) => f.st === "open");
+    cnt.textContent = String(open.length);
+    cnt.className = "cnt" + (open.some((f) => f.severity === "E") ? " hot" : "");
+    const out = [];
+    if (!S.findings.length) out.push(emptyBox("Không có phát hiện nào", `Bản vẽ đạt các luật đang chạy của ${deptStd().join(" + ")}.`));
+    for (const f of S.findings) {
+      const fixed = f.st === "fixed";
+      const sevPill = fixed ? pill("ok", "Đã sửa", "check") : pill(SEV[f.severity][0], SEV[f.severity][1], SEV[f.severity][2]);
+      const first = f.items[0] || {};
+      const where = [first.layer ? "layer " + first.layer : null, first.layout && first.layout !== "Model" ? "tờ " + first.layout : null].filter(Boolean).join(" · ");
+      out.push(el("div", {class: "f-card" + (S.sel === f.no ? " sel" : ""), "data-no": f.no, tabindex: "0", role: "button",
+        "aria-label": `${SEV[f.severity][1]} ${f.no}: ${f.title}`,
+        onclick: () => selectFinding(f.no, false),
+        onkeydown: (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); selectFinding(f.no, false); } }},
+      el("div", {class: "f-top"}, el("span", {class: "f-no", text: String(f.no)}), sevPill,
+        el("button", {class: "f-rule link", type: "button", title: "Xem luật này", onclick: (e) => { e.stopPropagation(); showExplain(f.rule_id, f.std); }}, f.rule_id),
+        f.count > 1 ? pill("neu sm", `${fmt(f.count)} chỗ`) : null, el("span", {class: "std"}, pill("neu sm", f.std))),
+      el("div", {class: "f-title", text: f.title}),
+      el("div", {class: "f-d"}, el("ul", {}, f.items.slice(0, 3).map((it) => el("li", {text: it.message}))),
+        f.items.length > 3 ? el("span", {class: "muted", text: `+${f.items.length - 3} mục khác`}) : null),
+      fixed ? el("div", {class: "f-meta"}, icon("check"), "Không còn trong tệp mới " + (S.applied ? S.applied.output : ""))
+        : f.fixable ? el("div", {class: "f-meta"}, icon("gear"), "Có thể tự sửa bằng thao tác an toàn: xem tab Thay đổi")
+          : el("div", {class: "f-meta"}, icon("hand"), "Cần người sửa trong phần mềm CAD. Trợ lý không tự sửa."),
+      el("div", {class: "f-meta"}, icon("search"), f.box ? `Vị trí: đánh dấu số ${f.no} trên bản vẽ` + (where ? " · " + where : "")
+        : (where ? where + " · " : "") + "không có vị trí trên hình mô hình")));
+    }
+    const sk = Object.values(S.audits).flatMap((r) => r.skipped.map((s) => ({...s, std: r.standard})));
+    if (sk.length) out.push(el("details", {class: "skipped"}, el("summary", {text: `${sk.length} luật bỏ qua (thiếu dữ liệu trong bản vẽ)`}),
+      el("ul", {}, sk.map((s) => el("li", {}, b(s.rule_id + ": "), s.reason)))));
+    fill(box, ...out);
   }
 
   async function showExplain(ruleId, standard) {
     try {
       const r = await api(`/api/explain?rule=${encodeURIComponent(ruleId)}&standard=${encodeURIComponent(standard)}`);
-      const nodes = [
-        el("p", {}, pill(SEV[r.severity] ? SEV[r.severity][0] : "neu", SEV[r.severity] ? SEV[r.severity][1] : r.severity), " ",
-          r.enabled ? pill("ok", "Đang bật") : pill("neu", "Tắt"), " ", r.implemented ? null : pill("neu", "Chưa cài code")),
-        kv([["Chuẩn", standard], ["Loại", r.kind === "deterministic" ? "tất định" : r.kind], ["Rủi ro báo sai", r.false_positive_risk],
-          ["Đọc gì", r.reads], ["Nguồn", r.source], ["Hồ sơ công ty", r.profile ? `${r.profile.name} ${r.profile.version}` : "không áp"]]),
-        el("h3", {text: "Tham số đang áp"}),
-        el("pre", {class: "json", text: JSON.stringify(r.rule_params || {}, null, 2)}),
-      ];
-      if (r.fix_ops && r.fix_ops.length) nodes.push(el("h3", {text: "Thao tác sửa có sẵn"}), el("p", {text: r.fix_ops.join(", ")}));
-      if (r.description_md) nodes.push(el("h3", {text: "Trong tài liệu chuẩn"}), el("pre", {class: "json", text: r.description_md}));
-      openDrawer(`${r.id} — ${r.title}`, nodes);
+      openRuleDrawer(r, standard);
     } catch (e) { toast(e.message); }
   }
 
-  // ---------- đề xuất sửa -> xem trước -> áp dụng -> hoàn tác ----------
-  function emptyChg() {
-    return el("div", {class: "empty"}, el("b", {text: "Chưa có đề xuất"}),
-      "Bấm “Đề xuất sửa” ở tab Lỗi: cad-guard gợi ý thao tác theo từ vựng cố định; bạn chọn, xem trước, rồi tự quyết áp dụng.");
+  // ---------- tab Thay đổi: đề xuất -> xem trước -> duyệt (tệp mới) -> hoàn tác ----------
+  const KIND_VI = {layers: "layer", text_styles: "kiểu chữ", dim_styles: "kiểu kích thước", blocks: "khối"};
+  function opDiff(op) {
+    const list = (x) => [].concat(x || []).slice(0, 4).join(", ") + ([].concat(x || []).length > 4 ? "…" : "");
+    switch (op.op) {
+      case "merge_layers": return [`layer ${list(op.sources)}`, `layer ${op.target || "(chọn layer đích)"}`];
+      case "move_to_layer": return [`đối tượng trên layer ${list((op.filter && op.filter.layers) || ["0"])} (không gian mô hình)`, `layer ${op.target || "(chọn layer đích)"}`];
+      case "set_bylayer": return ["màu / độ dày nét gán riêng từng đối tượng", "ByLayer (theo layer)"];
+      case "replace_text_style": return [`kiểu chữ ${list(op.from)}`, `kiểu chữ ${op.to || "(chọn kiểu chữ)"}`];
+      case "replace_dim_style": return [`kiểu kích thước ${list(op.from)}`, `kiểu kích thước ${op.to || "(chọn)"}`];
+      case "clear_dim_text_override": return ["chữ kích thước ghi đè bằng tay", "số đo tự động (<>)"];
+      case "purge_unused": return [`${op.names && op.names.length ? list(op.names) : (op.kinds || []).map((k) => KIND_VI[k] || k).join(", ")} không dùng`, "xoá định nghĩa (không xoá hình)"];
+      default: return [op.op, ""];
+    }
+  }
+
+  function suggestStd() {
+    for (const [std, r] of Object.entries(S.audits)) if (r.fixable_rules.length) return std;
+    return deptStd()[0];
   }
 
   async function loadSuggest() {
     if (!S.file) return;
-    fill($("chgList"), el("div", {class: "empty"}, "Đang tìm thao tác phù hợp…"));
+    const std = suggestStd();
+    fill($("chgList"), emptyBox("Đang tìm thao tác phù hợp…"));
     $("chgFoot").hidden = true;
     try {
-      S.suggest = await api("/api/changeset/suggest", {file: S.file, standard: S.standard});
+      S.suggest = await api("/api/changeset/suggest", {file: S.file, standard: std});
+      S.suggestStd = std;
+      for (const o of S.suggest.ops) o.on = !!o.checked;
       S.preview = null;
-      renderSuggest();
-    } catch (e) { fill($("chgList"), el("div", {class: "empty"}, el("b", {text: "Không gợi ý được"}), e.message)); }
+      renderChg();
+      renderSuggestions();
+    } catch (e) { fill($("chgList"), emptyBox("Không gợi ý được", e.message)); }
   }
 
-  function renderSuggest() {
+  function renderChg() {
+    const list = $("chgList"), foot = $("chgFoot");
+    foot.hidden = true;
+    const pending = S.suggest && !S.applied ? S.suggest.ops.filter((o) => o.on).length : 0;
+    $("cntC").textContent = S.applied ? "✓" : String(pending);
+    if (S.dept && S.dept.view === "scene") { fill(list, emptyBox("Không có thay đổi cho xem 3D", "Màn 3D chỉ xem; bản vẽ không bị sửa.")); return; }
+    if (S.applied) return renderApplied();
+    if (S.preview) return renderPreview();
+    if (!S.suggest) {
+      const fx = S.findings.filter((f) => f.fixable).length;
+      fill(list, emptyBox("Chưa có thay đổi nào", "Khi bạn (hoặc trợ lý) đề xuất sửa, từng thay đổi hiện ở đây để bạn xem trước và duyệt.", el("br"), "Bản vẽ gốc không bị chạm tới.",
+        S.file && fx ? [el("br"), el("br"), el("button", {class: "btn-p", type: "button", onclick: loadSuggest}, icon("gear"), `Đề xuất sửa ${fx} nhóm tự sửa được`)] : null),
+      changesetList());
+      return;
+    }
     const s = S.suggest;
-    const out = [el("div", {class: "safe"}, icon("shield"), el("span", {},
-      "Thao tác chỉ nằm trong từ vựng cố định (không xoá đối tượng hình học). Xem trước là chạy khô trong bộ nhớ, ",
-      el("b", {text: "chưa ghi gì"}), ". Áp dụng ghi ra tệp mới, tệp gốc giữ nguyên."))];
-    if (!s.ops.length) out.push(el("div", {class: "empty"}, el("b", {text: "Không có thao tác sửa tự động"}), "Các phát hiện còn lại cần sửa trong phần mềm CAD."));
-    for (const o of s.ops) {
+    const cards = s.ops.map((o) => {
       const cb = el("input", {type: "checkbox", id: "cb-" + o.key});
-      cb.checked = !!o.checked;
-      const choiceNodes = Object.entries(o.choices || {}).map(([field, values]) => {
-        const sel = el("select", {class: "sel", id: `ch-${o.key}-${field}`, "data-field": field},
+      cb.checked = o.on;
+      const [from, to] = opDiff(o.op);
+      const plus = el("div", {class: "p", text: "+ " + to});
+      cb.addEventListener("change", () => { o.on = cb.checked; renderChgCount(); });
+      const choices = Object.entries(o.choices || {}).map(([field, values]) => {
+        const sel = el("select", {class: "sel", id: `ch-${o.key}-${field}`, "aria-label": field === "to" ? "Kiểu chữ đích" : "Layer đích"},
           el("option", {value: "", text: "— chọn —"}), values.map((v) => el("option", {value: v, text: v})));
         sel.value = o.op[field] || "";
-        sel.addEventListener("change", () => { if (sel.value) cb.checked = true; });
-        return el("div", {class: "choice"}, el("label", {for: sel.id, text: field === "to" ? "Đổi sang kiểu chữ" : "Layer đích"}), sel);
+        sel.addEventListener("change", () => { o.op[field] = sel.value; plus.textContent = "+ " + opDiff(o.op)[1]; if (sel.value) { cb.checked = true; o.on = true; renderChgCount(); } });
+        return el("div", {class: "choice"}, el("label", {for: sel.id, text: field === "to" ? "Đổi sang" : "Layer đích"}), sel);
       });
-      out.push(el("div", {class: "op", "data-key": o.key},
-        el("label", {for: cb.id}, cb, el("span", {},
-          el("span", {class: "f-top"}, el("b", {text: o.title}), pill("neu sm", o.rule_id), el("span", {class: "opname", text: o.op.op})),
-          el("span", {class: "f-d", text: o.description}))),
-        choiceNodes,
-        el("details", {}, el("summary", {class: "muted", text: "Thao tác dạng JSON"}), el("pre", {text: JSON.stringify(o.op, null, 2)}))));
-    }
-    for (const n of s.notes) out.push(el("div", {class: "f-card"}, el("div", {class: "f-top"}, pill("neu sm", n.rule_id)), el("div", {class: "f-d", text: n.message})));
-    fill($("chgList"), ...out);
+      return el("div", {class: "op"},
+        el("label", {for: cb.id}, cb, el("span", {}, b(o.title), el("br"), el("span", {class: "f-rule", text: `${o.rule_id} · ${o.op.op}`}),
+          el("span", {class: "f-d", text: o.description}),
+          el("span", {class: "diff"}, el("div", {class: "m", text: "− " + from}), plus))),
+        choices);
+    });
+    const notes = s.notes.map((n) => el("div", {class: "f-card"}, el("div", {class: "f-top"}, pill("neu sm", n.rule_id), icon("hand")), el("div", {class: "f-d", text: n.message})));
+    fill(list, el("div", {class: "safe"}, icon("shield"), el("span", {}, "Thao tác chỉ nằm trong từ vựng cố định (không xoá đối tượng hình học). ",
+      s.protected_patterns ? `Hồ sơ công ty bảo vệ ${s.protected_patterns} mẫu layer.` : "")),
+    s.ops.length ? cards : emptyBox("Không có thao tác sửa tự động", "Các phát hiện còn lại cần sửa trong phần mềm CAD."),
+    notes.length ? [el("div", {class: "sub-h", text: "Cần người sửa"}), notes] : null, changesetList());
+    renderChgFoot();
+  }
+
+  function renderChgCount() {
+    const n = S.suggest ? S.suggest.ops.filter((o) => o.on).length : 0;
+    $("cntC").textContent = String(n);
+    const btn = $("previewBtn");
+    if (btn) { btn.disabled = !n; fill(btn, icon("search"), `Xem trước ${n} thay đổi`); }
+  }
+
+  function renderChgFoot() {
     const foot = $("chgFoot");
-    fill(foot, el("div", {class: "bar-act"},
-      el("span", {class: "muted", text: s.protected_patterns ? `Hồ sơ công ty bảo vệ ${s.protected_patterns} mẫu layer: thao tác bỏ qua đối tượng trên các layer đó.` : "Không có layer bảo vệ từ hồ sơ công ty."}),
-      el("span", {class: "spacer"}),
-      el("button", {class: "btn-p", type: "button", id: "previewBtn", disabled: !s.ops.length, onclick: doPreview}, icon("search"), "Xem trước")));
+    if (!S.suggest || !S.suggest.ops.length) { foot.hidden = true; return; }
+    const n = S.suggest.ops.filter((o) => o.on).length;
+    fill(foot, el("div", {class: "safe"}, icon("check"), el("span", {}, "Chưa ghi gì. Xem trước là chạy khô trong bộ nhớ; khi duyệt, kết quả lưu thành ", b("tệp mới"), ", bản gốc không bị sửa.")),
+      el("div", {class: "bar-act"},
+        el("button", {class: "btn-p", type: "button", id: "previewBtn", disabled: !n, onclick: doPreview}, icon("search"), `Xem trước ${n} thay đổi`),
+        el("button", {class: "btn-s", type: "button", onclick: () => { S.suggest = null; renderChg(); renderSuggestions(); say("ai", "Đã bỏ đề xuất. Bản vẽ không thay đổi gì."); }}, "Bỏ đề xuất")));
     foot.hidden = false;
   }
 
   function selectedOps() {
     const ops = [];
     for (const o of S.suggest.ops) {
-      if (!$("cb-" + o.key).checked) continue;
-      const op = JSON.parse(JSON.stringify(o.op));
-      for (const field of Object.keys(o.choices || {})) {
-        const v = $(`ch-${o.key}-${field}`).value;
-        if (!v) throw new Error(`Chọn giá trị cho “${o.title}” trước khi xem trước.`);
-        op[field] = v;
-      }
-      ops.push(op);
+      if (!o.on) continue;
+      for (const field of Object.keys(o.choices || {})) if (!o.op[field]) throw new Error(`Chọn giá trị cho “${o.title}” trước khi xem trước.`);
+      ops.push(JSON.parse(JSON.stringify(o.op)));
     }
-    if (!ops.length) throw new Error("Chưa chọn thao tác nào.");
+    if (!ops.length) throw new Error("Chưa chọn thay đổi nào.");
     return ops;
   }
 
@@ -444,242 +1171,331 @@
     let ops;
     try { ops = selectedOps(); } catch (e) { toast(e.message); return; }
     const btn = $("previewBtn");
-    btn.disabled = true;
-    try {
-      S.preview = await api("/api/changeset/propose", {file: S.file, standard: S.standard, ops});
-      renderPreview(S.preview, null);
-      loadChangesets();
-    } catch (e) { toast(e.message); btn.disabled = false; }
-  }
-
-  function rulesBlock(rules) {
-    const list = (arr) => (arr && arr.length ? arr.join(", ") : "không");
-    return kv([["Luật hết", list(rules.resolved)], ["Luật giảm", list(rules.improved)],
-      ["Luật xuất hiện mới/tăng", list(rules.regressed)],
-      ["Trước → sau", Object.keys(rules.before || {}).map((k) => `${k}: ${rules.before[k]} → ${(rules.after || {})[k] || 0}`).join("; ") || "—"]]);
-  }
-
-  function checksBlock(checks) {
-    return el("ul", {class: "checks"}, (checks || []).map((c) => el("li", {class: c.ok ? "ok" : "bad"}, icon(c.ok ? "check" : "x"), el("span", {}, el("b", {text: c.id + ": "}), c.message))));
-  }
-
-  function renderPreview(pv, applied) {
-    const ops = (pv.ops || []).map((r) => `${r.index}. ${r.op}: ${fmt(r.affected)} mục` + (r.skipped_protected ? ` (bỏ qua ${r.skipped_protected} trên layer bảo vệ)` : ""));
-    const regressed = pv.rules_regressed || (pv.rules && pv.rules.rules_regressed) || 0;
-    const card = el("div", {class: "pv " + (pv.ok && !regressed ? "result-ok" : "result-bad")},
-      el("h3", {text: "Xem trước changeset " + pv.changeset_id}),
-      el("p", {}, pv.ok && !regressed ? pill("ok", "Đạt kiểm", "check") : pill("err", "Không đạt", "x"), " ", el("span", {text: pv.summary_vi || ""})),
-      kv([["Tệp gốc", pv.source && pv.source.path], ["Chuẩn", `${pv.standard} ${pv.standard_version || ""}`],
-        ["Hồ sơ", pv.profile ? `${pv.profile.name} ${pv.profile.version}` : "không"], ["Thay đổi", pv.diff_summary_vi]]),
-      el("div", {class: "f-d"}, el("b", {text: "Theo thao tác:"}), el("ul", {}, ops.map((t) => el("li", {text: t})))),
-      pv.rules ? rulesBlock(pv.rules) : null,
-      el("details", {}, el("summary", {class: "muted", text: "Các mục kiểm"}), checksBlock(pv.checks)));
-    fill($("chgList"), card);
-    const foot = $("chgFoot");
-    if (applied) { renderApplied(applied, pv); return; }
-    const canApply = pv.ok && !regressed;
-    fill(foot, 
-      el("div", {class: "safe"}, icon("shield"), el("span", {text: "Chưa ghi bản vẽ nào. Áp dụng sẽ ghi ra tệp mới cạnh tệp gốc, tự kiểm lại; không đạt thì không tạo tệp."})),
-      el("div", {class: "bar-act"},
-        el("button", {class: "btn-s", type: "button", onclick: () => { if (S.suggest) renderSuggest(); else fill($("chgList"), emptyChg()); }}, "Quay lại"),
-        el("span", {class: "spacer"}),
-        el("button", {class: "btn-p", type: "button", id: "applyBtn", disabled: !canApply, onclick: () => doApply(pv)}, icon("check"), "Áp dụng (ghi ra tệp mới)")));
-    foot.hidden = false;
-  }
-
-  async function doApply(pv) {
-    const ok = await confirmDialog({
-      title: `Áp dụng changeset ${pv.changeset_id}?`,
-      body: [`Ghi ra TỆP MỚI cạnh “${pv.source.path}” (tên có đuôi .cg-…dxf). Tệp gốc giữ nguyên, không bị ghi.`,
-        "cad-guard kiểm lại tệp mới; không đạt thì không tạo tệp. Hoàn tác được (xoá tệp mới)."],
-      yes: "Áp dụng",
-    });
-    if (!ok) return;
-    const btn = $("applyBtn");
     if (btn) btn.disabled = true;
     try {
-      const r = await api("/api/changeset/apply", {changeset_id: pv.changeset_id, confirm: true});
-      toast("Đã ghi tệp mới: " + r.output.path);
-      renderApplied(r, pv);
-      loadFiles();
+      S.preview = await api("/api/changeset/propose", {file: S.file, standard: S.suggestStd, ops});
+      toolCard("cadguard.propose_changeset", `{ "file": "${S.file}", "ops": ${ops.length}, "dry_run": true }`, "", `${S.preview.ops ? S.preview.ops.length : ops.length} thao tác · chưa ghi tệp nào`);
+      renderChg();
+      renderSuggestions();
       loadChangesets();
     } catch (e) { toast(e.message); if (btn) btn.disabled = false; }
   }
 
-  function renderApplied(r, pv) {
-    const v = r.validation || {};
-    const card = el("div", {class: "pv " + (v.ok ? "result-ok" : "result-bad")},
-      el("h3", {text: "Đã áp dụng " + r.changeset_id}),
-      kv([["Tệp mới", r.output && r.output.path], ["Mã băm tệp mới", r.output && r.output.sha256 ? r.output.sha256.slice(0, 16) + "…" : ""],
-        ["Tệp gốc", (r.source && r.source.path) + " (không đổi)"], ["Thời điểm", r.applied_at], ["Kiểm lại", v.summary_vi]]),
-      el("details", {open: true}, el("summary", {class: "muted", text: "Kết quả kiểm tệp ra (validate)"}), checksBlock(v.checks)));
-    fill($("chgList"), card);
+  function checksList(checks) {
+    return el("ul", {class: "checks"}, (checks || []).map((c) => el("li", {class: c.ok ? "" : "bad"}, icon(c.ok ? "check" : "x"), el("span", {text: c.message || c.id}))));
+  }
+
+  function renderPreview() {
+    const pv = S.preview;
+    const regressed = pv.rules_regressed || 0;
+    const ok = pv.ok && !regressed;
+    const ops = (pv.ops || []).map((r) => el("li", {text: `${r.op}: ${fmt(r.affected)} mục` + (r.skipped_protected ? ` (bỏ qua ${r.skipped_protected} trên layer bảo vệ)` : "")}));
+    const rr = pv.rules || {};
+    fill($("chgList"),
+      el("div", {class: "pv " + (ok ? "result-ok" : "result-bad")},
+        el("h3", {}, "Xem trước ", el("span", {class: "f-rule", text: pv.changeset_id})),
+        el("p", {}, ok ? pill("ok", "Đạt kiểm", "check") : pill("err", "Không đạt", "x"), " ", pv.summary_vi || ""),
+        kv([["Tệp gốc", pv.source && pv.source.path], ["Chuẩn", `${pv.standard} ${pv.standard_version || ""}`], ["Thay đổi", pv.diff_summary_vi],
+          ["Luật hết lỗi", (rr.resolved || []).join(", ") || "không"], ["Luật giảm", (rr.improved || []).join(", ") || "không"],
+          ["Luật xuất hiện mới", (rr.regressed || []).join(", ") || "không"]]),
+        el("div", {class: "f-d"}, b("Theo thao tác:"), el("ul", {}, ops)),
+        el("details", {}, el("summary", {class: "muted", text: "Các mục tự kiểm"}), checksList(pv.checks))),
+      changesetList());
+    const foot = $("chgFoot");
+    fill(foot, el("div", {class: "safe"}, icon("check"), el("span", {text: "Chưa ghi bản vẽ nào. Duyệt sẽ ghi ra tệp mới cạnh tệp gốc, tự mở lại và chạy lại luật; không đạt thì không tạo tệp."})),
+      el("div", {class: "bar-act"},
+        el("button", {class: "btn-p", type: "button", id: "okBtn", disabled: !ok, onclick: doApply}, icon("check"), "Duyệt & lưu tệp mới"),
+        el("button", {class: "btn-s", type: "button", onclick: () => { S.preview = null; renderChg(); renderSuggestions(); }}, "Quay lại")));
+    foot.hidden = false;
+  }
+
+  async function doApply() {
+    const pv = S.preview;
+    const ok = await confirmDialog({title: "Duyệt và lưu tệp mới?",
+      body: [`Ghi ra TỆP MỚI cạnh “${pv.source.path}” (tên có đuôi .cg-….dxf). Tệp gốc giữ nguyên, không bị ghi.`,
+        "cad-guard mở lại tệp mới và chạy lại luật; không đạt thì không tạo tệp. Bỏ được bất cứ lúc nào (hoàn tác)."],
+      yes: "Duyệt và lưu", no: "Chưa"});
+    if (!ok) return;
+    const btn = $("okBtn");
+    if (btn) btn.disabled = true;
+    say("me", "Duyệt và lưu");
+    let r;
+    try { r = await api("/api/changeset/apply", {changeset_id: pv.changeset_id, confirm: true}); } catch (e) { toast(e.message); if (btn) btn.disabled = false; return; }
+    S.applied = {cid: r.changeset_id, output: r.output.path, source: r.source.path, validation: r.validation || {}};
+    S.preview = null; S.suggest = null; S.cmp = "after";
+    toolCard("cadguard.apply_changeset", `{ "changeset": "${r.changeset_id}", "out": "${r.output.path}" }`, "", "đã ghi tệp mới");
+    toolCard("cadguard.validate_output", `{ "file": "${r.output.path}" }`, "", (r.validation && r.validation.summary_vi) || "đã kiểm");
+    toast(`Đã lưu ${r.output.path} · bản gốc không đổi`);
+    await loadFiles();
+    await recheckApplied();
+    const left = S.findings.filter((f) => f.st === "open").length;
+    sayRich([el("p", {}, "Đã lưu ", b(r.output.path), ". Mình đã mở lại tệp mới và chạy lại luật: ", (r.validation && r.validation.ok) ? "không hỏng gì." : "có mục kiểm không đạt, xem tab Thay đổi.",
+      ` Còn `, b(`${left} nhóm phát hiện`), " cần người xử lý."), el("div", {class: "src", text: "Kết quả công cụ cad-guard (tất định), không qua mô hình AI."})]);
+    renderAll();
+    loadChangesets();
+  }
+
+  async function recheckApplied() {
+    const out = S.applied.output;
+    try {
+      S.geoOut = await api("/api/geometry", {file: out});
+    } catch (_) { S.geoOut = null; }
+    S.view = null;
+    const remain = new Set();
+    const counts = {E: 0, W: 0, I: 0};
+    for (const std of deptStd()) {
+      try {
+        const r = await api("/api/audit", {file: out, standard: std, dept: S.dept.id});
+        for (const g of r.groups) for (const rule of g.rules) remain.add(std + "|" + rule.rule_id);
+        for (const k of ["E", "W", "I"]) counts[k] += r.counts[k];
+      } catch (_) { /* giữ nguyên */ }
+    }
+    S.stat[out] = counts;
+    for (const f of S.findings) f.st = remain.has(f.std + "|" + f.rule_id) ? "open" : "fixed";
+    $("cmp").hidden = false; $("cmpLabel").hidden = false;
+    for (const x of $$("#cmp button")) x.setAttribute("aria-pressed", x.dataset.v === "after" ? "true" : "false");
+    $("cvTitle").textContent = out;
+  }
+
+  function renderApplied() {
+    const a = S.applied;
+    const v = a.validation || {};
+    fill($("chgList"),
+      el("div", {class: "op"}, el("div", {class: "bar-act"}, pill("ok", "Đã lưu", "check"), b(a.output)),
+        el("p", {class: "f-d", text: `Bản gốc ${a.source} giữ nguyên. Bạn có thể bỏ bản mới nếu thấy chưa ổn.`})),
+      el("div", {class: "op"}, b("Đã tự kiểm sau khi lưu"), checksList(v.checks)),
+      changesetList());
     const foot = $("chgFoot");
     fill(foot, el("div", {class: "bar-act"},
-      r.output ? el("button", {class: "btn-s", type: "button", onclick: () => openFile(r.output.path)}, icon("file"), "Mở tệp mới") : null,
-      el("span", {class: "spacer"}),
-      el("button", {class: "btn-d", type: "button", id: "undoBtn", onclick: () => doUndo(r.changeset_id, r.output && r.output.path)}, icon("undo"), "Hoàn tác (xoá tệp mới)")));
+      el("button", {class: "btn-s", type: "button", onclick: () => openFile(a.output, {scan: true})}, icon("file"), "Mở tệp mới"),
+      el("button", {class: "btn-s", type: "button", onclick: () => doUndo(a.cid, a.output)}, icon("undo"), "Bỏ bản mới (hoàn tác)")));
     foot.hidden = false;
   }
 
   async function doUndo(cid, outPath) {
-    const ok = await confirmDialog({
-      title: `Hoàn tác ${cid}?`,
-      body: [`Xoá tệp mới “${outPath || "?"}” do changeset này tạo. Tệp gốc không bị ảnh hưởng.`,
-        "Nếu tệp mới đã bị sửa sau khi áp dụng (mã băm khác) thì cad-guard từ chối xoá."],
-      yes: "Xoá tệp mới", danger: true,
-    });
+    const ok = await confirmDialog({title: `Bỏ bản ${outPath || "mới"}?`,
+      body: ["Tệp mới này sẽ bị xoá. Bản gốc không bị ảnh hưởng.", "Nếu tệp mới đã bị sửa sau khi lưu (mã băm khác) thì cad-guard từ chối xoá."],
+      yes: "Bỏ bản mới", no: "Giữ lại", danger: true});
     if (!ok) return;
     try {
       const r = await api("/api/changeset/undo", {changeset_id: cid, confirm: true});
-      toast("Đã hoàn tác: xoá " + r.removed);
-      fill($("chgList"), el("div", {class: "pv result-ok"}, el("h3", {text: "Đã hoàn tác " + r.changeset_id}),
-        kv([["Đã xoá", r.removed], ["Thời điểm", r.undone_at]])));
-      $("chgFoot").hidden = true;
-      if (S.file === outPath) S.file = null;
+      toast("Đã bỏ " + r.removed);
+      if (S.applied && S.applied.cid === cid) {
+        S.applied = null; S.geoOut = null; S.cmp = "after"; S.view = null;
+        for (const f of S.findings) f.st = "open";
+        $("cmp").hidden = true; $("cmpLabel").hidden = true;
+        $("cvTitle").textContent = S.file || "";
+        say("ai", `Đã bỏ bản mới. Mọi thứ quay về như lúc vừa quét; bản gốc ${S.file} không bị đụng tới.`);
+      }
+      delete S.stat[r.removed];
+      if (S.file === r.removed) { S.file = null; resetDrawing(true); }
       await loadFiles();
+      renderAll();
       loadChangesets();
     } catch (e) { toast(e.message); }
   }
 
-  // ---------- lịch sử changeset ----------
   async function loadChangesets() {
-    try {
-      const r = await api("/api/changesets");
-      S.changesets = r.changesets;
-      renderHistory();
-    } catch (e) { /* im lặng: tab Thay đổi chỉ là phụ */ }
+    if (!hasProject()) return;
+    try { S.changesets = (await api("/api/changesets")).changesets; } catch (_) { return; }
+    const box = $("csList");
+    if (box) fill(box, ...changesetItems());
   }
 
-  function renderHistory() {
-    const pending = S.changesets.filter((c) => !c.applied).length;
-    $("cntC").textContent = String(pending);
-    const list = S.changesets;
-    if (!list.length) {
-      fill($("histList"), el("div", {class: "empty"}, el("b", {text: "Chưa có changeset"}), "Changeset bạn hoặc trợ lý đề xuất sẽ hiện ở đây."));
-      return;
-    }
-    fill($("histList"), ...list.map((c) => {
+  function changesetItems() {
+    const list = S.changesets.filter((c) => !S.file || c.source === S.file || c.source === parentOf(S.file));
+    if (!list.length) return [el("p", {class: "muted small", text: "Chưa có changeset nào cho bản vẽ này."})];
+    return list.slice(0, 20).map((c) => {
       const a = c.applied;
       const state = !a ? pill("neu sm", "chưa áp dụng") : a.undone_at ? pill("neu sm", "đã hoàn tác") : pill("ok sm", "đã áp dụng");
       return el("div", {class: "f-card"},
         el("div", {class: "f-top"}, el("span", {class: "f-rule", text: c.id}), state,
           c.created_by === "agent" ? pill("info sm", "trợ lý đề xuất") : pill("neu sm", "bạn đề xuất"),
           c.ok === false ? pill("err sm", "xem trước không đạt") : null),
-        el("div", {class: "f-d", text: `${c.source} · ${c.standard} · ${c.ops} thao tác · ${c.created_at}`}),
-        c.summary_vi ? el("div", {class: "f-d", text: c.summary_vi}) : null,
+        el("div", {class: "f-d", text: `${c.standard} · ${c.ops} thao tác · ${when(c.created_at)}`}),
         a && !a.undone_at && a.output ? el("div", {class: "f-d", text: "Tệp mới: " + a.output.path}) : null,
         el("div", {class: "bar-act mt8"},
-          el("button", {class: "btn-s btn-sm", type: "button", onclick: () => openChangeset(c.id)}, "Xem trước / áp dụng"),
+          !a ? el("button", {class: "btn-s btn-sm", type: "button", onclick: () => openChangeset(c.id)}, "Xem trước & duyệt") : null,
           a && !a.undone_at ? el("button", {class: "btn-s btn-sm", type: "button", onclick: () => doUndo(c.id, a.output && a.output.path)}, icon("undo"), "Hoàn tác") : null));
-    }));
+    });
+  }
+
+  function changesetList() {
+    if (!S.file) return null;
+    return [el("div", {class: "sub-h", text: "Các changeset của bản vẽ này"}), el("div", {id: "csList", class: "list-in"}, ...changesetItems())];
   }
 
   async function openChangeset(cid) {
     try {
       const c = await api("/api/changeset?id=" + encodeURIComponent(cid));
       if (!c.preview) { toast("Changeset không có phần xem trước."); return; }
-      selectCenter("chg");
-      if (c.applied && !c.applied.undone_at) {
-        renderApplied({changeset_id: c.id, output: c.applied.output, source: c.source, applied_at: c.applied.applied_at, validation: c.applied.validation}, c.preview);
-      } else if (c.applied) {
-        renderPreview(c.preview, null);
-        $("applyBtn").disabled = true;
-        toast("Changeset này đã áp dụng rồi hoàn tác; muốn làm lại hãy đề xuất mới.");
-      } else {
-        renderPreview(c.preview, null);
-      }
+      if (S.file !== c.source.path) await openFile(c.source.path, {scan: false, intro: false});
+      S.preview = {...c.preview, changeset_id: c.id};
+      rightTab("chg");
+      renderChg();
     } catch (e) { toast(e.message); }
   }
 
-  // ---------- tóm tắt mô hình ----------
-  async function loadSummary() {
-    if (!S.file) { fill($("sumList"), el("div", {class: "empty", text: "Chọn một bản vẽ."})); return; }
-    try {
-      const r = await api("/api/summary", {file: S.file});
-      const obj = (o) => Object.entries(o || {}).map(([k, v]) => `${k}: ${fmt(v)}`).join(" · ") || "—";
-      fill($("sumList"), el("div", {class: "pv"}, el("h3", {text: "Tóm tắt mô hình bản vẽ"}),
-        kv([["Phiên bản DXF", r.dxf_version], ["Đơn vị (INSUNITS)", r.insunits], ["Số layer", fmt(r.layer_count)], ["Số khối dùng", fmt(r.block_count)],
-          ["Đối tượng theo loại", obj(r.entities_by_type)], ["Đối tượng theo không gian", obj(r.entities_by_space)],
-          ["Kiểu chữ dùng", obj(r.text_styles)],
-          ["Layout", (r.layouts || []).map((l) => `${l.name} (${l.paper_w_mm || "?"}×${l.paper_h_mm || "?"} mm, ${l.viewport_count} khung nhìn)`).join("; ") || "—"]]),
-        r.truncated ? el("p", {class: "muted", text: "Danh sách đã bị cắt bớt."}) : null));
-    } catch (e) { fill($("sumList"), el("div", {class: "empty", text: e.message})); }
+  function renderAll() { renderFiles(); renderFinds(); renderChg(); renderSheet(); renderSuggestions(); renderWorkSide(); }
+
+  // ---------- trò chuyện ----------
+  function logAdd(node) { const log = $("log"); log.appendChild(node); log.scrollTop = log.scrollHeight; return node; }
+  function say(who, text) {
+    if (who === "err") return logAdd(el("div", {class: "msg err", text}));
+    return logAdd(el("div", {class: "msg " + who, text}));
+  }
+  function sayRich(nodes) { return logAdd(el("div", {class: "msg ai rich"}, nodes)); }
+  function showTyping() { return logAdd(el("div", {class: "typing"}, el("i"), el("i"), el("i"), " Đang xử lý")); }
+  function toolCard(name, args, ms, out) {
+    return logAdd(el("details", {class: "tool"}, el("summary", {}, el("span", {class: "ok"}, icon("check")), el("code", {text: name}), el("span", {class: "spacer"}), el("span", {text: ms || ""})),
+      el("pre", {text: `${args}\n→ ${out}`})));
   }
 
-  function selectCenter(name) { centerTab(name); }
+  function introChat() {
+    fill($("log"));
+    S.history = [];
+    if (!S.file) return;
+    const stds = deptStd();
+    sayRich([el("p", {}, "Xin chào, phòng ", b(S.dept.name), ". Mình đang xem ", b(S.file), ". ",
+      stds.length ? ["Mình quét theo chuẩn ", b(stds.join(" + ")), ", giải thích và đề xuất sửa. Mọi sửa đổi đều ghi ra ", b("tệp mới"), " sau khi bạn duyệt."]
+        : "Phòng này hiện chỉ xem 3D dựng từ bản vẽ (chỉ xem, không sửa).")]);
+  }
 
-  // ---------- trợ lý ----------
+  function renderSuggestions() {
+    const s = [];
+    const nx = S.dept ? nextNames(S.dept) : [];
+    const scanned = Object.keys(S.audits).length > 0;
+    const firstRule = S.findings.find((f) => f.st === "open");
+    const needRule = S.findings.find((f) => f.st === "open" && !f.fixable);
+    if (S.file && S.dept && S.dept.view !== "scene") {
+      if (!scanned) s.push(["Quét bản vẽ này", () => doScan(false), true], ["Bản vẽ này có gì?", doAbout]);
+      else if (S.applied) {
+        s.push([`Soạn gói bàn giao cho ${nx.join(" và ") || "xưởng"}`, doHandoverNote, true], ["Quét lại bản mới", () => openFile(S.applied.output, {scan: true})]);
+        if (needRule) s.push([`Giải thích lỗi ${needRule.rule_id}`, () => doExplain(needRule)]);
+      } else if (S.suggest || S.preview) {
+        s.push(["Mở tab Thay đổi", () => rightTab("chg"), true]);
+        if (firstRule) s.push([`Giải thích lỗi ${firstRule.rule_id}`, () => doExplain(firstRule)]);
+      } else {
+        if (S.findings.some((f) => f.fixable)) s.push(["Sửa các lỗi tự sửa được", doPropose, true]);
+        if (firstRule) s.push([`Giải thích lỗi ${firstRule.rule_id}`, () => doExplain(firstRule)]);
+        s.push([`Soạn gói bàn giao cho ${nx.join(" và ") || "xưởng"}`, doHandoverNote, !S.findings.some((f) => f.fixable)]);
+      }
+    } else if (S.file) s.push(["Bản vẽ này có gì?", doAbout]);
+    fill($("sug"), ...s.map(([t, fn, p]) => el("button", {type: "button", class: p ? "primary" : "", onclick: () => { if (S.busy) return; if (t !== "Quét bản vẽ này") say("me", t); fn(); }}, t)));
+  }
+
+  async function doAbout() {
+    try {
+      const r = await api("/api/summary", {file: S.file});
+      toolCard("cadguard.get_model_summary", `{ "file": "${S.file}" }`, "", "đã lấy tóm tắt (có trần kích thước)");
+      const top = Object.entries(r.entities_by_type || {}).slice(0, 4).map(([k, v]) => `${fmt(v)} ${k}`).join(", ");
+      const units = {4: "mm", 5: "cm", 6: "m", 1: "inch", 0: "không đặt đơn vị"}[r.insunits] || `mã ${r.insunits}`;
+      sayRich([el("p", {}, "Đây là bản vẽ ", b(`DXF ${r.dxf_version || "?"}`), `, đơn vị ${units}, ${fmt(r.layer_count)} layer, ${fmt(r.block_count)} khối dùng.`),
+        el("p", {text: `Đối tượng nhiều nhất: ${top || "không có"}. Có ${(r.layouts || []).length} layout.`}),
+        el("div", {class: "src", text: "Kết quả công cụ cad-guard (tất định), không qua mô hình AI."})]);
+    } catch (e) { say("err", e.message); }
+    renderSuggestions();
+  }
+
+  async function doExplain(f) {
+    try {
+      const r = await api(`/api/explain?rule=${encodeURIComponent(f.rule_id)}&standard=${encodeURIComponent(f.std)}`);
+      toolCard("cadguard.explain_rule", `{ "rule": "${f.rule_id}" }`, "", "đã lấy mô tả luật và tham số");
+      const params = Object.entries(r.rule_params || {}).map(([k, v]) => `${k} = ${JSON.stringify(v)}`).join("; ");
+      sayRich([el("p", {}, b(`${r.id} · ${r.title}.`)),
+        el("p", {}, `Mức `, b(SEV[r.severity] ? SEV[r.severity][1].toLowerCase() : r.severity), `. Bản vẽ này có ${fmt(f.count)} chỗ vi phạm. `,
+          f.fixable ? "Có thao tác sửa an toàn trong từ vựng cố định (tab Thay đổi)." : "Chưa có thao tác sửa tự động: cần sửa trong phần mềm CAD."),
+        params ? el("p", {text: "Tham số đang áp: " + params}) : null,
+        el("div", {class: "src", text: `Căn cứ: standards/${f.std}.yaml · ${r.id}` + (r.source ? ` · nguồn ${r.source}` : "")}),
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: () => openRuleDrawer(r, f.std)}, "Xem đầy đủ")]);
+    } catch (e) { say("err", e.message); }
+  }
+
+  async function doPropose() {
+    rightTab("chg");
+    await loadSuggest();
+    if (!S.suggest) return;
+    const n = S.suggest.ops.length;
+    const need = S.findings.filter((f) => f.st === "open" && !f.fixable);
+    toolCard("cadguard.suggest_ops", `{ "file": "${S.file}", "standard": "${S.suggestStd}" }`, "", `${n} thao tác gợi ý · chưa ghi tệp nào`);
+    sayRich([el("p", {}, "Mình đề xuất ", b(`${n} thay đổi`), " và ", b("chưa ghi gì"), ". Hãy xem tab ", b("Thay đổi"), ", bỏ tick việc nào bạn chưa muốn, bấm Xem trước rồi duyệt."),
+      need.length ? el("p", {}, "Những việc mình ", b("không tự làm"), ": ", need.slice(0, 4).map((f) => f.title.toLowerCase()).join("; "), need.length > 4 ? "…" : "", ".") : null,
+      el("div", {class: "src", text: "Thao tác gợi ý do cad-guard sinh tất định từ phát hiện, không qua mô hình AI."})]);
+  }
+
+  function handoverLines() {
+    const lines = [];
+    const res = Object.values(S.audits);
+    const open = S.findings.filter((f) => f.st === "open");
+    const e = open.filter((f) => f.severity === "E");
+    lines.push(`Bản vẽ: ${S.applied ? S.applied.output + " (bản đã sửa, tệp mới)" : S.file}`);
+    lines.push(`Kiểm theo: ${res.map((r) => `${r.standard} ${r.version}`).join(", ")}` + (S.session.profile ? ` · hồ sơ ${S.session.profile.name} ${S.session.profile.version}` : ""));
+    lines.push(`Còn lại: ${e.length} nhóm lỗi mức E, ${open.length - e.length} nhóm cảnh báo/gợi ý`);
+    const fixed = S.findings.filter((f) => f.st === "fixed");
+    if (fixed.length) lines.push(`Đã sửa trong tệp mới: ${fixed.map((f) => f.rule_id).join(", ")}`);
+    for (const f of open.slice(0, 6)) lines.push(`${f.rule_id} (${SEV[f.severity][1]}): ${f.title} · ${f.count} chỗ`);
+    return {lines, blocked: e.length > 0};
+  }
+
+  function doHandoverNote() {
+    if (!Object.keys(S.audits).length) { say("ai", "Hãy quét bản vẽ trước, mình mới soạn được ghi chú bàn giao từ kết quả kiểm."); return; }
+    const nx = nextNames(S.dept);
+    const {lines, blocked} = handoverLines();
+    toolCard("cadguard.get_handover_data", `{ "file": "${S.file}" }`, "", "dữ liệu bàn giao có cấu trúc");
+    const copy = el("button", {class: "btn-s btn-sm", type: "button", onclick: async () => {
+      try { await navigator.clipboard.writeText(lines.join("\n")); toast("Đã sao chép ghi chú bàn giao"); } catch (_) { toast("Không sao chép được; hãy chọn chữ và Ctrl+C."); }
+    }}, icon("copy"), "Sao chép");
+    const target = S.applied ? S.applied.output : S.file;
+    const mark = el("button", {class: "btn-p btn-sm", type: "button", disabled: blocked, onclick: () => markHandover(target)},
+      nx.length ? `Đánh dấu sẵn sàng giao cho ${nx.join(" và ")}` : "Đánh dấu sẵn sàng xuất cho xưởng");
+    sayRich([el("p", {}, "Đây là ", b(`ghi chú bàn giao cho ${nx.join(" và ") || "xưởng"}`), ", tạo từ dữ liệu có cấu trúc của bản vẽ:"),
+      el("div", {class: "note-card"}, el("div", {class: "lbl"}, icon("info"), "Sinh tự động từ dữ liệu, không phải văn bản tự do của mô hình"),
+        el("ul", {}, lines.map((t) => el("li", {text: t})),
+          blocked ? el("li", {class: "warnli"}, icon("alert", "i14"), " Còn lỗi mức E: chưa nên bàn giao") : null),
+        el("div", {class: "bar-act"}, copy, mark)),
+      el("div", {class: "src", text: "Đánh dấu chỉ ghi vào lịch sử dự án trên máy này; cad-guard không gửi tệp đi đâu."})]);
+  }
+
+  // ----- engine -----
   async function loadEngines(refresh) {
     try {
       const r = await api("/api/engines" + (refresh ? "?refresh=1" : ""));
-      S.engines = r.engines;
-      S.groups = r.groups;
-      renderEngineSelect();
-      renderConnect();
+      S.engines = r.engines; S.groups = r.groups; S.maxCost = r.max_cost_usd;
+      const saved = sessionStorage.getItem("cg-engine");
+      const usable = (e) => e.available && !e.needs_model;
+      const pick = S.engines.find((e) => e.name === saved && usable(e)) || S.engines.find((e) => e.name === r.default_engine && usable(e))
+        || S.engines.find(usable);
+      S.engine = pick || null;
+      renderEngineMenu();
       if (refresh) $("refreshNote").textContent = "Đã kiểm lại lúc " + new Date().toLocaleTimeString("vi-VN");
     } catch (e) { toast(e.message); }
   }
 
-  function renderEngineSelect() {
-    const sel = $("engineSel");
-    const saved = sessionStorage.getItem("cg-engine");
-    fill(sel, ...S.groups.map((g) => el("optgroup", {label: g.title},
-      S.engines.filter((e) => e.mode === g.mode).map((e) => el("option", {value: e.name, disabled: !e.available,
-        text: e.title + (e.available ? "" : " — " + e.reason)})))));
-    const pick = S.engines.find((e) => e.name === saved && e.available) || S.engines.find((e) => e.available);
-    if (pick) sel.value = pick.name;
-    S.engine = pick || null;
-    renderEngineCard();
-  }
-
-  function engineCost(e) {
-    if (!e) return "";
-    if (e.mode === "cli") return "Chi phí: tính vào gói/tài khoản CLI của bạn. Số USD hiện ở đây là ước tính của CLI, với gói thuê bao không phải tiền bị trừ.";
-    if (e.name === "ollama") return "Chi phí: không có cước API (mô hình chạy trên máy).";
-    return "Chi phí: tính theo token vào tài khoản API của bạn; cad-guard ước tính khi biết giá.";
-  }
-
-  function engineDataFlow(e) {
-    const anon = S.session && S.session.anonymize;
-    const what = anon ? "Trợ lý chỉ thấy kết quả công cụ đã ẩn danh (mã F_…, L_…), không thấy tệp DXF." : "Ẩn danh đã TẮT: trợ lý thấy tên thật.";
-    if (!e) return what;
-    if (e.name === "ollama") return what + " Dữ liệu ở lại máy.";
-    if (e.mode === "cli") return what + " Đi tới nhà cung cấp của CLI theo điều khoản tài khoản của bạn.";
-    if (e.default_off) return what + " Đi qua bên trung gian thứ ba rồi tới nhà cung cấp mô hình.";
-    return what + " Đi thẳng tới nhà cung cấp API đã chọn.";
-  }
-
-  function renderEngineCard() {
+  function renderEngineMenu() {
     const e = S.engine;
-    const card = $("engCard");
-    if (!e) {
-      fill(card, el("div", {class: "t"}, pill("neu", "Chưa có trợ lý dùng được")),
-        el("div", {text: "Cài và đăng nhập một CLI (vd. Claude Code), hoặc đặt khoá API bằng `cadguard keys set …`, rồi vào tab Kết nối AI bấm Kiểm lại."}));
-      $("modelRow").hidden = true;
-      $("chatHead").textContent = "Chưa chọn trợ lý";
-      $("sendBtn").disabled = true;
-      return;
+    $("engineName").textContent = e ? e.title.replace(/ \(.*$/, "").replace(/ — .*/, "") : "chưa có";
+    const anon = S.session ? S.session.anonymize : true;
+    fill($("chatHead"), icon("bot"), el("span", {}, e ? ["Đang dùng ", b(e.title), anon ? " · chỉ thấy kết quả công cụ đã ẩn danh" : " · KHÔNG ẩn danh (--no-anonymize)"]
+      : "Chưa có trợ lý dùng được: cài/đăng nhập một CLI hoặc nhập khoá API ở màn Kết nối AI."));
+    $("sendBtn").disabled = !e || S.busy;
+    const items = [];
+    for (const g of S.groups) {
+      items.push(el("div", {class: "grp", text: g.title}));
+      for (const x of S.engines.filter((y) => y.mode === g.mode)) {
+        items.push(menuItem(e && x.name === e.name, x.title, x.available ? (x.status || "dùng được") + (x.model ? ` · ${x.model}` : "") : x.reason,
+          () => { S.engine = x; sessionStorage.setItem("cg-engine", x.name); renderEngineMenu(); }, !x.available));
+      }
     }
-    $("sendBtn").disabled = S.busy;
-    fill(card, 
-      el("div", {class: "t"}, e.mode === "cli" ? pill("info sm", "Hạn mức tài khoản (CLI)") : pill("ok sm", "API — khoá của bạn"),
-        e.experimental ? pill("warn sm", "thử nghiệm") : null, el("span", {text: e.status})),
-      el("div", {text: engineCost(e)}),
-      el("div", {class: "terms", text: "Điều khoản: " + e.terms}));
-    const mi = $("modelIn");
-    $("modelRow").hidden = false;
-    mi.placeholder = e.mode === "cli" ? "mặc định của CLI" : (e.needs_model ? "bắt buộc: tên mô hình" : "mặc định");
-    mi.value = sessionStorage.getItem("cg-model-" + e.name) || e.model || "";
-    fill($("chatHead"), icon("lock"), el("span", {text: engineDataFlow(e)}));
+    items.push(menuItem(false, "Cấu hình kết nối AI…", "Đăng nhập CLI, nhập khoá API, chọn trợ lý mặc định", () => go("connect")));
+    fill($("engineMenu"), ...items);
+    renderCost(null);
   }
 
   function usageText(u) {
     if (!u) return "";
     const cost = u.cost_usd === null || u.cost_usd === undefined ? "chi phí không rõ"
       : `~${Number(u.cost_usd).toLocaleString("vi-VN", {maximumFractionDigits: 4})} USD` + (u.cost_estimated ? " (ước tính)" : "");
-    return `${fmt(u.input_tokens)} token vào · ${fmt(u.output_tokens)} ra` +
-      (u.cache_read_tokens ? ` · ${fmt(u.cache_read_tokens)} đọc cache` : "") + ` · ${cost}`;
+    return `${fmt(u.input_tokens)} token vào · ${fmt(u.output_tokens)} ra · ${cost}`;
   }
   function addUsage(total, u) {
     for (const k of ["input_tokens", "output_tokens", "cache_read_tokens", "cache_write_tokens"]) total[k] = (total[k] || 0) + (u[k] || 0);
@@ -687,18 +1503,12 @@
     total.cost_estimated = total.cost_estimated || u.cost_estimated;
   }
   function renderCost(turn) {
-    const parts = [];
-    if (turn) parts.push("Lượt này: " + usageText(turn));
-    parts.push("Cả phiên: " + usageText(S.sessionUsage));
-    if (S.engine && S.engine.mode === "cli") parts.push("(gói thuê bao: số USD là ước tính, không phải tiền bị trừ)");
-    $("costLine").textContent = parts.join(" — ");
-  }
-
-  function logAdd(node) {
-    const log = $("log");
-    log.appendChild(node);
-    log.scrollTop = log.scrollHeight;
-    return node;
+    const su = S.sessionUsage;
+    const used = su.cost_usd ? Number(su.cost_usd).toLocaleString("vi-VN", {maximumFractionDigits: 4}) : "0";
+    $("capUsed").textContent = `Phiên này đã dùng ~${used} USD`;
+    if (!su.input_tokens && !turn) { $("costLine").textContent = ""; return; }
+    $("costLine").textContent = (turn ? "Lượt này: " + usageText(turn) + " — " : "") + "Cả phiên: " + usageText(su)
+      + (S.engine && S.engine.mode === "cli" ? " (gói thuê bao: số USD là ước tính)" : "");
   }
 
   async function sendChat(ev) {
@@ -707,20 +1517,16 @@
     const text = $("inp").value.trim();
     if (!text) return;
     const e = S.engine;
-    if (!e) { toast("Chưa có trợ lý dùng được."); return; }
-    const model = $("modelIn").value.trim();
-    if (e.needs_model && !model) { toast("Engine này cần tên mô hình."); $("modelIn").focus(); return; }
-    if (model) sessionStorage.setItem("cg-model-" + e.name, model);
+    if (!e) { toast("Chưa có trợ lý dùng được. Vào Kết nối AI để cấu hình."); return; }
+    if (e.needs_model) { toast("Engine này cần tên mô hình: đặt ở màn Kết nối AI."); return; }
     $("inp").value = "";
     S.history.push({role: "user", content: text});
-    logAdd(el("div", {class: "msg me", text}));
+    say("me", text);
     const ai = el("div", {class: "msg ai"});
-    const typing = logAdd(el("div", {class: "typing", text: "Trợ lý đang trả lời…"}));
-    let aiAdded = false;
+    const typing = showTyping();
+    let aiAdded = false, answer = "", proposed = false;
     const tools = {};
     const turn = {input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, cost_usd: null};
-    let answer = "";
-    let proposed = false;
     setBusy(true);
     const ensureAi = () => { if (!aiAdded) { typing.before(ai); aiAdded = true; } };
     const handle = (m) => {
@@ -729,17 +1535,16 @@
         case "text": ensureAi(); ai.textContent += m.text || ""; break;
         case "tool_call": {
           const pre = el("pre", {text: "Tham số: " + JSON.stringify(m.arguments, null, 2)});
-          const st = el("span", {class: "muted", text: "đang chạy…"});
-          const d = el("details", {class: "tool"}, el("summary", {}, icon("tool"), el("span", {text: "Công cụ " + m.name}), st), pre);
-          tools[m.id || m.name] = {d, st, pre};
+          const st = el("span", {class: "run", text: "đang chạy…"});
+          const d = el("details", {class: "tool"}, el("summary", {}, el("span", {class: "ok"}, icon("gear")), el("code", {text: m.name}), el("span", {class: "spacer"}), st), pre);
+          tools[m.id || m.name] = {st, pre};
           typing.before(d);
           break;
         }
         case "tool_result": {
           const t = tools[m.id || m.name];
-          const txt = "Kết quả: " + (m.content || "");
-          if (t) { t.st.textContent = m.is_error ? "lỗi" : "xong"; t.pre.textContent += "\n\n" + txt; }
-          else typing.before(el("details", {class: "tool"}, el("summary", {}, icon("tool"), "Kết quả " + (m.name || "")), el("pre", {text: txt})));
+          const txt = "→ " + (m.content || "");
+          if (t) { t.st.textContent = m.is_error ? "lỗi" : "xong"; t.pre.textContent += "\n" + txt; }
           if (m.name && m.name.endsWith("propose_changeset") && !m.is_error) proposed = true;
           break;
         }
@@ -755,8 +1560,7 @@
     try {
       const r = await fetch("/api/chat", {method: "POST", cache: "no-store",
         headers: {"X-CadGuard-Token": TOKEN, "Content-Type": "application/json"},
-        body: JSON.stringify({engine: e.name, model: model || null, messages: S.history, standard: S.standard,
-          allow_propose: $("allowPropose").checked})});
+        body: JSON.stringify({engine: e.name, model: null, messages: S.history, standard: chatStd(), allow_propose: $("allowPropose").checked})});
       if (!r.ok) {
         let msg = "Lỗi máy chủ " + r.status;
         try { msg = (await r.json()).error || msg; } catch (_) { /* giữ msg */ }
@@ -777,28 +1581,25 @@
           if (line) { try { handle(JSON.parse(line)); } catch (_) { /* dòng hỏng: bỏ */ } }
         }
       }
-    } catch (err) {
-      typing.before(el("div", {class: "msg err", text: err.message}));
-    }
+    } catch (err) { typing.before(el("div", {class: "msg err", text: err.message})); }
     typing.remove();
     addUsage(S.sessionUsage, turn);
     renderCost(turn);
-    if (answer) S.history.push({role: "assistant", content: answer});
-    else S.history.pop();
+    if (answer) S.history.push({role: "assistant", content: answer}); else S.history.pop();
     if (proposed) {
-      logAdd(el("div", {class: "msg note", text: "Trợ lý đã đề xuất một changeset (chưa ghi bản vẽ). Xem ở tab “Thay đổi”, kiểm phần xem trước rồi tự quyết áp dụng."}));
+      say("note", "Trợ lý đã đề xuất một changeset (chưa ghi bản vẽ). Xem ở tab “Thay đổi”, kiểm phần xem trước rồi tự quyết duyệt.");
       loadChangesets();
     }
     S.run = null;
     setBusy(false);
   }
 
-  function setBusy(b) {
-    S.busy = b;
-    $("sendBtn").disabled = b || !S.engine;
-    $("stopBtn").hidden = !b;
-    $("engineSel").disabled = b;
-    if (b) $("stopBtn").focus(); else $("inp").focus();
+  function setBusy(v) {
+    S.busy = v;
+    $("sendBtn").disabled = v || !S.engine;
+    $("sendBtn").hidden = v;
+    $("stopBtn").hidden = !v;
+    if (v) $("stopBtn").focus(); else $("inp").focus();
   }
 
   async function stopChat() {
@@ -808,78 +1609,325 @@
     $("stopBtn").disabled = false;
   }
 
-  // ---------- Kết nối AI ----------
-  function renderConnect() {
-    const card = (e) => el("div", {class: "card prov" + (e.available ? "" : " off")},
-      el("div", {class: "hd"}, el("span", {class: "nm", text: e.title}),
-        e.available ? pill("ok", "Dùng được", "check") : pill("neu", e.reason)),
-      el("p", {class: "ds"}, el("b", {text: "Trạng thái: "}), e.status || "—", e.model ? ` · mô hình mặc định: ${e.model}` : (e.mode === "api" ? " · chưa đặt mô hình mặc định" : "")),
-      e.hint ? el("p", {class: "ds"}, el("b", {text: "Cách bật: "}), e.hint) : null,
-      e.mode === "api" && e.name !== "ollama" ? el("p", {class: "ds"}, "Khoá: ", el("code", {text: `cadguard keys set ${e.name}`}), " trong terminal (không nhập ở đây).") : null,
-      el("p", {class: "terms", text: "Điều khoản: " + e.terms}));
-    fill($("cliCards"), ...S.engines.filter((e) => e.mode === "cli").map(card));
-    fill($("apiCards"), ...S.engines.filter((e) => e.mode !== "cli").map(card));
-    const anon = S.session.anonymize;
-    fill($("dataCard"), 
-      el("p", {}, anon ? pill("ok", "Ẩn danh Bậc 1 (mặc định)", "lock") : pill("err", "KHÔNG ẩn danh (--no-anonymize)", "warn")),
-      el("p", {text: anon
-        ? "Trợ lý chỉ thấy kết quả công cụ đã ẩn danh: mã phiên F_… (tệp), L_… (layer), B_… (khối), S_… (kiểu chữ), Y_… (layout); chữ trong bản vẽ bị che. Không gửi tệp DXF, không gửi đường dẫn tuyệt đối."
-        : "Ẩn danh đã tắt bằng cờ dòng lệnh: trợ lý thấy tên layer, tên tệp và chữ thật. Muốn bật lại: dừng và chạy lại `cadguard app` không có --no-anonymize."}),
-      el("p", {text: "Lịch sử trò chuyện chỉ nằm trong trang này (bộ nhớ trình duyệt), không ghi ra đĩa. Màn hình người dùng (danh sách lỗi, xem trước) dùng tên thật vì không rời máy."}));
-  }
-
-  // ---------- Luật áp dụng ----------
-  let RULES = null;
+  // ---------- LUẬT ÁP DỤNG ----------
   async function loadRules() {
-    const std = $("ruleStd").value || S.standard;
-    try {
-      RULES = await api("/api/rules?standard=" + encodeURIComponent(std));
-      renderRules();
-    } catch (e) { toast(e.message); }
+    if (!hasProject()) return;
+    const sel = $("ruleStd");
+    if (!sel.options.length) fill(sel, el("option", {value: "", text: "Tất cả chuẩn"}), S.session.standards.map((n) => el("option", {value: n, text: n})));
+    if (!S.rules) {
+      S.rules = {};
+      try {
+        for (const n of S.session.standards) S.rules[n] = await api("/api/rules?standard=" + encodeURIComponent(n));
+      } catch (e) { toast(e.message); }
+    }
+    renderRules();
   }
 
-  function paramText(defs, eff, changed) {
-    const keys = Object.keys(defs || {});
-    if (!keys.length) return [el("span", {class: "muted", text: "không có tham số"})];
-    return keys.map((k) => {
-      const d = JSON.stringify(defs[k]);
-      const v = JSON.stringify(eff[k]);
-      return el("div", {class: "prm"}, k + ": ", changed.includes(k) ? el("span", {class: "chg", text: `${d} → ${v}`}) : d);
-    });
+  function openCatalog(o) {
+    S.ruleFilter = {dept: o.dept || "", q: o.rule || "", kind: "", sev: ""};
+    $("rq").value = S.ruleFilter.q;
+    $("fKind").value = ""; $("fSev").value = "";
+    $("ruleStd").value = "";
+    go("rules");
+  }
+
+  function ruleRows() {
+    const out = [];
+    for (const [std, data] of Object.entries(S.rules || {})) for (const r of data.rules) out.push({...r, std, version: data.version});
+    return out;
   }
 
   function renderRules() {
-    const r = RULES;
-    fill($("srcline"), 
-      el("span", {}, "Chuẩn ", el("code", {text: `${r.standard} ${r.version}`})),
-      el("span", {}, "Hồ sơ công ty: ", r.profile ? el("b", {text: `${r.profile.name} ${r.profile.version}`}) : "không áp"),
-      r.profile_note ? pill("warn", r.profile_note) : null,
-      r.globals_changed.length ? el("span", {}, "Tham số chung đã chỉnh: ", r.globals_changed.join(", ")) : null);
-    const c = r.counts;
-    const cov = (nm, big, sub) => el("div", {class: "cov"}, el("div", {class: "nm", text: nm}), el("div", {class: "big", text: String(big)}), el("div", {class: "sub", text: sub}));
-    fill($("covs"), cov("Luật trong chuẩn", c.total, `${c.implemented} đã có code`), cov("Đang chạy", c.running, "đã cài và đang bật"),
-      cov("Tắt bởi hồ sơ", c.disabled_by_profile, "hồ sơ công ty tắt"), cov("Tham số đã chỉnh", c.params_changed, "khác mặc định của chuẩn"));
-    const q = $("rq").value.trim().toLowerCase();
-    const k = $("fKind").value;
-    const rows = r.rules.filter((x) => {
-      if (q && !(x.id.toLowerCase().includes(q) || x.title.toLowerCase().includes(q))) return false;
-      if (k === "run") return x.implemented && x.enabled;
-      if (k === "off") return x.enabled_default && !x.enabled;
-      if (k === "changed") return x.params_changed.length > 0;
-      if (k === "todo") return !x.implemented;
+    if (!S.rules) return;
+    const F = S.ruleFilter;
+    const stdSel = $("ruleStd").value;
+    const deps = S.session.departments;
+    const deptsOf = (std) => deps.filter((d) => d.standards.includes(std));
+    const all = ruleRows().filter((r) => !stdSel || r.std === stdSel);
+    fill($("srcline"), pill("info", "Chỉ đọc"),
+      el("span", {}, Object.values(S.rules).map((d, i) => [i ? " · " : "", "Chuẩn ", b(`${d.standard} ${d.version}`)])),
+      el("span", {}, "Hồ sơ công ty: ", S.session.profile ? b(`${S.session.profile.name} ${S.session.profile.version}`) : "không dùng"),
+      el("span", {}, "Danh mục sinh từ tệp: ", Object.keys(S.rules).map((n, i) => [i ? " + " : "", el("code", {text: `standards/${n}.yaml`})]), " + ", el("code", {text: "departments.json"})));
+    const card = (d) => {
+      const L = all.filter((r) => d.standards.includes(r.std));
+      const run = L.filter((r) => r.implemented && r.enabled).length, nc = L.filter((r) => !r.implemented).length, off = L.length - run - nc, n = L.length || 1;
+      const bar = el("div", {class: "bar2", "aria-hidden": "true"}, el("i"), el("i"), el("i"));
+      const [i1, i2, i3] = bar.children;
+      i1.style.width = (run / n * 100) + "%"; i1.style.background = "var(--ok)";
+      i2.style.width = (off / n * 100) + "%"; i2.style.background = "var(--warn)";
+      i3.style.width = (nc / n * 100) + "%"; i3.style.background = "var(--border-strong)";
+      return el("button", {class: "cov", type: "button", "aria-pressed": F.dept === d.id ? "true" : "false", onclick: () => { F.dept = F.dept === d.id ? "" : d.id; renderRules(); }},
+        el("div", {class: "nm", text: d.name}), el("div", {class: "big", text: `${L.length} luật`}), bar,
+        el("div", {class: "sub", text: d.standards.length ? `${run} đang chạy · ${off} tắt · ${nc} chưa cài code` : "Chưa có chuẩn (đang phát triển)"}));
+    };
+    const todo = all.filter((r) => !r.implemented).length;
+    const covs = $("covs");
+    covs.classList.toggle("c-auto", true);
+    fill(covs, ...deps.map(card), el("button", {class: "cov gap", type: "button", "aria-pressed": F.kind === "todo" ? "true" : "false",
+      onclick: () => { F.kind = F.kind === "todo" ? "" : "todo"; $("fKind").value = F.kind; renderRules(); }},
+    el("div", {class: "nm", text: "Chưa cài code"}), el("div", {class: "big", text: `${todo} luật`}),
+    el("div", {class: "sub", text: "Có trong chuẩn nhưng chưa chạy, chưa chặn gì. Bấm để xem."})));
+    const q = F.q.trim().toLowerCase();
+    const rows = all.filter((r) => {
+      if (F.dept && !(deptById(F.dept) || {standards: []}).standards.includes(r.std)) return false;
+      if (q && !(r.id.toLowerCase().includes(q) || r.title.toLowerCase().includes(q))) return false;
+      if (F.sev && r.severity !== F.sev) return false;
+      if (F.kind === "run") return r.implemented && r.enabled;
+      if (F.kind === "todo") return !r.implemented;
+      if (F.kind === "off") return r.enabled_default && !r.enabled;
+      if (F.kind === "changed") return r.params_changed.length > 0;
       return true;
     });
-    fill($("rbody"), ...rows.map((x) => {
-      const state = !x.implemented ? pill("neu sm", "Chưa cài code") : !x.enabled ? pill("warn sm", x.enabled_default ? "Tắt bởi hồ sơ" : "Tắt") : pill("ok sm", "Đang chạy");
-      return el("tr", {class: x.implemented && x.enabled ? "" : "off"},
-        el("td", {}, el("button", {class: "code", type: "button", onclick: () => showExplain(x.id, r.standard)}, x.id)),
-        el("td", {}, el("div", {class: "ttl", text: x.title}),
-          el("div", {class: "meta", text: [x.kind === "deterministic" ? "tất định" : x.kind, "rủi ro báo sai " + x.false_positive_risk, x.fix_ops.length ? "có thao tác sửa" : null].filter(Boolean).join(" · ")})),
-        el("td", {}, pill((SEV[x.severity] || ["neu"])[0] + " sm", x.severity)),
-        el("td", {}, state),
-        el("td", {}, paramText(x.params_default, x.params_effective, x.params_changed)));
-    }));
-    $("rfoot").textContent = `${rows.length}/${r.rules.length} luật. Chỉ đọc: muốn đổi ngưỡng cho công ty thì sửa hồ sơ công ty (YAML) rồi khởi động lại; đổi luật/ngưỡng của chuẩn là tạo phiên bản chuẩn mới.`;
+    const paramNodes = (r) => {
+      const keys = Object.keys(r.params_default || {});
+      if (!keys.length) return el("span", {class: "meta", text: "không có tham số"});
+      return keys.slice(0, 4).map((k) => {
+        const d0 = JSON.stringify(r.params_default[k]), v = JSON.stringify(r.params_effective[k]);
+        return el("div", {class: "prm"}, k + ": ", r.params_changed.includes(k) ? el("span", {class: "chg", text: `${d0} → ${v}`}) : d0);
+      }).concat(keys.length > 4 ? [el("div", {class: "meta", text: `+${keys.length - 4} tham số`})] : []);
+    };
+    fill($("rbody"), ...(rows.length ? rows.map((r) => {
+      const sv = SEV[r.severity] || ["neu", r.severity];
+      const ds = deptsOf(r.std);
+      const st = [!r.implemented ? pill("neu sm", "Chưa cài code") : !r.enabled ? pill("warn sm", r.enabled_default ? "Tắt bởi hồ sơ" : "Tắt") : pill("ok sm", "Đang chạy", "check")];
+      if (r.params_changed.length) st.push(pill("edit sm", "Hồ sơ chỉnh tham số"));
+      if (r.fix_ops.length) st.push(pill("info sm", "Có thao tác sửa"));
+      return el("tr", {class: "row" + (r.implemented && r.enabled ? "" : " off"), onclick: (e) => { if (!e.target.closest("button")) showExplain(r.id, r.std); }},
+        el("td", {}, el("button", {class: "code", type: "button", "aria-label": "Mở chi tiết luật " + r.id, onclick: () => showExplain(r.id, r.std)}, r.id),
+          el("div", {class: "mt6"}, pill(sv[0] + " sm", sv[1]))),
+        el("td", {}, el("div", {class: "ttl", text: r.title}), el("div", {class: "meta", text: `${r.source || "—"} · ${r.std} ${r.version} · ${r.kind === "deterministic" ? "tất định" : r.kind} · rủi ro báo sai ${r.false_positive_risk}`})),
+        el("td", {}, el("div", {class: "stack"}, ds.length ? ds.map((d) => pill("neu sm", d.name)) : el("span", {class: "none", text: "Chưa gắn"}))),
+        el("td", {}, paramNodes(r)),
+        el("td", {}, el("div", {class: "stack"}, st)));
+    }) : [el("tr", {}, el("td", {colspan: "5"}, emptyBox("Không có luật nào khớp bộ lọc", "Thử bỏ bớt bộ lọc.")))]));
+    $("rfoot").textContent = `Hiển thị ${rows.length} / ${all.length} luật. Bấm mã luật để xem chi tiết. Muốn đổi ngưỡng cho công ty: sửa hồ sơ công ty (YAML); đổi luật/ngưỡng của chuẩn: tạo phiên bản chuẩn mới.`;
+    fill($("vhist"), ...Object.values(S.rules).map((d) => el("li", {}, el("time", {text: d.version}), el("span", {}, b(d.standard), " · ", d.description || `${d.counts.total} luật, ${d.counts.implemented} đã có code`))),
+      S.session.profile ? el("li", {}, el("time", {text: S.session.profile.version}), el("span", {}, b(`Hồ sơ ${S.session.profile.name}`), ` · áp cho ${S.session.profile.standard}`)) : null);
+  }
+
+  function openRuleDrawer(r, std) {
+    const d = $("drawer");
+    const sv = SEV[r.severity] || ["neu", r.severity];
+    const why = r.implemented
+      ? "Chạy bằng code tất định trên mô hình bản vẽ. Đúng/sai do luật quyết, không do AI."
+      : "Đã có trong chuẩn nhưng chưa có code nên chưa chạy và chưa chặn gì.";
+    const params = Object.entries(r.rule_params || {});
+    const close = el("button", {class: "iconbtn", type: "button", id: "drClose", "aria-label": "Đóng chi tiết luật", onclick: closeDrawer}, icon("x"));
+    fill(d,
+      el("div", {class: "dr-h"}, el("div", {class: "grow1"},
+        el("div", {class: "bar-act"}, el("span", {class: "f-rule", text: r.id}), pill(sv[0], sv[1]), r.implemented ? pill("ok", "Đang chạy") : pill("neu", "Chưa cài code"), r.enabled ? null : pill("warn", "Tắt")),
+        el("h2", {id: "drTitle", text: r.title})), close),
+      el("div", {class: "dr-b"},
+        el("h3", {text: "Luật nói gì"}), el("p", {text: why}),
+        kv([["Nguồn", r.source], ["Thuộc chuẩn", std], ["Loại", r.kind === "deterministic" ? "tất định" : r.kind], ["Rủi ro báo sai", r.false_positive_risk],
+          ["Đọc gì", Array.isArray(r.reads) ? r.reads.join(", ") : r.reads], ["Hồ sơ công ty", r.profile ? `${r.profile.name} ${r.profile.version}` : "không áp"]]),
+        el("h3", {text: "Tham số đang áp"}),
+        params.length ? kv(params.map(([k, v]) => [k, JSON.stringify(v)])) : el("p", {text: "Không có tham số."}),
+        r.fix_ops && r.fix_ops.length ? [el("h3", {text: "Thao tác sửa có sẵn"}), el("p", {text: r.fix_ops.join(", ")})] : null,
+        r.description_md ? [el("h3", {text: "Trong tài liệu chuẩn"}), el("pre", {text: r.description_md})] : null),
+      el("div", {class: "dr-f"}, el("span", {class: "spacer"}), el("button", {class: "btn-s", type: "button", onclick: closeDrawer}, "Đóng")));
+    d.classList.add("on");
+    close.focus();
+  }
+  function closeDrawer() { const d = $("drawer"); d.classList.remove("on"); }
+
+  // ---------- KẾT NỐI AI ----------
+  const PROV_TITLE = {anthropic: "Anthropic", openai: "OpenAI", gemini: "Google Gemini", openrouter: "OpenRouter", ollama: "Ollama (trên máy)"};
+  const ACCT = {business: "Doanh nghiệp (Gemini Enterprise / Google Cloud)", "api-key": "Khoá API (GEMINI_API_KEY)"};
+
+  async function loadConnect() {
+    try {
+      const [ai] = await Promise.all([api("/api/ai/settings"), loadEngines(false)]);
+      S.ai = ai;
+    } catch (e) { toast(e.message); return; }
+    renderConnect();
+  }
+
+  async function saveAi(patch, okMsg) {
+    try {
+      S.ai = await api("/api/ai/settings", patch);
+      if (okMsg) toast(okMsg);
+      await loadEngines(false);
+      renderConnect();
+      return true;
+    } catch (e) { toast(e.message); return false; }
+  }
+
+  function cliCard(e) {
+    const ai = S.ai;
+    const cmd = ai.login_commands[e.name];
+    const st = e.installed === false ? ["neu", "Chưa cài", "x"] : e.installed === null ? ["neu", "Chưa kiểm", "info"]
+      : e.logged_in === true ? ["ok", "Đã đăng nhập", "check"] : e.logged_in === false ? ["warn", "Cần đăng nhập", "alert"] : ["info", "Đã cài, chưa rõ đăng nhập", "info"];
+    const res = el("p", {class: "res"});
+    const loginBtn = el("button", {class: "btn-s btn-sm", type: "button", disabled: e.installed !== true || (e.name === "agy-cli" && ai.agy_account !== "business"),
+      onclick: async () => {
+        try {
+          const r = await api("/api/ai/cli/login", {engine: e.name});
+          res.className = "res ok"; res.textContent = r.note;
+        } catch (err) { res.className = "res bad"; res.textContent = err.message; }
+      }}, icon("key"), "Đăng nhập");
+    const extra = [];
+    if (e.name === "codex-cli") {
+      const cb = el("input", {type: "checkbox", id: "sw-codex"});
+      cb.checked = !!ai.codex_experimental || !!(ai.cli_flags && ai.cli_flags.experimental);
+      cb.disabled = !!(ai.cli_flags && ai.cli_flags.experimental);
+      cb.addEventListener("change", async () => {
+        if (cb.checked) {
+          const ok = await confirmDialog({title: "Bật chế độ thử nghiệm cho Codex?",
+            body: ["Điều khoản của OpenAI cho ứng dụng bên thứ ba khởi chạy Codex bằng đăng nhập ChatGPT của bạn CHƯA RÕ (không cho phép, cũng không cấm bằng văn bản).",
+              "Chỉ bật khi bạn tự chấp nhận rủi ro. Với công ty, nên dùng khoá API của tổ chức (OpenAI) ở phần dưới."],
+            yes: "Tôi hiểu, bật thử nghiệm", no: "Không bật"});
+          if (!ok) { cb.checked = false; return; }
+        }
+        saveAi({codex_experimental: cb.checked}, cb.checked ? "Đã bật thử nghiệm Codex" : "Đã tắt thử nghiệm Codex");
+      });
+      extra.push(el("label", {class: "sw"}, cb, el("span", {text: "Bật chế độ thử nghiệm" + (cb.disabled ? " (đã bật bằng --experimental)" : "")})),
+        el("div", {class: "warnbox", text: "Thử nghiệm: điều khoản dùng đăng nhập ChatGPT cho ứng dụng bên thứ ba chưa rõ."}));
+    }
+    if (e.name === "agy-cli") {
+      const sel = el("select", {class: "sel", id: "sel-agy", "aria-label": "Loại tài khoản Antigravity"},
+        el("option", {value: "", text: "— chọn loại tài khoản —"}),
+        el("option", {value: "business", text: ACCT.business}), el("option", {value: "api-key", text: ACCT["api-key"]}),
+        el("option", {value: "personal", text: "Tài khoản Google cá nhân"}));
+      sel.value = ai.agy_account || "";
+      const why = el("div", {class: "warnbox", hidden: true});
+      sel.addEventListener("change", () => {
+        if (sel.value === "personal") {
+          why.hidden = false;
+          why.textContent = "Không được phép: FAQ Antigravity nói bọc agy trong ứng dụng bên thứ ba không được hỗ trợ với tài khoản cá nhân; điều khoản mục 6 có thể dẫn tới khoá tài khoản. Hãy dùng tài khoản doanh nghiệp hoặc khoá API.";
+          sel.value = ai.agy_account || "";
+          return;
+        }
+        why.hidden = true;
+        saveAi({agy_account: sel.value || null}, "Đã lưu loại tài khoản Antigravity");
+      });
+      extra.push(el("div", {class: "row"}, el("label", {class: "lbl", for: "sel-agy", text: "Loại tài khoản"}), sel), why);
+      if (ai.agy_account === "api-key") extra.push(el("p", {class: "ds", text: "Khoá API: đặt GEMINI_API_KEY và \"modelProvider\": \"gemini\" trong cấu hình agy; không cần bấm Đăng nhập."}));
+    }
+    return el("div", {class: "card prov" + (e.available ? "" : " off")},
+      el("div", {class: "hd"}, el("span", {class: "nm", text: e.title.replace(/ \(.*$/, "").replace(/ — .*/, "")}), pill(st[0], st[1], st[2])),
+      el("p", {class: "ds"}, e.installed === false ? ai.install_docs[e.name] + " (chỉ hiện hướng dẫn; cad-guard không tải gì.)"
+        : [e.version ? `Phiên bản: ${e.version}. ` : "", e.available ? "Dùng được trong trò chuyện." : e.reason, e.hint && !e.available ? " " + e.hint : ""]),
+      el("p", {class: "ds"}, "Lệnh đăng nhập chính thức: ", el("code", {text: cmd}), ". Cửa sổ đăng nhập là của chính CLI; cad-guard không đọc đầu ra hay token."),
+      extra,
+      el("div", {class: "row"}, loginBtn, el("button", {class: "btn-s btn-sm", type: "button", onclick: () => loadEngines(true).then(renderConnect)}, icon("refresh"), "Kiểm lại")),
+      res,
+      el("details", {}, el("summary", {text: "Điều khoản (tóm tắt)"}), el("p", {class: "terms", text: e.terms})));
+  }
+
+  function apiCard(e) {
+    const ai = S.ai;
+    const name = e.name;
+    const k = ai.keys[name];
+    const isOR = name === "openrouter", isOllama = name === "ollama";
+    const orOn = !!ai.allow_openrouter || !!(ai.cli_flags && ai.cli_flags.allow_openrouter);
+    const res = el("p", {class: "res"});
+    const show = (ok, msg) => { res.className = "res " + (ok ? "ok" : "bad"); res.textContent = msg; };
+    const st = isOllama ? ["neu", "Cục bộ, không cần khoá", "info"] : !k ? ["neu", "—", null]
+      : k.source === "keyring" ? ["ok", "Đã có khoá (lưu trong kho khoá hệ điều hành)", "check"]
+        : k.source === "env" ? ["info", `Có khoá (biến môi trường ${k.env_var})`, "check"] : ["neu", "Chưa nhập khoá", "x"];
+    const nodes = [el("div", {class: "hd"}, el("span", {class: "nm", text: PROV_TITLE[name] || e.title}), pill(st[0], st[1], st[2]))];
+    if (isOR) {
+      const cb = el("input", {type: "checkbox", id: "sw-or"});
+      cb.checked = orOn;
+      cb.disabled = !!(ai.cli_flags && ai.cli_flags.allow_openrouter);
+      cb.addEventListener("change", async () => {
+        if (cb.checked) {
+          const ok = await confirmDialog({title: "Bật OpenRouter?", body: ["OpenRouter là bên trung gian thứ ba: dữ liệu (đã ẩn danh) đi qua OpenRouter rồi mới tới nhà cung cấp mô hình.", "Chỉ bật khi khách đã đồng ý."], yes: "Bật OpenRouter", no: "Không bật"});
+          if (!ok) { cb.checked = false; return; }
+        }
+        saveAi({allow_openrouter: cb.checked}, cb.checked ? "Đã bật OpenRouter" : "Đã tắt OpenRouter");
+      });
+      nodes.push(el("label", {class: "sw"}, cb, el("span", {text: "Cho phép OpenRouter (bên trung gian thứ ba, mặc định tắt)"})));
+    }
+    if (isOllama) {
+      const url = el("input", {type: "text", id: "ollama-url", autocomplete: "off", spellcheck: "false", "aria-label": "Địa chỉ Ollama"});
+      url.value = ai.ollama_base_url || "";
+      nodes.push(el("p", {class: "ds", text: "Chạy trên máy: dữ liệu không rời máy (Bậc L). Chất lượng gọi công cụ/tiếng Việt tuỳ mô hình."}),
+        el("form", {class: "row", onsubmit: (ev) => { ev.preventDefault(); saveAi({ollama_base_url: url.value.trim()}, "Đã lưu địa chỉ Ollama"); }},
+          el("label", {class: "lbl", for: "ollama-url", text: "Địa chỉ"}), url, el("button", {class: "btn-s btn-sm", type: "submit"}, "Lưu")));
+    } else {
+      const inp = el("input", {type: "password", id: "key-" + name, autocomplete: "off", spellcheck: "false", placeholder: k && k.has_key ? "Dán khoá mới để thay" : "Dán khoá API",
+        "aria-label": "Khoá API " + (PROV_TITLE[name] || name), disabled: (isOR && !orOn) || !ai.keyring_available});
+      const save = async (ev) => {
+        ev.preventDefault();
+        const v = inp.value;
+        inp.value = "";
+        if (!v.trim()) { show(false, "Chưa dán khoá."); return; }
+        try { await api("/api/ai/key", {provider: name, key: v}); show(true, "Đã lưu khoá vào kho khoá hệ điều hành."); await refreshKeys(); }
+        catch (err) { show(false, err.message); }
+      };
+      nodes.push(el("form", {class: "row", onsubmit: save}, inp, el("button", {class: "btn-s btn-sm", type: "submit", disabled: inp.disabled}, k && k.has_key ? "Đổi" : "Lưu")));
+    }
+    const model = el("input", {type: "text", id: "model-" + name, autocomplete: "off", spellcheck: "false", "aria-label": "Mô hình mặc định " + name,
+      placeholder: e.needs_model ? "bắt buộc: tên mô hình" : "mặc định của nhà cung cấp"});
+    model.value = (ai.models && ai.models[name]) || "";
+    nodes.push(el("form", {class: "row", onsubmit: (ev) => { ev.preventDefault(); saveAi({models: {[name]: model.value.trim() || null}}, "Đã lưu mô hình mặc định"); }},
+      el("label", {class: "lbl", for: model.id, text: "Mô hình"}), model, el("button", {class: "btn-s btn-sm", type: "submit"}, "Lưu")));
+    const testBtn = el("button", {class: "btn-s btn-sm", type: "button", disabled: (isOR && !orOn) || (!isOllama && !(k && k.has_key)),
+      onclick: async () => {
+        testBtn.disabled = true; show(true, "Đang kiểm…");
+        try { const r = await api("/api/ai/key/test", {provider: name}); show(r.ok, r.message); } catch (err) { show(false, err.message); }
+        testBtn.disabled = false;
+      }}, icon("check"), "Kiểm tra");
+    const delBtn = !isOllama ? el("button", {class: "btn-s btn-sm", type: "button", disabled: !(k && k.source === "keyring"),
+      onclick: async () => {
+        const ok = await confirmDialog({title: `Xoá khoá ${PROV_TITLE[name]}?`, body: ["Khoá bị xoá khỏi kho khoá của hệ điều hành trên máy này."], yes: "Xoá khoá", danger: true});
+        if (!ok) return;
+        try { await api("/api/ai/key/delete", {provider: name}); show(true, "Đã xoá khoá."); await refreshKeys(); } catch (err) { show(false, err.message); }
+      }}, icon("trash"), "Xoá") : null;
+    nodes.push(el("div", {class: "row"}, testBtn, delBtn, el("span", {class: "muted small", text: "Kiểm tra: gọi danh sách mô hình, không tốn token."})), res);
+    if (!e.available && e.reason && !isOR) nodes.push(el("p", {class: "ds", text: e.reason}));
+    nodes.push(el("details", {}, el("summary", {text: "Điều khoản (tóm tắt)"}), el("p", {class: "terms", text: e.terms})));
+    return el("div", {class: "card prov" + (e.available ? "" : " off")}, nodes);
+  }
+
+  async function refreshKeys() {
+    try { S.ai = await api("/api/ai/settings"); } catch (_) { /* giữ */ }
+    await loadEngines(false);
+    renderConnect();
+  }
+
+  function renderConnect() {
+    const ai = S.ai;
+    if (!ai) return;
+    fill($("cliCards"), ...S.engines.filter((e) => e.mode === "cli").map(cliCard));
+    fill($("keyringNote"), ai.keyring_available ? null : el("div", {class: "callout warn"}, icon("alert"),
+      el("div", {}, b("Máy này chưa có kho khoá cho cad-guard."), " Cài bằng ", el("code", {text: "pip install cadguard[keyring]"}),
+        " rồi mở lại ứng dụng. cad-guard không bao giờ ghi khoá ra tệp, nên chưa có kho khoá thì không nhận khoá (biến môi trường vẫn dùng được).")));
+    fill($("apiCards"), ...S.engines.filter((e) => e.mode === "api").map(apiCard));
+    const def = $("defEngine");
+    fill(def, el("option", {value: "", text: "Tự chọn engine đầu tiên dùng được"}), S.engines.map((e) => el("option", {value: e.name, text: e.title + (e.available ? "" : " (chưa dùng được)")})));
+    def.value = ai.default_engine || "";
+    const anon = S.session ? S.session.anonymize : true;
+    const tier = (checked, t, d, extra) => el("label", {class: "dis"}, el("input", {type: "radio", name: "tier", disabled: true, checked: !!checked}),
+      el("span", {}, el("span", {class: "t"}, t, extra || null), el("br"), el("span", {class: "d", text: d})));
+    fill($("tiers"),
+      tier(false, "Bậc 0 · Không dùng AI", "Chỉ chạy bộ luật. Không cần làm gì: không chọn trợ lý / không gửi câu hỏi thì không có gì rời máy."),
+      tier(anon, "Bậc 1 · Chỉ gửi kết quả đã ẩn danh", "AI chỉ thấy tóm tắt do công cụ trả về: mã băm thay tên, che chữ trong bản vẽ. Không thấy tệp bản vẽ.", pill("info pill-mid", "Mặc định")),
+      tier(!anon, "Bậc 2 · Gửi tên thật (không ẩn danh)", "Chỉ bật bằng cờ dòng lệnh --no-anonymize khi khách đã đồng ý bằng văn bản; giao diện không có nút bật."),
+      tier(false, "Bậc L · Chỉ mô hình chạy trên máy", "Chọn Ollama làm trợ lý: dữ liệu không rời máy. Chất lượng thấp hơn mô hình lớn."));
+    $("cap").value = String(ai.max_cost_usd);
+    renderCost(null);
+  }
+
+  // ---------- hồ sơ công ty ----------
+  function openProfileModal() {
+    const p = S.session.profile;
+    $("mpCur").textContent = p ? `${p.name} ${p.version} (viết cho ${p.standard})` : "không dùng (mặc định của chuẩn)";
+    $("mpPick").disabled = !S.session.dialog_available;
+    $("mProfile").classList.add("on");
+    $("mpClose").focus();
+  }
+  async function setProfile(path) {
+    try {
+      const r = await api("/api/project/profile", {path});
+      S.session = r.session;
+      $("mProfile").classList.remove("on");
+      renderSession(); renderWorkSide(); S.rules = null;
+      toast(path ? "Đã áp hồ sơ công ty cho dự án này" : "Đã bỏ hồ sơ công ty");
+      if (S.file) openFile(S.file, {scan: Object.keys(S.audits).length > 0});
+    } catch (e) { toast(e.message); }
   }
 
   // ---------- khởi động ----------
@@ -887,49 +1935,76 @@
     initIcons(document);
     applyTheme(localStorage.getItem("cg-theme") || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
     $("themeBtn").addEventListener("click", () => applyTheme(document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark"));
-    const screens = {work: $("s-work"), rules: $("s-rules"), connect: $("s-connect")};
-    const goScreen = setupTablist(document.querySelector(".nav"), (tab) => {
-      for (const [k, s] of Object.entries(screens)) s.classList.toggle("on", k === tab.dataset.go);
-      if (tab.dataset.go === "rules") loadRules();
+    for (const t of $$(".nav [data-go]")) {
+      t.addEventListener("click", () => go(t.dataset.go));
+      t.addEventListener("keydown", (e) => {
+        const tabs = $$(".nav [data-go]").filter((x) => !x.disabled);
+        const i = tabs.indexOf(t);
+        if (e.key === "ArrowRight") { e.preventDefault(); const n = tabs[(i + 1) % tabs.length]; n.focus(); go(n.dataset.go); }
+        if (e.key === "ArrowLeft") { e.preventDefault(); const n = tabs[(i - 1 + tabs.length) % tabs.length]; n.focus(); go(n.dataset.go); }
+      });
+    }
+    for (const t of $$("#rightTabs [role=tab]")) t.addEventListener("click", () => rightTab(t.dataset.p));
+    $("projBtn").addEventListener("click", () => go("project"));
+    $("deptBtn").addEventListener("click", toggleMenu("deptBtn", "deptMenu"));
+    $("engineBtn").addEventListener("click", toggleMenu("engineBtn", "engineMenu"));
+    document.addEventListener("click", closeMenus);
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      closeMenus();
+      if ($("mProfile").classList.contains("on")) $("mProfile").classList.remove("on");
+      else if ($("drawer").classList.contains("on")) closeDrawer();
     });
-    centerTab = setupTablist($("centerTabs"), (tab) => {
-      for (const p of ["finds", "chg", "hist", "sum"]) $("p-" + p).classList.toggle("on", p === tab.dataset.p);
-      if (tab.dataset.p === "sum") loadSummary();
-      if (tab.dataset.p === "hist") loadChangesets();
-      if (tab.dataset.p === "chg" && S.file && !S.suggest && !S.preview) loadSuggest();
+    $("pickBtn").addEventListener("click", pickProject);
+    $("pathForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("pathIn").value.trim(); if (v) openProject(v); });
+    $("stdLink").addEventListener("click", () => openCatalog({dept: S.dept.id}));
+    $("profileBtn").addEventListener("click", openProfileModal);
+    $("mpClose").addEventListener("click", () => $("mProfile").classList.remove("on"));
+    $("mpNone").addEventListener("click", () => setProfile(null));
+    $("mpPick").addEventListener("click", async () => {
+      try {
+        const r = await api("/api/project/profile/pick", {});
+        if (r.unavailable) toast("Không mở được hộp thoại: hãy dán đường dẫn tệp.");
+        else if (r.path) setProfile(r.path);
+      } catch (e) { toast(e.message); }
     });
-    $("stdLink").addEventListener("click", () => goScreen("rules"));
-    $("deptSel").addEventListener("change", () => {
-      S.dept = S.session.departments.find((d) => d.id === $("deptSel").value);
-      sessionStorage.setItem("cg-dept", S.dept.id);
-      applyDept();
-    });
+    $("mpForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("mpPath").value.trim(); if (v) setProfile(v); });
     $("scanAll").addEventListener("click", scanAll);
-    $("ruleStd").addEventListener("change", loadRules);
-    $("rq").addEventListener("input", () => RULES && renderRules());
-    $("fKind").addEventListener("change", () => RULES && renderRules());
-    $("drClose").addEventListener("click", closeDrawer);
-    document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("drawer").classList.contains("on")) closeDrawer(); });
-    $("engineSel").addEventListener("change", () => {
-      S.engine = S.engines.find((x) => x.name === $("engineSel").value) || null;
-      if (S.engine) sessionStorage.setItem("cg-engine", S.engine.name);
-      renderEngineCard();
-      renderCost(null);
+    $("zoomIn").addEventListener("click", () => (S.v3d ? S.v3d.zoom(1.25) : zoomButton(0.8)));
+    $("zoomOut").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0.8) : zoomButton(1.25)));
+    $("zoomFit").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0) : zoomButton(0)));
+    for (const btn of $$("#cmp button")) btn.addEventListener("click", () => {
+      S.cmp = btn.dataset.v; S.view = null;
+      for (const x of $$("#cmp button")) x.setAttribute("aria-pressed", x === btn ? "true" : "false");
+      $("cvTitle").textContent = S.cmp === "after" && S.applied ? S.applied.output : S.file;
+      renderSheet(); renderFiles();
     });
+    $("ruleStd").addEventListener("change", renderRules);
+    $("rq").addEventListener("input", () => { S.ruleFilter.q = $("rq").value; renderRules(); });
+    $("fKind").addEventListener("change", () => { S.ruleFilter.kind = $("fKind").value; renderRules(); });
+    $("fSev").addEventListener("change", () => { S.ruleFilter.sev = $("fSev").value; renderRules(); });
     $("form").addEventListener("submit", sendChat);
-    $("inp").addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); $("form").requestSubmit(); }
-    });
     $("stopBtn").addEventListener("click", stopChat);
-    $("clearBtn").addEventListener("click", () => { if (!S.busy) { S.history = []; fill($("log"), ); } });
-    $("refreshEngines").addEventListener("click", () => loadEngines(true));
+    $("clearBtn").addEventListener("click", () => { if (!S.busy) introChat(); });
+    $("refreshEngines").addEventListener("click", async () => { await loadEngines(true); renderConnect(); });
+    $("defEngine").addEventListener("change", () => saveAi({default_engine: $("defEngine").value || null}, "Đã lưu trợ lý mặc định"));
+    $("capForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const v = Number(String($("cap").value).replace(",", ".").replace(/[^0-9.]/g, ""));
+      if (!(v > 0)) { toast("Nhập số USD, ví dụ 2 hoặc 0,5."); return; }
+      saveAi({max_cost_usd: v}, "Đã lưu giới hạn chi phí");
+    });
     if (!TOKEN) { $("tokenBanner").hidden = false; return; }
-    try {
-      S.session = await api("/api/session");
-    } catch (e) { toast(e.message); return; }
+    try { S.session = await api("/api/session"); } catch (e) { toast(e.message); return; }
     renderSession();
-    renderCost(null);
-    await Promise.all([loadFiles(), loadEngines(false), loadChangesets()]);
+    renderWorkSide();
+    renderFinds(); renderChg(); renderSheet();
+    loadEngines(false);
+    if (hasProject()) {
+      await loadFiles();
+      loadChangesets();
+      go("home");
+    } else go("project");
   }
 
   document.addEventListener("DOMContentLoaded", boot);

@@ -14,7 +14,8 @@ from .server import CadGuardApp, create_server, start_in_thread, url_of
 
 
 def add_arguments(p: argparse.ArgumentParser) -> None:
-    p.add_argument("--workspace", required=True, metavar="THƯ_MỤC", help="thư mục làm việc chứa DXF (mọi đường dẫn nằm trong đây)")
+    p.add_argument("--workspace", default=None, metavar="THƯ_MỤC",
+                   help="mở thẳng dự án này (thư mục chứa DXF). Không có: mở màn chọn dự án (dự án gần đây, Mở thư mục…)")
     p.add_argument("--profile", default=None, metavar="TỆP", help="hồ sơ công ty (YAML cg.company-profile/1)")
     p.add_argument("--port", type=int, default=0, help="cổng (mặc định 0 = ngẫu nhiên); chỉ nghe 127.0.0.1")
     p.add_argument("--no-browser", action="store_true", help="không tự mở trình duyệt; chỉ in địa chỉ")
@@ -29,8 +30,8 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
 
 
 def run_from_args(args: argparse.Namespace) -> int:
-    ws = Path(args.workspace)
-    if not ws.is_dir():
+    ws = Path(args.workspace) if args.workspace else None
+    if ws is not None and not ws.is_dir():
         print("Thư mục làm việc không tồn tại hoặc không phải thư mục.", file=sys.stderr)
         return 2
     if not (0 <= args.port <= 65535):

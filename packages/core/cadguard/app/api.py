@@ -21,12 +21,16 @@ from ..changeset.ops import OP_HELP, OpError, parse_ops
 from ..reader_select import DEFAULT_STREAM_THRESHOLD_MB
 from ..runner import audit_model
 from ..standard import CompanyProfile, ProfileError, Standard, find_standards_dir, load_profile, load_standard
+from .geometry import drawing_geometry
+from .history import History, audit_entry
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.\-]*$")
 SEVERITIES = ("E", "W", "I")
 SEVERITY_VI = {"E": "Lỗi", "W": "Cảnh báo", "I": "Thông tin"}
 OUTPUT_RE = re.compile(r"\.cg-[0-9a-f]{8}\.dxf$", re.IGNORECASE)
 MAX_FINDINGS = 500
+MAX_DRAWINGS = 2000  # trần số tệp DXF liệt kê (thư mục quá rộng như gốc ổ đĩa)
+MAX_SCAN_DIRS = 20000  # trần số thư mục duyệt khi tìm DXF
 DEPARTMENTS_FILE = Path(__file__).with_name("departments.json")
 
 
@@ -40,7 +44,7 @@ class ApiError(ValueError):
 
 @dataclass
 class AppConfig:
-    workspace: Path
+    workspace: Path | None = None  # None = mở ứng dụng chưa chọn dự án (màn chọn dự án)
     profile_path: Path | None = None
     anonymize: bool = True
     experimental: bool = False
@@ -60,9 +64,14 @@ class AppData:
     profile: CompanyProfile | None = field(init=False, default=None)
     standards_dir: Path = field(init=False)
     departments: dict = field(init=False)
+    history: History = field(init=False)
 
     def __post_init__(self) -> None:
-        self.ws = Workspace(Path(self.config.workspace))
+        try:
+            self.ws = Workspace(Path(self.config.workspace))
+        except PathDenied:
+            raise ApiError("Thư mục dự án không tồn tại hoặc không đọc được.") from None
+        self.history = History(self.ws.root)
         self.standards_dir = Path(self.config.standards_dir or find_standards_dir(Path(__file__).resolve())).resolve()
         if self.config.profile_path:
             self.profile = load_profile(self.config.profile_path)  # ProfileError -> lệnh dừng với thông điệp tiếng Việt
@@ -111,7 +120,11 @@ class AppData:
 
 
 def load_departments(path: Path, standards: list[str]) -> dict:
-    """Đọc `departments.json`; phòng trỏ tới chuẩn không có vẫn hiện nhưng mang ghi chú."""
+    """Đọc `departments.json`. Mỗi phòng có thể có nhiều chuẩn (`standards`) và nhiều phòng nhận (`next`).
+
+    Dạng cũ (`standard`: một tên, `next`: một id hoặc null) vẫn đọc được. Chuẩn không có trong standards/ vẫn hiện
+    nhưng bị bỏ khỏi danh sách chạy (`standards_missing`).
+    """
     try:
         data = json.loads(Path(path).read_text(encoding="utf-8"))
         items = data["departments"]
@@ -123,33 +136,60 @@ def load_departments(path: Path, standards: list[str]) -> dict:
     for d in items:
         if not isinstance(d, dict) or not isinstance(d.get("id"), str) or not isinstance(d.get("name"), str):
             raise ApiError("departments.json: mỗi phòng cần 'id' và 'name'.", 500)
-        std = d.get("standard")
-        out.append({"id": d["id"], "name": d["name"], "standard": std if isinstance(std, str) else None,
-                    "description": str(d.get("description") or ""), "next": d.get("next"),
-                    "standard_ok": isinstance(std, str) and std in standards})
+        stds = d.get("standards")
+        if stds is None:
+            stds = [d["standard"]] if isinstance(d.get("standard"), str) else []
+        if not isinstance(stds, list) or not all(isinstance(x, str) for x in stds):
+            raise ApiError("departments.json: 'standards' phải là danh sách tên chuẩn.", 500)
+        nxt = d.get("next")
+        nxt = [nxt] if isinstance(nxt, str) else (nxt if isinstance(nxt, list) else [])
+        ok = [x for x in stds if x in standards]
+        out.append({"id": d["id"], "name": d["name"], "standards": ok,
+                    "standards_missing": [x for x in stds if x not in standards],
+                    "standard": ok[0] if ok else None, "standard_ok": bool(ok),
+                    "description": str(d.get("description") or ""), "role": str(d.get("role") or ""),
+                    "next": [x for x in nxt if isinstance(x, str)],
+                    "view": d.get("view") if d.get("view") in ("scene",) else None,
+                    "priority": bool(d.get("priority"))})
     default = data.get("default") if any(x["id"] == data.get("default") for x in out) else out[0]["id"]
     return {"default": default, "departments": out}
+
+
+def check_dept(app: "AppData", dept: Any) -> dict | None:
+    if dept is None:
+        return None
+    for d in app.departments["departments"]:
+        if d["id"] == dept:
+            return d
+    raise ApiError("Không có phòng này.")
 
 
 # ---------- bản vẽ, kiểm, giải thích ----------
 
 def list_drawings(app: AppData) -> dict:
-    paths = app.ws.list_dxf(".")
+    paths = app.ws.list_dxf(".", limit=MAX_DRAWINGS + 1, max_dirs=MAX_SCAN_DIRS)
     items = []
-    for p in paths[:2000]:
+    for p in paths[:MAX_DRAWINGS]:
         rel = app.rel(p)
         st = p.stat()
         items.append({"path": rel, "name": p.name, "dir": rel.rsplit("/", 1)[0] if "/" in rel else "",
                       "size_bytes": st.st_size, "is_output": bool(OUTPUT_RE.search(p.name))})
-    return {"drawings": items, "total": len(paths), "truncated": len(paths) > 2000}
+    return {"drawings": items, "total": min(len(paths), MAX_DRAWINGS), "truncated": len(paths) > MAX_DRAWINGS,
+            "limit": MAX_DRAWINGS}
 
 
-def audit_file(app: AppData, rel: Any, standard: Any) -> dict:
+def audit_file(app: AppData, rel: Any, standard: Any, dept: Any = None) -> dict:
     path = app.resolve(rel)
     std = app.load_std(standard)
+    dep = check_dept(app, dept)
     model = app.model(path)
     res = audit_model(model, std)
     counts = Counter(f.severity for f in res.findings)
+    per_rule: Counter = Counter()
+    for f in res.findings:
+        per_rule[f.rule_id] += max(1, int(f.count or 1))
+    app.history.record("audit", **audit_entry(app.history.file_id(app.rel(path)), model.file_hash,
+                                               dep["id"] if dep else None, std.name, std.version, counts, per_rule))
     groups: dict[str, list[dict]] = {s: [] for s in SEVERITIES}
     by_rule: dict[tuple[str, str], dict] = {}
     for f in res.findings[:MAX_FINDINGS]:
@@ -162,7 +202,7 @@ def audit_file(app: AppData, rel: Any, standard: Any) -> dict:
             by_rule[key] = g
             groups.setdefault(f.severity, []).append(g)
         g["items"].append({"message": f.message, "layer": f.layer, "layout": f.layout, "count": f.count,
-                           "handles": list(f.handles)[:5]})
+                           "handles": list(f.handles)[:20]})
         g["count"] += max(1, int(f.count or 1))
     fixable = sorted({g["rule_id"] for gs in groups.values() for g in gs} & set(FIXABLE_RULES))
     skipped = [{"rule_id": r, "reason": "Lỗi nội bộ của luật." if r in res.internal_errors else reason}
@@ -173,15 +213,19 @@ def audit_file(app: AppData, rel: Any, standard: Any) -> dict:
         "groups": [{"severity": s, "label": SEVERITY_VI[s], "rules": groups.get(s, [])} for s in SEVERITIES],
         "skipped": skipped, "truncated": len(res.findings) > MAX_FINDINGS, "fixable_rules": fixable,
         "records_capped": bool(model.stats is not None and model.stats.entity_records_truncated),
+        "rules_total": len(std.rules), "rules_enabled": sum(1 for r in std.rules if r.enabled and r.implemented),
+        "entity_count": len(model.entities), "dxf_version": model.dxf_version, "insunits": model.insunits,
     }
 
 
-def audit_all(app: AppData, standard: Any) -> dict:
+def audit_all(app: AppData, standard: Any, dept: Any = None) -> dict:
     std = app.check_standard(standard)
     out = []
     for item in list_drawings(app)["drawings"][:200]:
+        if item["is_output"]:
+            continue
         try:
-            r = audit_file(app, item["path"], std)
+            r = audit_file(app, item["path"], std, dept)
             out.append({"path": item["path"], "counts": r["counts"], "ok": r["counts"]["E"] == 0})
         except ApiError as exc:
             out.append({"path": item["path"], "error": str(exc)})
@@ -452,9 +496,13 @@ def apply_changeset(app: AppData, cid: Any, confirm: Any) -> dict:
     if confirm is not True:
         raise ApiError("Cần người dùng bấm xác nhận trong giao diện trước khi áp dụng changeset.", 409)
     try:
-        return apply(app.ws, cid, confirm=True, profile=app.profile, standards_dir=app.standards_dir)
+        res = apply(app.ws, cid, confirm=True, profile=app.profile, standards_dir=app.standards_dir)
     except _cs_errors() as exc:
         raise ApiError(str(exc), 409) from None
+    h = app.history
+    h.record("apply", file=h.file_id(res["source"]["path"]), out=h.file_id(res["output"]["path"]), changeset=cid,
+             ok=bool((res.get("validation") or {}).get("ok")))
+    return res
 
 
 def undo_changeset(app: AppData, cid: Any, confirm: Any) -> dict:
@@ -462,11 +510,75 @@ def undo_changeset(app: AppData, cid: Any, confirm: Any) -> dict:
     if confirm is not True:
         raise ApiError("Cần người dùng bấm xác nhận trước khi hoàn tác.", 409)
     try:
-        return undo(app.ws, cid, confirm=True)
+        res = undo(app.ws, cid, confirm=True)
     except _cs_errors() as exc:
         raise ApiError(str(exc), 409) from None
+    app.history.record("undo", out=app.history.file_id(res["removed"]), changeset=cid)
+    return res
 
 
-__all__ = ["ApiError", "AppConfig", "AppData", "FIXABLE_RULES", "apply_changeset", "audit_all", "audit_file", "explain",
-           "get_changeset", "list_changesets", "list_drawings", "load_departments", "propose_changeset", "rules_table",
-           "suggest_ops", "summary", "undo_changeset"]
+# ---------- xem trước hình, 3D, bàn giao ----------
+
+def geometry(app: AppData, rel: Any) -> dict:
+    path = app.resolve(rel)
+    out = drawing_geometry(app.model(path))
+    out["file"] = app.rel(path)
+    return out
+
+
+MAX_BOXES = 5000
+
+
+def scene3d(app: AppData, rel: Any) -> dict:
+    """Cảnh 3D tất định (`cadguard scene`) ở chế độ chỉ xem: hộp + màu vật liệu, không tên tệp/đường dẫn."""
+    from ..scene import build_scene
+    from ..scene.geometry import boxes
+    from ..scene.gltf import color_for
+
+    path = app.resolve(rel)
+    sc = build_scene(app.model(path))
+    bx = boxes(sc)
+    data = [{"b": [list(p) for p in b.base], "z0": b.z0, "z1": b.z1, "c": list(color_for(b.material)), "k": b.kind}
+            for b in bx[:MAX_BOXES]]
+    return {"file": app.rel(path), "boxes": data, "truncated": len(bx) > MAX_BOXES,
+            "counts": {"walls": len(sc.walls), "modules": len(sc.modules), "panels": len(sc.panels),
+                       "gaps": len(sc.gaps), "skipped": len(sc.skipped)},
+            "gaps": [g.message for g in sc.gaps[:20]], "notes": list(sc.notes)[:10]}
+
+
+def handover(app: AppData, rel: Any, dept: Any) -> dict:
+    """Đánh dấu bản vẽ sẵn sàng bàn giao cho phòng kế. Chỉ ghi lịch sử cục bộ; KHÔNG gửi gì đi đâu.
+
+    Điều kiện: đã quét theo mọi chuẩn của phòng (đúng nội dung tệp hiện tại) và không còn lỗi mức E.
+    """
+    from .history import latest_audits
+
+    path = app.resolve(rel)
+    dep = check_dept(app, dept)
+    if dep is None:
+        raise ApiError("Thiếu phòng.")
+    if not dep["standards"]:
+        raise ApiError("Phòng này chưa có chuẩn kiểm nên chưa đánh dấu bàn giao được.")
+    model = app.model(path)
+    fid = app.history.file_id(app.rel(path))
+    lat = latest_audits(app.history.read(), dep["id"])
+    missing, errors = [], 0
+    for std in dep["standards"]:
+        e = lat.get((fid, std))
+        if e is None or (e.get("sha") and model.file_hash and e["sha"] != model.file_hash[:16]):
+            missing.append(std)
+        else:
+            errors += int(e["counts"].get("E", 0))
+    if missing:
+        raise ApiError("Hãy quét bản vẽ (bản hiện tại) theo " + ", ".join(missing) + " trước khi bàn giao.", 409)
+    if errors:
+        raise ApiError(f"Còn {errors} lỗi mức E: chưa thể bàn giao. Sửa hết lỗi E rồi quét lại.", 409)
+    app.history.record("handover", file=fid, dept=dep["id"], to=dep["next"], sha=(model.file_hash or "")[:16] or None)
+    names = {d["id"]: d["name"] for d in app.departments["departments"]}
+    return {"file": app.rel(path), "dept": dep["id"], "to": [names.get(x, x) for x in dep["next"]], "ready": True,
+            "note": "Đã đánh dấu sẵn sàng bàn giao (ghi trong lịch sử dự án trên máy này). cad-guard không gửi tệp đi đâu."}
+
+
+__all__ = ["ApiError", "AppConfig", "AppData", "FIXABLE_RULES", "apply_changeset", "audit_all", "audit_file",
+           "check_dept", "explain", "geometry", "get_changeset", "handover", "list_changesets", "list_drawings",
+           "load_departments", "propose_changeset", "rules_table", "scene3d", "suggest_ops", "summary", "undo_changeset"]

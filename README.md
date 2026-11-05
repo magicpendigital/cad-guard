@@ -26,10 +26,10 @@ Lệnh khác: `python -m cadguard rules` (danh sách luật), `python -m cadguar
 ### Giao diện cục bộ trong trình duyệt
 
 ```powershell
-python -m cadguard app --workspace D:\CadGuardData\phien-01 [--profile ho-so.yaml]
+python -m cadguard app [--workspace D:\CadGuardData\phien-01]
 ```
 
-Mở giao diện chỉ trên máy này (`127.0.0.1`, cổng ngẫu nhiên, mã phiên trong địa chỉ in ra): chọn phòng (Thiết kế / Kỹ thuật / Lập trình sản xuất), xem lỗi theo mức E/W/I, đề xuất sửa → xem trước → áp dụng ra **tệp mới** khi bạn bấm xác nhận → hoàn tác; tab Luật áp dụng (chỉ đọc); trò chuyện với trợ lý AI bằng hạn mức CLI đã đăng nhập hoặc khoá API của bạn (khoá đặt bằng `cadguard keys set …`, không nhập trong trình duyệt). Không cần phụ thuộc thêm. Chi tiết: `docs/app.md`.
+Mở giao diện chỉ trên máy này (`127.0.0.1`, cổng ngẫu nhiên, mã phiên trong địa chỉ in ra), theo bản mẫu chốt `design/ui-mockup.html`. Không cần `--workspace`: chọn dự án bằng **Mở thư mục…** (hộp thoại của hệ điều hành) hoặc **Dự án gần đây**, đổi dự án lúc đang chạy. Phòng Kỹ thuật (ưu tiên khảo sát): xem trước bản vẽ, soát lỗi theo `design-hygiene-v0` + `furniture-v0` có đánh dấu vị trí, làm sạch (đề xuất → xem trước → lưu **tệp mới** có xác nhận → hoàn tác), đánh dấu sẵn sàng bàn giao. Màn **Kết nối AI**: đăng nhập CLI (mở cửa sổ đăng nhập của chính CLI) và nhập khoá API (lưu vào kho khoá hệ điều hành, không bao giờ hiện lại). Không cần phụ thuộc thêm. Chi tiết: `docs/app.md`.
 
 ### Máy chủ MCP chỉ đọc cho trợ lý AI
 

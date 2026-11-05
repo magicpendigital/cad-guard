@@ -1,28 +1,41 @@
 {
-  "schema": "cg.app-departments/1",
-  "note": "Phòng trong chuỗi sản xuất và chuẩn mặc định của từng phòng. Đổi chuẩn ở đây (tên tệp trong standards/, không đuôi .yaml).",
-  "default": "thiet-ke",
+  "schema": "cg.app-departments/2",
+  "note": "Chuỗi phòng và chuẩn kiểm của từng phòng (tên tệp trong standards/, không đuôi .yaml). Một phòng có thể có nhiều chuẩn. 'next' là các phòng nhận bàn giao. 'priority' = phòng ưu tiên (khảo sát).",
+  "default": "ky-thuat",
   "departments": [
     {
       "id": "thiet-ke",
       "name": "Thiết kế",
-      "standard": "design-hygiene-v0",
+      "standards": ["design-hygiene-v0"],
+      "role": "Nhận yêu cầu từ khách, ra bản triển khai không gian",
       "description": "Vệ sinh và nhất quán bản vẽ trước khi giao Kỹ thuật.",
-      "next": "ky-thuat"
+      "next": ["ky-thuat"]
     },
     {
       "id": "ky-thuat",
       "name": "Kỹ thuật",
-      "standard": "furniture-v0",
-      "description": "Bản vẽ triển khai: khung tên, layer, chữ, kích thước, chi tiết.",
-      "next": "lap-trinh-san-xuat"
+      "standards": ["design-hygiene-v0", "furniture-v0"],
+      "role": "Triển khai chi tiết, bóc tách, kiểm kích thước và bảng kê",
+      "description": "Bản vẽ triển khai: vệ sinh bản vẽ, khung tên, layer, chữ, kích thước, chi tiết.",
+      "next": ["thiet-ke-3d", "lap-trinh-san-xuat"],
+      "priority": true
+    },
+    {
+      "id": "thiet-ke-3d",
+      "name": "Thiết kế 3D",
+      "standards": [],
+      "role": "Dựng 3D từ bản kỹ thuật đã chuẩn, đặt ánh sáng và góc máy",
+      "description": "Xem 3D dựng tất định từ bản vẽ (chỉ xem). Luật kiểm 3D đang phát triển.",
+      "next": [],
+      "view": "scene"
     },
     {
       "id": "lap-trinh-san-xuat",
       "name": "Lập trình sản xuất",
-      "standard": "furniture-v0",
+      "standards": ["furniture-v0"],
+      "role": "Chuẩn bị dữ liệu cho máy CNC và cắt",
       "description": "Kiểm trước khi xuất cho máy và xưởng.",
-      "next": null
+      "next": []
     }
   ]
 }
