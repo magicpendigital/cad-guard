@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cad-guard — bản mẫu giao diện hợp nhất (một luồng, nhiều định dạng)</title>
+<!--
+  BẢN MẪU GIAO DIỆN (không phải sản phẩm). Toàn bộ dữ liệu là TỔNG HỢP/minh hoạ: không có bản vẽ hay số liệu của khách.
+  Trợ lý trong bản mẫu là kịch bản có sẵn, chưa nối mô hình nào.
+  Bối cảnh: công ty sản xuất có ba phòng nối tiếp (Thiết kế, Kỹ thuật, Lập trình sản xuất). Chọn phòng ở góc trên để xem từng góc nhìn.
+  Mã luật VS-/CN- là mã minh hoạ, chưa có trong chuẩn.
+  Gắn với plans/cad-guard-agent.md (mục 3–5).
+-->
+<style>
+:root{
+  --font: "Segoe UI", system-ui, -apple-system, "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", monospace;
+  --r: 10px;
+  --bg:#F6F5F2; --surface:#FFFFFF; --surface2:#EFEDE8; --border:#DEDAD2; --border-strong:#C9C4B9;
+  --text:#1F2421; --text2:#555C57; --text3:#6B726D;
+  --primary:#0F6B62; --primary-hover:#0B554E; --primary-soft:#DDF0EC; --on-primary:#FFFFFF; --primary-text:#0B4F48;
+  --ok-bg:#DFF3E4; --ok-fg:#14532D; --err-bg:#FBE3E1; --err-fg:#8E1B13; --warn-bg:#FCEFCB; --warn-fg:#7A4B00;
+  --neu-bg:#E9E7E2; --neu-fg:#4A504B; --info-bg:#DEEBFA; --info-fg:#1E4C84;
+  --err:#C0392B; --warn:#B7791F; --ok:#2E7D4F;
+  --cv-bg:#FFFFFF; --cv-line:#2B3330; --cv-fill:#F3F1EC; --cv-dim:#0E7490; --cv-l0:#8A918C; --cv-grid:#EEECE6;
+  --shadow:0 1px 2px rgba(20,25,22,.06),0 4px 14px rgba(20,25,22,.06);
+}
+html[data-theme="dark"]{
+  --bg:#121513; --surface:#1A1E1C; --surface2:#232826; --border:#323935; --border-strong:#46504A;
+  --text:#E9ECEA; --text2:#A8B0AA; --text3:#8E968F;
+  --primary:#3FBFAE; --primary-hover:#63D0C1; --primary-soft:#173A35; --on-primary:#06201C; --primary-text:#9FE3D9;
+  --ok-bg:#163A24; --ok-fg:#8EDCA6; --err-bg:#46201D; --err-fg:#FFB4AC; --warn-bg:#44330A; --warn-fg:#F3CF7A;
+  --neu-bg:#2C312E; --neu-fg:#B8BFBA; --info-bg:#1C3350; --info-fg:#A9CBF4;
+  --err:#F0766A; --warn:#E0B04A; --ok:#5CC98A;
+  --cv-bg:#0F1211; --cv-line:#C8D0CB; --cv-fill:#171B19; --cv-dim:#5CC8DD; --cv-l0:#7E8781; --cv-grid:#1B201E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--font);font-size:15px;line-height:1.5;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:6px}
+.app{display:grid;grid-template-rows:56px 1fr;height:100vh;min-width:980px}
+
+/* ===== top bar ===== */
+.topbar{display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:.2px}
+.brand .logo{width:28px;height:28px;border-radius:8px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center}
+.sample-tag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--warn-bg);color:var(--warn-fg);white-space:nowrap}
+.nav{display:flex;gap:4px;margin-left:10px}
+.nav button{border:0;background:transparent;padding:8px 13px;border-radius:8px;color:var(--text2);font-weight:600;display:flex;gap:7px;align-items:center}
+.nav button:hover{background:var(--surface2);color:var(--text)}
+.nav button[aria-selected="true"]{background:var(--primary-soft);color:var(--primary-text)}
+.nav small{font-weight:500;color:var(--text3);font-size:12px}
+.spacer{flex:1}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--border);border-radius:99px;background:var(--surface);font-size:13.5px;color:var(--text2);white-space:nowrap}
+.chip b{color:var(--text);font-weight:600}
+.chip.btn{cursor:pointer}
+.chip.btn:hover{border-color:var(--border-strong);background:var(--surface2)}
+.iconbtn{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface);border-radius:8px;color:var(--text2)}
+.iconbtn:hover{background:var(--surface2);color:var(--text)}
+svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.menu{position:absolute;z-index:30;top:50px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:6px;min-width:330px}
+.menu button{display:flex;width:100%;gap:10px;align-items:flex-start;text-align:left;border:0;background:transparent;padding:9px 10px;border-radius:8px}
+.menu button:hover{background:var(--surface2)}
+.menu button[aria-checked="true"]{background:var(--primary-soft)}
+.menu .t{font-weight:600}.menu .d{font-size:13px;color:var(--text2)}
+
+/* ===== pills ===== */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:99px;font-size:13px;font-weight:600;line-height:1.5;white-space:nowrap}
+.pill svg.i{width:14px;height:14px}
+.pill.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.pill.err{background:var(--err-bg);color:var(--err-fg)}
+.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.pill.neu{background:var(--neu-bg);color:var(--neu-fg)}
+.pill.info{background:var(--info-bg);color:var(--info-fg)}
+
+/* ===== buttons ===== */
+.btn-p,.btn-s,.btn-d{border-radius:8px;padding:8px 14px;font-weight:600;border:1px solid transparent;display:inline-flex;gap:7px;align-items:center;justify-content:center}
+.btn-p{background:var(--primary);color:var(--on-primary)}
+.btn-p:hover{background:var(--primary-hover)}
+.btn-s{background:var(--surface);border-color:var(--border-strong);color:var(--text)}
+.btn-s:hover{background:var(--surface2)}
+.btn-d{background:var(--err);color:#fff}
+html[data-theme="dark"] .btn-d{color:#2A0906}
+.btn-p[disabled],.btn-s[disabled]{opacity:.45;cursor:not-allowed}
+.btn-sm{padding:5px 10px;font-size:14px}
+
+/* ===== screens ===== */
+.screen{display:none;min-height:0}
+.screen.on{display:grid}
+#s-work{grid-template-columns:272px minmax(0,1fr) 420px}
+.col{min-height:0;display:flex;flex-direction:column;background:var(--surface)}
+.col.left{border-right:1px solid var(--border)}
+.col.right{border-left:1px solid var(--border)}
+.col-h{padding:14px 16px 8px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+
+/* file list */
+.files{padding:0 8px;overflow:auto;flex:1}
+.file{display:block;width:100%;text-align:left;border:1px solid transparent;background:transparent;padding:10px;border-radius:9px;margin-bottom:2px}
+.file:hover{background:var(--surface2)}
+.file[aria-current="true"]{background:var(--primary-soft);border-color:color-mix(in srgb,var(--primary) 35%,transparent)}
+.file .n{display:flex;align-items:center;gap:8px;font-weight:600;word-break:break-all}
+.file .n svg{color:var(--text3)}
+.file .m{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;padding-left:26px}
+.file.child{margin-left:18px;width:calc(100% - 18px)}
+.std-box{margin:8px 12px 12px;padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);font-size:14px}
+.std-box .k{color:var(--text3);font-size:12.5px}
+.std-box .v{font-weight:600}
+
+/* canvas */
+.center{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.cv-tools{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border)}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:6px 13px;font-weight:600;color:var(--text2)}
+.seg button+button{border-left:1px solid var(--border-strong)}
+.seg button[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-text)}
+.seg button[disabled]{opacity:.45;cursor:not-allowed}
+.cv-wrap{flex:1;min-height:0;padding:14px;overflow:auto;display:flex}
+.sheet{flex:1;background:var(--cv-bg);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);display:grid;place-items:center;padding:6px;min-height:340px}
+.sheet svg{width:100%;height:auto;max-height:100%}
+.cv-status{display:flex;gap:16px;align-items:center;padding:8px 14px;background:var(--surface);border-top:1px solid var(--border);font-size:13.5px;color:var(--text2);flex-wrap:wrap}
+.cv-status .lock{display:inline-flex;gap:6px;align-items:center;color:var(--ok-fg);background:var(--ok-bg);padding:2px 9px;border-radius:99px;font-weight:600}
+/* svg drawing */
+.ln{stroke:var(--cv-line);stroke-width:1.4;fill:none}
+.ln.thin{stroke-width:.9}
+.fillc{fill:var(--cv-fill)}
+.txt{fill:var(--cv-line);font-family:var(--font)}
+.fa-s{stroke:var(--cv-l0);fill:none;stroke-width:1.4}
+.fa-t{fill:var(--cv-l0)}
+svg[data-fixed-a="1"] .fa-s{stroke:var(--cv-dim)}
+svg[data-fixed-a="1"] .fa-t{fill:var(--cv-dim)}
+.fb-t{font-family:var(--font);fill:var(--cv-line);font-size:var(--s,16px)}
+svg[data-fixed-b="1"] .fb-t{font-size:13px}
+.fb-s{stroke:var(--cv-l0);fill:none;stroke-width:2.2}
+svg[data-fixed-b="1"] .fb-s{stroke:var(--cv-dim)}
+.fa-show{display:none}
+svg[data-fixed-a="1"] .fa-show{display:block}
+svg[data-fixed-a="1"] .fa-hide{display:none}
+.chg-box{fill:none;stroke:var(--ok);stroke-width:1.6;stroke-dasharray:5 4;display:none}
+svg[data-show-chg="1"][data-fixed-a="1"] #chg-a{display:block}
+svg[data-show-chg="1"][data-fixed-b="1"] #chg-b{display:block}
+.mk{display:none;cursor:pointer}
+svg[data-scanned="1"] .mk{display:block}
+.mk .ring{fill:none;stroke-width:2.2}
+.mk .dot{stroke:none}
+.mk .num{fill:#fff;font:700 13px var(--font);text-anchor:middle}
+.mk.sev-error .ring{stroke:var(--err)} .mk.sev-error .dot{fill:var(--err)}
+.mk.sev-warn .ring{stroke:var(--warn)} .mk.sev-warn .dot{fill:var(--warn)}
+.mk.sev-warn .num{fill:#1d1300}
+html[data-theme="dark"] .mk.sev-error .num{fill:#2A0906}
+.mk.fixed .ring{stroke:var(--ok)} .mk.fixed .dot{fill:var(--ok)} .mk.fixed .num{fill:#06210F}
+.mk.sel .ring{stroke-width:4}
+.mk .pulse{fill:none;stroke-width:2;opacity:0}
+.mk.sel .pulse{animation:pl 1.4s ease-out infinite;stroke:currentColor}
+.mk.sev-error{color:var(--err)} .mk.sev-warn{color:var(--warn)} .mk.fixed{color:var(--ok)}
+@keyframes pl{0%{opacity:.7;r:14}100%{opacity:0;r:34}}
+.missing{stroke:var(--err);stroke-dasharray:4 3;fill:none;stroke-width:1.5}
+
+/* right panel */
+.tabs{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--border)}
+.tabs button{border:0;background:transparent;padding:9px 12px;font-weight:600;color:var(--text2);border-bottom:3px solid transparent;display:flex;gap:7px;align-items:center}
+.tabs button[aria-selected="true"]{color:var(--primary-text);border-bottom-color:var(--primary)}
+.tabs .cnt{font-size:12px;background:var(--neu-bg);color:var(--neu-fg);padding:0 7px;border-radius:99px;font-weight:700}
+.tabs .cnt.hot{background:var(--err-bg);color:var(--err-fg)}
+.pane{display:none;min-height:0;flex:1;flex-direction:column}
+.pane.on{display:flex}
+.chat-head{display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:13.5px;color:var(--text2);border-bottom:1px dashed var(--border)}
+.chat-log{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:94%}
+.msg.me{align-self:flex-end;background:var(--primary);color:var(--on-primary);padding:9px 13px;border-radius:14px 14px 4px 14px}
+.msg.ai{align-self:flex-start;background:var(--surface2);padding:11px 14px;border-radius:14px 14px 14px 4px}
+.msg.ai p{margin:0 0 8px}.msg.ai p:last-child{margin:0}
+.msg .src{margin-top:8px;font-size:12.5px;color:var(--text3)}
+.tool{align-self:flex-start;width:94%;border:1px solid var(--border);border-radius:9px;background:var(--surface);font-size:13.5px}
+.tool summary{cursor:pointer;padding:7px 11px;display:flex;gap:8px;align-items:center;color:var(--text2);list-style:none}
+.tool summary::-webkit-details-marker{display:none}
+.tool summary .ok{color:var(--ok);display:inline-flex}
+.tool pre{margin:0;padding:8px 11px 10px;border-top:1px solid var(--border);font:12.5px/1.5 var(--mono);color:var(--text2);white-space:pre-wrap}
+.typing{align-self:flex-start;color:var(--text3);font-size:14px;display:flex;gap:6px;align-items:center}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--text3);animation:bl 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes bl{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.suggest{display:flex;flex-wrap:wrap;gap:7px;padding:8px 14px 0}
+.suggest button{border:1px solid var(--border-strong);background:var(--surface);border-radius:99px;padding:6px 12px;font-size:14px;font-weight:500}
+.suggest button:hover{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-text)}
+.suggest button.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:600}
+.composer{display:flex;gap:8px;padding:10px 14px 12px}
+.composer input{flex:1;padding:10px 12px;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface)}
+.composer input::placeholder{color:var(--text3)}
+.hint{padding:0 14px 10px;font-size:12.5px;color:var(--text3)}
+.note-card{margin-top:8px;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface);padding:10px 12px;font-size:14px}
+.note-card .lbl{font-size:12.5px;color:var(--text3);margin-bottom:6px;display:flex;gap:6px;align-items:center}
+.note-card ul{margin:0 0 8px 18px;padding:0}
+
+/* findings */
+.list{overflow:auto;flex:1;padding:12px 12px 16px;display:flex;flex-direction:column;gap:9px}
+.empty{padding:34px 20px;text-align:center;color:var(--text2)}
+.empty b{display:block;color:var(--text);font-size:16px;margin-bottom:4px}
+.f-card{border:1px solid var(--border);border-radius:var(--r);padding:12px;background:var(--surface);cursor:pointer;text-align:left;width:100%}
+.f-card:hover{border-color:var(--border-strong)}
+.f-card.sel{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 22%,transparent)}
+.f-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.f-no{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--neu-bg);color:var(--neu-fg)}
+.f-rule{font:600 13px var(--mono);color:var(--text2)}
+.f-title{font-weight:600;margin:7px 0 3px}
+.f-d{color:var(--text2);font-size:14px}
+.f-act{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.f-meta{margin-top:8px;font-size:13px;color:var(--text3);display:flex;gap:6px;align-items:center}
+
+/* changeset */
+.op{border:1px solid var(--border);border-radius:var(--r);padding:12px;background:var(--surface)}
+.op label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.op input{margin-top:4px;width:17px;height:17px;accent-color:var(--primary)}
+.diff{margin-top:9px;font:13px/1.55 var(--mono);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.diff div{padding:3px 10px}
+.diff .m{background:var(--err-bg);color:var(--err-fg)}
+.diff .p{background:var(--ok-bg);color:var(--ok-fg)}
+.cs-foot{border-top:1px solid var(--border);padding:12px 14px;background:var(--surface)}
+.checks{margin:0 0 10px;padding:0;list-style:none;font-size:14px}
+.checks li{display:flex;gap:8px;align-items:flex-start;padding:2px 0;color:var(--text2)}
+.checks li svg{color:var(--ok);margin-top:3px}
+.safe{display:flex;gap:8px;font-size:13.5px;color:var(--text2);margin-bottom:10px;align-items:flex-start}
+.safe svg{color:var(--ok);margin-top:2px}
+
+/* ===== settings screen ===== */
+.page{overflow:auto;padding:26px 32px 48px;background:var(--bg)}
+.page-in{max-width:1040px;margin:0 auto}
+h1{font-size:24px;margin:0 0 4px;line-height:1.25}
+h2{font-size:18px;margin:30px 0 4px}
+.lead{color:var(--text2);margin:0 0 18px;font-size:16px;max-width:760px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+.prov{display:flex;flex-direction:column;gap:10px}
+.prov .hd{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.prov .nm{font-weight:700;font-size:16px}
+.prov .ds{color:var(--text2);font-size:14px;margin:0}
+.prov .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.prov input[type=password],.prov input[type=text],.num-in{padding:8px 11px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);min-width:0;flex:1}
+.callout{display:flex;gap:11px;padding:13px 15px;border-radius:var(--r);background:var(--info-bg);color:var(--info-fg);font-size:14.5px;margin:0 0 18px;max-width:900px}
+.callout svg{margin-top:2px}
+.tier{display:grid;gap:8px}
+.tier label{display:flex;gap:11px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer;align-items:flex-start}
+.tier label:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
+.tier input{margin-top:4px;accent-color:var(--primary);width:17px;height:17px}
+.tier .t{font-weight:700}.tier .d{font-size:14px;color:var(--text2)}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);font-size:14.5px}
+th{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:700}
+.perm td:first-child{width:62%}
+.lockrow{display:inline-flex;gap:6px;align-items:center}
+
+/* manager */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi .v{font-size:30px;font-weight:700;line-height:1.1}
+.kpi .l{color:var(--text2);font-size:14px;margin-top:4px}
+.kpi .dlt{font-size:13px;margin-top:8px;color:var(--text3)}
+.bars{display:grid;gap:9px}
+.bar{display:grid;grid-template-columns:230px 1fr 40px;gap:12px;align-items:center;font-size:14.5px}
+.bar .tr{height:12px;border-radius:6px;background:var(--surface2);overflow:hidden}
+.bar .tr i{display:block;height:100%;background:var(--primary);border-radius:6px}
+.bar .nn{text-align:right;font-weight:600}
+.privacy{display:flex;gap:9px;align-items:center;color:var(--text2);font-size:14px;margin-top:12px}
+
+/* home (thợ vẽ) */
+.hero{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:18px}
+.hero h1{font-size:26px}
+.hero p{margin:4px 0 14px;color:var(--text2);font-size:16px}
+.ask{display:flex;gap:8px;max-width:720px}
+.ask input{flex:1;padding:11px 14px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);font-size:15px}
+.ask input::placeholder{color:var(--text3)}
+.home-grid{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:18px;align-items:start}
+.home-grid h2{margin-top:0;font-size:17px}
+.dwg{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.dwg-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dwg-h .nm{font-weight:700;font-size:16px;display:flex;gap:8px;align-items:center}
+.dwg-h .nm svg{color:var(--text3)}
+.dwg .stage{margin-left:auto}
+.ready{list-style:none;margin:12px 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:14.5px}
+.ready li{display:flex;gap:8px;align-items:flex-start;color:var(--text2)}
+.ready li svg{margin-top:3px}
+.ready li.done{color:var(--text)}
+.ready li.done svg{color:var(--ok)}
+.ready li.todo svg{color:var(--text3)}
+.dwg-f{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dwg-f .why{color:var(--text3);font-size:13.5px}
+.decide{background:var(--warn-bg);color:var(--warn-fg);border-radius:9px;padding:10px 12px;font-size:14.5px;margin:0 0 12px;display:flex;gap:9px;align-items:flex-start}
+.decide svg{margin-top:2px}
+.pack{margin-top:10px;border:1px dashed var(--border-strong);border-radius:9px;padding:10px 12px;font-size:14.5px;display:none}
+.pack.on{display:block}
+.pack ul{margin:4px 0 8px 18px;padding:0;color:var(--text2)}
+.mine{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.mine .lockline{display:flex;gap:7px;align-items:center;font-size:13.5px;color:var(--ok-fg);background:var(--ok-bg);padding:3px 10px;border-radius:99px;width:fit-content;font-weight:600;margin-bottom:10px}
+.mine h3{margin:0 0 8px;font-size:15px}
+.mine .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:14.5px}
+.mine .row:last-child{border-bottom:0}
+.mine .tip{font-size:14px;color:var(--text2);margin-top:8px;display:flex;gap:8px}
+.tl{list-style:none;margin:0;padding:0;font-size:14px}
+.tl li{display:flex;gap:10px;padding:5px 0;color:var(--text2)}
+.tl time{color:var(--text3);min-width:40px;font-variant-numeric:tabular-nums}
+
+/* chuỗi phòng */
+.pipe{display:flex;align-items:stretch;gap:6px;margin:0 0 18px;flex-wrap:wrap}
+.pipe .node{flex:1;min-width:150px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.pipe .node.me{border-color:var(--primary);background:var(--primary-soft)}
+.pipe .node .nm{font-weight:700}
+.pipe .node .ct{font-size:14px;color:var(--text2);margin:2px 0 6px}
+.pipe .arr{display:grid;place-items:center;color:var(--text3)}
+.flow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.flow .card .big{font-size:26px;font-weight:700;line-height:1.1}
+/* ===== luật áp dụng ===== */
+.page-in.wide{max-width:1280px}
+.rh{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:6px}
+.rh-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rh-act label{font-size:13.5px;color:var(--text2)}
+.sel{padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);min-width:0}
+.srcline{display:flex;gap:8px 16px;flex-wrap:wrap;align-items:center;font-size:13.5px;color:var(--text2);margin:0 0 16px}
+.srcline code{font:12.5px var(--mono);background:var(--surface2);padding:1px 6px;border-radius:5px}
+.covs{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.cov{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;text-align:left;width:100%;display:block}
+.cov:hover{border-color:var(--border-strong)}
+.cov[aria-pressed="true"]{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 22%,transparent);background:var(--primary-soft)}
+.cov .nm{font-weight:700}
+.cov .big{font-size:28px;font-weight:700;line-height:1.15;margin:2px 0 4px}
+.cov .sub{font-size:13.5px;color:var(--text2)}
+.cov.gap .big{color:var(--warn-fg)}
+.cov .bar2{display:flex;height:6px;border-radius:4px;overflow:hidden;background:var(--neu-bg);margin:8px 0 6px}
+.cov .bar2 i{display:block;height:100%}
+.tb{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.tb .grow{flex:1;min-width:180px}
+.tb input[type=search]{width:100%;padding:8px 11px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface)}
+.tb .lbl{font-size:13.5px;color:var(--text2)}
+.tbp{display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.tbp .sel{max-width:210px}
+.callout.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.rt{width:100%;border-collapse:collapse}
+.rt th{position:sticky;top:0;background:var(--surface);z-index:1}
+.rt td{vertical-align:top;font-size:14px}
+.rt tr.row{cursor:pointer}
+.rt tr.row:hover td{background:var(--surface2)}
+.rt tr.row.sel td{background:var(--primary-soft)}
+.rt tr.grp td{background:var(--surface2);font-weight:700;padding:8px 12px;font-size:14px;border-bottom:1px solid var(--border-strong)}
+.rt .code{font:600 13px var(--mono);color:var(--text);background:none;border:0;padding:0;text-align:left;text-decoration:underline;text-decoration-color:var(--border-strong);text-underline-offset:3px}
+.rt .code:hover{text-decoration-color:var(--primary)}
+.rt .ttl{font-weight:600;margin-bottom:2px}
+.rt .meta{font-size:12.5px;color:var(--text3)}
+.rt .stack{display:flex;gap:4px;flex-wrap:wrap}
+.rt .own{font-size:12.5px;color:var(--text3);margin-top:4px}
+.rt .none{color:var(--warn-fg);background:var(--warn-bg);border-radius:6px;padding:1px 7px;font-size:13px;font-weight:600;display:inline-block}
+.pill.sm{font-size:12px;padding:0 7px}
+.pill.proj{background:var(--info-bg);color:var(--info-fg)}
+.pill.edit{background:var(--warn-bg);color:var(--warn-fg)}
+.tfoot{padding:10px 14px;font-size:13.5px;color:var(--text3);border-top:1px solid var(--border)}
+.f-rule.link{background:none;border:0;padding:0;text-decoration:underline;text-decoration-color:var(--border-strong);text-underline-offset:3px;cursor:pointer}
+.f-rule.link:hover{color:var(--primary-text);text-decoration-color:var(--primary)}
+.f-link{background:none;border:0;padding:0;color:var(--primary-text);font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* drawer */
+.drawer{position:fixed;top:56px;right:0;bottom:0;width:min(480px,100vw);background:var(--surface);border-left:1px solid var(--border-strong);box-shadow:var(--shadow);z-index:40;display:none;flex-direction:column}
+.drawer.on{display:flex}
+.dr-h{padding:14px 16px 10px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
+.dr-h h2{margin:0;font-size:17px;line-height:1.35}
+.dr-b{flex:1;overflow:auto;padding:4px 16px 16px}
+.dr-b h3{margin:18px 0 8px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+.dr-b p{margin:0 0 8px;color:var(--text2);font-size:14.5px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;font-size:14.5px}
+.kv dt{color:var(--text3)}.kv dd{margin:0}
+.chipset{display:flex;gap:6px;flex-wrap:wrap}
+.tchip{border:1px solid var(--border-strong);background:var(--surface);border-radius:99px;padding:5px 11px;font-size:14px;font-weight:600;color:var(--text2);display:inline-flex;gap:6px;align-items:center}
+.tchip:hover:not([disabled]){background:var(--surface2)}
+.tchip[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-text);border-color:var(--primary)}
+.tchip[disabled]{cursor:default;opacity:.75}
+.fld{display:grid;gap:4px;margin:0 0 12px}
+.fld>label,.fld>.lb{font-size:13.5px;font-weight:600;color:var(--text2)}
+.fld input[type=text],.fld select,.fld textarea{padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);width:100%}
+.fld input[disabled],.fld select[disabled]{background:var(--surface2);color:var(--text2)}
+.sw{display:flex;gap:10px;align-items:center}
+.sw input{width:18px;height:18px;accent-color:var(--primary)}
+.hist{list-style:none;margin:0;padding:0;font-size:14px;color:var(--text2)}
+.hist li{padding:4px 0;display:flex;gap:10px}.hist time{min-width:78px;color:var(--text3);font-variant-numeric:tabular-nums}
+.dr-f{border-top:1px solid var(--border);padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap}
+.exc{border:1px dashed var(--border-strong);border-radius:9px;padding:10px 12px;font-size:14px;background:var(--surface2)}
+/* thanh bản nháp */
+.draftbar{position:sticky;bottom:12px;margin-top:16px;background:var(--surface);border:1px solid var(--warn);border-radius:12px;box-shadow:var(--shadow);padding:10px 14px;display:none;gap:12px;align-items:center;flex-wrap:wrap}
+.draftbar.on{display:flex}
+.draftbar .tx{flex:1;min-width:240px;font-size:14.5px}
+.modal.wide{width:min(660px,94vw);max-height:90vh;overflow:auto}
+.modal.wide .lead{font-size:14.5px;margin-bottom:12px}
+.opt{display:flex;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;margin-bottom:6px;align-items:flex-start}
+.opt:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
+.opt input{margin-top:4px;accent-color:var(--primary)}
+.opt .d{font-size:13.5px;color:var(--text2)}
+.impact{border-radius:9px;padding:10px 12px;font-size:14.5px;margin:10px 0;background:var(--info-bg);color:var(--info-fg)}
+@media (max-width:1180px){.covs{grid-template-columns:repeat(2,1fr)}}
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(10,14,12,.5);display:none;place-items:center;z-index:50}
+.modal-bg.on{display:grid}
+.modal{background:var(--surface);border-radius:14px;padding:22px;width:min(460px,92vw);box-shadow:var(--shadow);border-top:5px solid var(--warn)}
+.modal h3{margin:0 0 6px;font-size:18px}
+.modal p{margin:0 0 16px;color:var(--text2)}
+.modal .ft{display:flex;justify-content:flex-end;gap:8px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:60;display:none;font-weight:600;box-shadow:var(--shadow)}
+.toast.on{display:block}
+.nav button{white-space:nowrap}
+@media (max-width:1600px){.nav small{display:none}}
+@media (max-width:1180px){#s-work{grid-template-columns:minmax(0,1fr) 400px}.col.left{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+/* ===== bổ sung cho bản hợp nhất ===== */
+.topbar .nav button[data-go="flow"]{position:relative}
+#s-flow{grid-template-columns:288px minmax(0,1fr) 420px}
+.stages{display:flex;gap:0;padding:0 14px;background:var(--surface);border-bottom:1px solid var(--border);overflow:auto}
+.stage{display:flex;align-items:center;gap:8px;padding:10px 14px 9px;border:0;background:transparent;color:var(--text2);font-weight:600;border-bottom:3px solid transparent;white-space:nowrap}
+.stage .no{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12.5px;background:var(--neu-bg);color:var(--neu-fg)}
+.stage[data-state="done"] .no{background:var(--ok-bg);color:var(--ok-fg)}
+.stage[data-state="warn"] .no{background:var(--warn-bg);color:var(--warn-fg)}
+.stage[data-state="err"] .no{background:var(--err-bg);color:var(--err-fg)}
+.stage[aria-selected="true"]{color:var(--primary-text);border-bottom-color:var(--primary)}
+.stage:hover{background:var(--surface2)}
+.stage .sep{width:18px;height:1px;background:var(--border-strong);margin:0 2px}
+.tree{padding:4px 8px;overflow:auto;flex:1}
+.tree .grp{font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);padding:10px 8px 4px}
+.tfile{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;width:100%;border:0;background:transparent;text-align:left;font-size:14px}
+.tfile:hover{background:var(--surface2)}
+.tfile[aria-current="true"]{background:var(--primary-soft);color:var(--primary-text)}
+.tfile .ext{font:600 11.5px var(--mono);padding:1px 6px;border-radius:5px;background:var(--neu-bg);color:var(--neu-fg);flex:none}
+.tfile .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tfile .sz{font-size:12.5px;color:var(--text3);flex:none}
+.jobs{margin:8px 12px 12px;padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);font-size:13.5px}
+.jobs .k{font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3);margin-bottom:6px}
+.job{display:grid;grid-template-columns:1fr auto;gap:2px 8px;align-items:center;padding:6px 0;border-top:1px solid var(--border)}
+.job:first-of-type{border-top:0}
+.job .t{font-weight:600;font-size:13.5px}
+.job .d{grid-column:1/3;font-size:12.5px;color:var(--text2)}
+.bar{grid-column:1/3;height:5px;border-radius:99px;background:var(--border);overflow:hidden;margin-top:4px}
+.bar i{display:block;height:100%;background:var(--primary);border-radius:99px}
+.mem{display:flex;gap:8px;align-items:center;margin-top:10px;font-size:12.5px;color:var(--text2)}
+.mem .bar{grid-column:auto;flex:1;margin:0}
+.mem .bar i{background:var(--ok)}
+.panel{flex:1;min-height:0;overflow:auto;padding:18px 22px 30px}
+.panel h2{font-size:18px;margin:0 0 4px}
+.panel .lead{color:var(--text2);margin:0 0 14px;font-size:14.5px}
+.tbl{width:100%;border-collapse:collapse;font-size:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.tbl th,.tbl td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top}
+.tbl th{font-size:12.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--text3);background:var(--surface2);font-weight:700}
+.tbl tr:last-child td{border-bottom:0}
+.tbl td.num,.tbl th.num{text-align:right;font-variant-numeric:tabular-nums}
+.tbl .mono{font-family:var(--mono);font-size:13px}
+.tbl tr.sel td{background:var(--primary-soft)}
+.tbl tr[tabindex]:hover td{background:var(--surface2)}
+.drop{border:2px dashed var(--border-strong);border-radius:14px;padding:22px;text-align:center;background:var(--surface);margin-bottom:16px}
+.drop b{display:block;font-size:16px;margin-bottom:4px}
+.drop p{margin:0;color:var(--text2);font-size:14px}
+.tiers{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 18px}
+.tier{border:1px solid var(--border);border-radius:var(--r);padding:12px;background:var(--surface)}
+.tier .h{display:flex;gap:8px;align-items:center;font-weight:700;margin-bottom:4px}
+.tier p{margin:0;font-size:13.5px;color:var(--text2)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card h3{margin:0 0 8px;font-size:15px}
+.card ul{margin:0;padding-left:18px;font-size:14px;color:var(--text2)}
+.card li{margin:3px 0}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14px}
+.kv .k{color:var(--text3)}
+.iso{width:100%;height:100%;min-height:360px}
+.outs{display:flex;flex-direction:column;gap:10px}
+.out{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface)}
+.out .ic{width:38px;height:38px;border-radius:9px;display:grid;place-items:center;background:var(--surface2);color:var(--text2)}
+.out .t{font-weight:600}.out .d{font-size:13.5px;color:var(--text2)}
+.gate{border-left:4px solid var(--warn);background:var(--warn-bg);color:var(--warn-fg);padding:12px 14px;border-radius:8px;font-size:14px;margin:14px 0}
+.gate.ok{border-left-color:var(--ok);background:var(--ok-bg);color:var(--ok-fg)}
+.note{font-size:13px;color:var(--text3);margin-top:10px}
+.lod{position:absolute;right:26px;bottom:60px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12.5px;color:var(--text2);box-shadow:var(--shadow)}
+.center{position:relative}
+#s-system .page-in{max-width:1100px}
+.arch{font-family:var(--mono);font-size:12.5px;line-height:1.55;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;overflow:auto;white-space:pre}
+@media (max-width:1280px){#s-flow{grid-template-columns:minmax(0,1fr) 400px}#s-flow .col.left{display:none}.tiers{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand"><span class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>cad-guard</div>
+    <span class="sample-tag" title="Dữ liệu minh hoạ, không phải của khách">Bản mẫu · hợp nhất</span>
+    <nav class="nav" role="tablist" aria-label="Màn hình">
+      <button role="tab" aria-selected="false" data-go="home"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></svg>Việc của tôi</button>
+      <button role="tab" aria-selected="true" data-go="flow"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h6v6H4zM14 12h6v6h-6z"/><path d="M10 9h4v6"/></svg>Dự án <small>một luồng, năm bước</small></button>
+      <button role="tab" aria-selected="false" data-go="overview"><svg class="i" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Tổng quan</button>
+      <button role="tab" aria-selected="false" data-go="rules"><svg class="i" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>Luật áp dụng</button>
+      <button role="tab" aria-selected="false" data-go="system"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="2"/><rect x="3" y="14" width="18" height="6" rx="2"/><path d="M7 7h.01M7 17h.01"/></svg>Hệ thống <small>hiệu năng · định dạng · AI</small></button>
+    </nav>
+    <div class="spacer"></div>
+    <span class="chip" title="Mức dữ liệu gửi cho AI"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Dữ liệu: <b>Bậc 1</b></span>
+    <span class="chip"><svg class="i" viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/></svg>Phòng: <b id="deptName">Kỹ thuật</b></span>
+    <span class="chip"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01"/></svg>Trợ lý: <b>Claude Code</b></span>
+    <button class="iconbtn" id="themeBtn" aria-label="Đổi giao diện sáng/tối" title="Sáng / tối"><svg class="i" id="themeIc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+  </header>
+
+  <!-- ============ VIỆC CỦA TÔI ============ -->
+  <main class="screen" id="s-home"><div class="page"><div class="page-in">
+    <section class="hero"><h1>Chào buổi sáng</h1><p>Hôm nay có <b>2 dự án</b> đang chờ bạn ở bước Kiểm &amp; dọn và <b>1 gói</b> phòng Lập trình sản xuất trả lại vì thiếu cạnh dán. Mọi việc đều mở ở màn <b>Dự án</b>, cùng một luồng năm bước.</p></section>
+    <div class="grid2">
+      <div class="card"><h3>Dự án đang mở</h3>
+        <table class="tbl"><thead><tr><th>Dự án</th><th>Bước</th><th>Trạng thái</th></tr></thead><tbody>
+          <tr tabindex="0" data-open="flow"><td>K1 · Sảnh &amp; khu tiện ích</td><td>2 · Kiểm &amp; dọn</td><td><span class="pill warn">12 cảnh báo</span></td></tr>
+          <tr tabindex="0" data-open="flow"><td>K2 · Tủ bếp mẫu B</td><td>5 · Sản xuất</td><td><span class="pill err">Trả lại: thiếu cạnh dán</span></td></tr>
+          <tr tabindex="0" data-open="flow"><td>K3 · Quầy lễ tân</td><td>1 · Nhận tệp</td><td><span class="pill info">Đang lập chỉ mục 61%</span></td></tr>
+        </tbody></table></div>
+      <div class="card"><h3>Vì sao chỉ một màn làm việc</h3><ul>
+        <li>Một bản vẽ đi qua năm bước; mỗi bước chỉ đổi <b>khung giữa</b> (2D, bảng, 3D, đầu ra), còn danh sách tệp và trợ lý giữ nguyên.</li>
+        <li>Mỗi phòng thấy cùng dữ liệu, chỉ khác bước mặc định và luật áp dụng.</li>
+        <li>Tệp gốc luôn chỉ đọc; mọi thứ sinh ra là tệp mới có phiên bản.</li>
+      </ul></div>
+    </div>
+  </div></div></main>
+
+  <!-- ============ DỰ ÁN: MỘT LUỒNG NĂM BƯỚC ============ -->
+  <main class="screen on" id="s-flow">
+    <aside class="col left" aria-label="Tệp và tác vụ nền">
+      <div class="col-h">Dự án K1 · Sảnh &amp; khu tiện ích</div>
+      <div class="tree" id="tree">
+        <div class="grp">Nguồn (chỉ đọc)</div>
+        <button class="tfile" aria-current="true"><span class="ext">DXF</span><span class="nm">K1-trien-khai-sanh.dxf</span><span class="sz">455 MB</span></button>
+        <button class="tfile"><span class="ext">DWG</span><span class="nm">K1-mat-bang.dwg</span><span class="sz">47 MB</span></button>
+        <button class="tfile"><span class="ext">PDF</span><span class="nm">K1-phe-duyet-khach.pdf</span><span class="sz">3 MB</span></button>
+        <button class="tfile"><span class="ext">JPG</span><span class="nm">K1-phac-thao-quay.jpg</span><span class="sz">2 MB</span></button>
+        <div class="grp">Sinh ra (phiên bản)</div>
+        <button class="tfile"><span class="ext">DXF</span><span class="nm">K1-trien-khai-sanh_v2.dxf</span><span class="sz">draft</span></button>
+        <button class="tfile"><span class="ext">CGP</span><span class="nm">K1.product.json</span><span class="sz">v1</span></button>
+        <button class="tfile"><span class="ext">GLB</span><span class="nm">K1-sanh.glb</span><span class="sz">v1</span></button>
+      </div>
+      <div class="jobs" aria-label="Tác vụ nền">
+        <div class="k">Tác vụ nền</div>
+        <div class="job"><span class="t">Lập chỉ mục K3-quay.dxf</span><span class="pill info">61%</span><span class="d">Đọc theo luồng · 812 MB · 2,4 triệu đối tượng</span><span class="bar"><i style="width:61%"></i></span></div>
+        <div class="job"><span class="t">Luật trên K1 (38 luật)</span><span class="pill ok">Xong 41 s</span><span class="d">Chạy trên chỉ mục, không nạp lại tệp</span></div>
+        <div class="mem"><span>Bộ nhớ lõi</span><span class="bar"><i style="width:23%"></i></span><span>1,8 / 8 GB</span></div>
+      </div>
+    </aside>
+
+    <section class="center" aria-label="Khung làm việc">
+      <div class="stages" role="tablist" aria-label="Bước">
+        <button class="stage" role="tab" data-st="intake" data-state="done" aria-selected="false"><span class="no">1</span>Nhận tệp</button><span class="sep"></span>
+        <button class="stage" role="tab" data-st="check" data-state="warn" aria-selected="true"><span class="no">2</span>Kiểm &amp; dọn</button><span class="sep"></span>
+        <button class="stage" role="tab" data-st="extract" data-state="warn" aria-selected="false"><span class="no">3</span>Bóc tách</button><span class="sep"></span>
+        <button class="stage" role="tab" data-st="three" data-state="" aria-selected="false"><span class="no">4</span>3D &amp; diễn hoạ</button><span class="sep"></span>
+        <button class="stage" role="tab" data-st="prod" data-state="" aria-selected="false"><span class="no">5</span>Sản xuất</button>
+      </div>
+
+      <!-- 1 Nhận tệp -->
+      <div class="panel" data-panel="intake" hidden>
+        <h2>Nhận tệp: mọi định dạng vào một mô hình</h2>
+        <p class="lead">Kéo tệp vào. Hệ thống nhận ra định dạng, chọn bộ đọc và gắn <b>bậc tin cậy</b> cho dữ liệu, để các bước sau biết được phép tin tới đâu.</p>
+        <div class="drop"><b>Thả DXF, DWG, PDF, ảnh hoặc cả thư mục vào đây</b><p>Tệp lớn được đọc theo luồng và lập chỉ mục một lần; các lần mở sau dùng chỉ mục, không đọc lại tệp.</p></div>
+        <div class="tiers">
+          <div class="tier"><div class="h"><span class="pill ok">Bậc A</span>DXF từ phần mềm gốc</div><p>Đầy đủ layer, khối, kích thước. Dùng cho mọi bước kể cả sản xuất.</p></div>
+          <div class="tier"><div class="h"><span class="pill warn">Bậc B</span>DWG qua bộ chuyển</div><p>Có thể mất khối động, proxy. Luật có ghi chú "có thể do chuyển đổi".</p></div>
+          <div class="tier"><div class="h"><span class="pill warn">Bậc C</span>PDF vector</div><p>Chỉ hình học và chữ, không layer/khối. Kiểm hình thức, so khớp với DXF; không dùng xuống máy.</p></div>
+          <div class="tier"><div class="h"><span class="pill neu">Bậc D</span>Ảnh, PDF quét, phác thảo</div><p>Trích <b>tham số</b> rồi sinh bản nháp từ mẫu. Luôn cần người xác nhận.</p></div>
+        </div>
+        <table class="tbl"><thead><tr><th>Tệp</th><th>Định dạng</th><th class="num">Kích thước</th><th>Bộ đọc</th><th>Bậc</th><th>Trạng thái</th></tr></thead><tbody>
+          <tr><td>K1-trien-khai-sanh.dxf</td><td>DXF ASCII R2010</td><td class="num">455 MB</td><td>Luồng + chỉ mục</td><td><span class="pill ok">A</span></td><td><span class="pill ok">Đã lập chỉ mục · 31 s</span></td></tr>
+          <tr><td>K1-mat-bang.dwg</td><td>DWG AC1024</td><td class="num">47 MB</td><td>Chờ DXF từ CAD của bạn</td><td><span class="pill warn">B</span></td><td><span class="pill warn">Cần xuất DXF (xem hướng dẫn)</span></td></tr>
+          <tr><td>K1-phe-duyet-khach.pdf</td><td>PDF vector</td><td class="num">3 MB</td><td>Trích vector</td><td><span class="pill warn">C</span></td><td><span class="pill ok">Đã đọc · so khớp 2 trang</span></td></tr>
+          <tr><td>K1-phac-thao-quay.jpg</td><td>Ảnh</td><td class="num">2 MB</td><td>Trích tham số (AI)</td><td><span class="pill neu">D</span></td><td><span class="pill info">6 tham số, 2 còn thiếu</span></td></tr>
+        </tbody></table>
+        <p class="note">DWG: đường chính thức là phần mềm CAD của bạn xuất DXF (tập lệnh "lưu kèm DXF"). Bộ chuyển DWG chỉ bật khi công ty đã có giấy phép phù hợp.</p>
+      </div>
+
+      <!-- 2 Kiểm & dọn -->
+      <div class="panel" data-panel="check" style="display:flex;flex-direction:column;padding:0">
+        <div class="cv-tools">
+          <strong>K1-trien-khai-sanh.dxf</strong>
+          <span class="pill neu">Không gian mô hình · vùng sảnh</span>
+          <span class="pill ok">Bậc A</span>
+          <div class="spacer"></div>
+          <div class="seg" role="group" aria-label="So sánh"><button data-v="before" aria-pressed="false">Trước</button><button data-v="after" aria-pressed="true">Sau (v2 nháp)</button></div>
+        </div>
+        <div class="cv-wrap"><div class="sheet">
+          <svg viewBox="0 0 760 420" width="100%" height="100%" role="img" aria-label="Bản vẽ minh hoạ">
+            <defs><pattern id="g" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M20 0H0V20" fill="none" stroke="var(--cv-grid)"/></pattern></defs>
+            <rect width="760" height="420" fill="url(#g)"/>
+            <g fill="none" stroke="var(--cv-line)" stroke-width="1.6">
+              <rect x="80" y="70" width="600" height="250"/><rect x="100" y="90" width="180" height="210" fill="var(--cv-fill)"/><rect x="300" y="90" width="180" height="210" fill="var(--cv-fill)"/><rect x="500" y="90" width="160" height="210" fill="var(--cv-fill)"/>
+              <path d="M100 195h180M300 195h180M500 150h160M500 240h160"/>
+            </g>
+            <g stroke="var(--cv-dim)" stroke-width="1" fill="var(--cv-dim)" font-size="11" font-family="var(--mono)">
+              <path d="M80 345v12M680 345v12M80 351h600"/><text x="360" y="366" text-anchor="middle">6000</text>
+              <path d="M700 70h12M700 320h12M706 70v250"/><text x="722" y="200">2500</text>
+              <path d="M100 60v-12M280 60v-12M100 54h180"/><text x="190" y="46" text-anchor="middle" fill="var(--err)" font-weight="700">1800*</text>
+            </g>
+            <g><rect x="92" y="40" width="200" height="22" rx="6" fill="none" stroke="var(--err)" stroke-width="2" stroke-dasharray="4 3"/><text x="300" y="56" font-size="12" fill="var(--err)" font-family="var(--font)" font-weight="600">TX-09 · chữ ghi đè ≠ số đo (1800 vs 1800,5)</text></g>
+            <g><rect x="498" y="88" width="164" height="214" rx="6" fill="none" stroke="var(--warn)" stroke-width="2" stroke-dasharray="4 3"/><text x="505" y="330" font-size="12" fill="var(--warn)" font-family="var(--font)" font-weight="600">VS-03 · 412 đối tượng trên layer 0</text></g>
+          </svg>
+        </div></div>
+        <div class="lod">Hiển thị theo ô · 418 k đối tượng trong khung · mức chi tiết 2/4</div>
+        <div class="cv-status">
+          <span class="lock"><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Tệp gốc chỉ đọc</span>
+          <span>Thay đổi ghi ra <b>tệp mới</b>, có xem trước và hoàn tác.</span><span class="spacer"></span><span>2,1 triệu đối tượng · 97 layer · mm · chỉ mục 0,9 GB</span>
+        </div>
+      </div>
+
+      <!-- 3 Bóc tách -->
+      <div class="panel" data-panel="extract" hidden>
+        <h2>Bóc tách: từ hình vẽ sang mô hình chi tiết</h2>
+        <p class="lead">Mỗi tấm là một dòng, truy ngược được tới đối tượng trong bản vẽ. Trường còn thiếu được hỏi, không đoán. Mô hình này là nguồn cho 3D, bảng cắt và báo giá.</p>
+        <div class="gate">3 tấm chưa đủ dữ liệu để xuống sản xuất. Trả lời ở cột <b>Thiếu</b> hoặc để trợ lý hỏi phòng Kỹ thuật.</div>
+        <table class="tbl"><thead><tr><th>Mã</th><th>Tên tấm</th><th class="num">Dài</th><th class="num">Rộng</th><th class="num">Dày</th><th>Vật liệu</th><th>Cạnh dán</th><th>Gia công</th><th>Thiếu</th></tr></thead><tbody id="parts"></tbody></table>
+        <p class="note">Nguồn mỗi dòng: handle DXF + bảng trong bản vẽ. Luật PR-11 (kích thước hình = kích thước bảng) và PR-14 (tổng tấm = tủ trừ khe hở) chạy trên bảng này.</p>
+      </div>
+
+      <!-- 4 3D -->
+      <div class="panel" data-panel="three" hidden style="display:none;flex-direction:column;padding:0">
+        <div class="cv-tools"><strong>K1-sanh.glb</strong><span class="pill neu">Dựng từ mô hình chi tiết v1</span><div class="spacer"></div><button class="btn-s btn-sm">Xuất glTF</button><button class="btn-s btn-sm">Xuất OBJ</button><button class="btn-s btn-sm">Gói cho diễn hoạ</button></div>
+        <div class="cv-wrap"><div class="sheet">
+          <svg class="iso" viewBox="0 0 760 420" role="img" aria-label="Khối 3D minh hoạ">
+            <g stroke="var(--cv-line)" stroke-width="1.4" stroke-linejoin="round">
+              <path d="M200 300l120-60 120 60-120 60z" fill="var(--cv-fill)"/><path d="M200 300v-140l120-60v140z" fill="var(--surface2)"/><path d="M320 360v-140l120-60v140z" fill="var(--cv-fill)"/>
+              <path d="M330 240l100-50 100 50-100 50z" fill="var(--cv-fill)"/><path d="M330 240v-110l100-50v110z" fill="var(--surface2)"/><path d="M430 290v-110l100-50v110z" fill="var(--cv-fill)"/>
+            </g>
+            <g stroke="var(--err)" stroke-width="2" fill="none" stroke-dasharray="5 3"><path d="M322 236l20-10 20 10-20 10z"/></g>
+            <text x="360" y="215" font-size="12.5" fill="var(--err)" font-family="var(--font)" font-weight="600">3D-02 · tấm hậu chồng tấm hông 12 mm</text>
+            <text x="60" y="60" font-size="13" fill="var(--text2)" font-family="var(--font)">Mỗi tấm = một hộp đúng kích thước, đặt tên theo mã chi tiết. Phòng diễn hoạ gán vật liệu và render bằng công cụ của họ.</text>
+          </svg>
+        </div></div>
+        <div class="cv-status"><span>Luật 3D: va chạm, hở, chồng giữa các tấm; chỉ chạy khi mô hình chi tiết không còn trường thiếu.</span><span class="spacer"></span><span>142 tấm · 38 phụ kiện</span></div>
+      </div>
+
+      <!-- 5 Sản xuất -->
+      <div class="panel" data-panel="prod" hidden>
+        <h2>Sản xuất: dữ liệu cho máy, do người duyệt</h2>
+        <p class="lead">Mọi đầu ra sinh tất định từ mô hình chi tiết. cad-guard <b>không sinh G-code</b>; phần mềm nesting/CAM của máy làm việc đó.</p>
+        <div class="gate">Chưa thể gửi: 3 tấm thiếu cạnh dán (bước 3). Phòng Lập trình chỉ nhận gói khi bước 3 xanh.</div>
+        <div class="outs">
+          <div class="out"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 10h16M10 5v14"/></svg></span><div><div class="t">Bảng chi tiết &amp; phụ kiện (Excel/CSV theo mẫu công ty)</div><div class="d">142 tấm, 38 phụ kiện · mẫu "nesting-A" và "ERP"</div></div><span class="pill ok">Sẵn sàng</span></div>
+          <div class="out"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></span><div><div class="t">DXF theo từng tấm (quy ước layer máy nesting)</div><div class="d">Đường bao khép kín · lỗ theo đường kính/độ sâu · gốc toạ độ góc trái dưới · mm</div></div><span class="pill warn">139 / 142</span></div>
+          <div class="out"><span class="ic"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 8h8M8 12h5M8 16h8"/></svg></span><div><div class="t">Nhãn mã vạch từng tấm</div><div class="d">Mã chi tiết · kích thước · cạnh dán · lô</div></div><span class="pill ok">Sẵn sàng</span></div>
+          <div class="out"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/></svg></span><div><div class="t">woodWOP .mpr (nếu máy HOMAG)</div><div class="d">Bật theo cấu hình máy của công ty</div></div><span class="pill neu">Chưa bật</span></div>
+        </div>
+        <div class="gate ok" style="margin-top:16px">Kiểm đầu ra CNC: 139 tấm đạt (đường bao khép kín, không trùng/đứt, đơn vị, gốc). 3 tấm chờ dữ liệu.</div>
+        <div style="display:flex;gap:10px;margin-top:6px"><button class="btn-p" disabled>Gửi gói xuống phòng Lập trình</button><button class="btn-s">Xem khác biệt với gói trước</button></div>
+      </div>
+    </section>
+
+    <aside class="col right" aria-label="Trợ lý">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-p="chat" aria-selected="true">Trợ lý</button>
+        <button role="tab" data-p="finds" aria-selected="false">Lỗi <span class="cnt">12</span></button>
+        <button role="tab" data-p="chg" aria-selected="false">Thay đổi <span class="cnt">3</span></button>
+      </div>
+      <div class="pane on" id="p-chat">
+        <div class="chat-head"><span>Đang dùng <b>Claude Code</b> · chỉ thấy kết quả công cụ đã ẩn danh</span></div>
+        <div class="chat-log" id="log" aria-live="polite"></div>
+        <div class="suggest" id="sug"></div>
+        <form class="composer" id="form"><input id="inp" placeholder="Hỏi hoặc ra lệnh, ví dụ: tấm nào chưa có cạnh dán?" aria-label="Nhập câu hỏi"><button class="btn-p" aria-label="Gửi"><svg class="i" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7z"/></svg></button></form>
+        <div class="hint">Trợ lý giải thích và đề xuất. Việc đúng/sai do bộ luật tất định quyết định.</div>
+      </div>
+      <div class="pane" id="p-finds"><div class="list" id="finds"></div></div>
+      <div class="pane" id="p-chg"><div class="list" id="chg"></div></div>
+    </aside>
+  </main>
+
+  <!-- ============ TỔNG QUAN ============ -->
+  <main class="screen" id="s-overview"><div class="page"><div class="page-in">
+    <h1>Tổng quan tuần này</h1>
+    <div class="kpis">
+      <div class="card"><div class="k">Bản vẽ qua bước 2</div><div class="v" style="font-size:26px;font-weight:700">38</div></div>
+      <div class="card"><div class="k">Lỗi bắt trước khi cắt</div><div class="v" style="font-size:26px;font-weight:700">27</div></div>
+      <div class="card"><div class="k">Gói sản xuất trả lại</div><div class="v" style="font-size:26px;font-weight:700">2</div></div>
+      <div class="card"><div class="k">Thời gian bóc tách trung bình</div><div class="v" style="font-size:26px;font-weight:700">46 phút</div></div>
+    </div>
+    <p class="note">Số tổng hợp theo mã băm tệp; không có tên tệp, khách hay thợ vẽ.</p>
+  </div></div></main>
+
+  <!-- ============ LUẬT ============ -->
+  <main class="screen" id="s-rules"><div class="page"><div class="page-in">
+    <h1>Luật áp dụng theo bước</h1>
+    <table class="tbl"><thead><tr><th>Bước</th><th>Nhóm luật</th><th class="num">Bật</th><th>Ghi chú</th></tr></thead><tbody>
+      <tr><td>1 Nhận tệp</td><td>Bậc tin cậy, đơn vị, phiên bản DXF, phông tiếng Việt</td><td class="num">6</td><td>Chạy ngay khi lập chỉ mục</td></tr>
+      <tr><td>2 Kiểm &amp; dọn</td><td>Layer, chữ, kích thước, vệ sinh (xref, layer 0, ByLayer, Z≠0)</td><td class="num">22</td><td>Chuẩn cấu hình theo công ty</td></tr>
+      <tr><td>3 Bóc tách</td><td>Hình = bảng, tổng tấm, cạnh dán, mã duy nhất</td><td class="num">8</td><td>Chạy trên mô hình chi tiết</td></tr>
+      <tr><td>4 3D</td><td>Va chạm, hở, chồng</td><td class="num">3</td><td>Chỉ khi bước 3 xanh</td></tr>
+      <tr><td>5 Sản xuất</td><td>Đường bao khép kín, layer gia công, gốc, đơn vị</td><td class="num">7</td><td>Chặn gửi nếu có lỗi E</td></tr>
+    </tbody></table>
+  </div></div></main>
+
+  <!-- ============ HỆ THỐNG ============ -->
+  <main class="screen" id="s-system"><div class="page"><div class="page-in">
+    <h1>Hệ thống: hiệu năng, định dạng, AI</h1>
+    <div class="grid2">
+      <div class="card"><h3>Đường xử lý tệp nặng</h3><ul>
+        <li><b>Đọc theo luồng</b>, không nạp cả tệp: bộ nhớ gần như không đổi dù tệp 0,5–2 GB.</li>
+        <li><b>Chỉ mục một lần</b> (SQLite + chỉ mục không gian R-tree) theo mã băm tệp; mở lại là tức thì.</li>
+        <li><b>Luật chạy trên chỉ mục</b>, song song theo nhóm; vòng lặp đầu tiên tính bằng giây.</li>
+        <li><b>Hiển thị theo ô và mức chi tiết</b>: chỉ vẽ phần trong khung nhìn.</li>
+        <li>Tác vụ chạy nền; giao diện không bao giờ chờ.</li>
+      </ul></div>
+      <div class="card"><h3>Định dạng vào</h3>
+        <div class="kv"><span class="k">DXF</span><span>Bậc A · luồng + chỉ mục</span><span class="k">DWG</span><span>CAD của bạn xuất DXF (A); bộ chuyển có giấy phép (B)</span><span class="k">PDF vector</span><span>Trích vector (C) · so khớp với DXF</span><span class="k">PDF quét / ảnh</span><span>Trích tham số bằng AI (D) · sinh bản nháp</span><span class="k">Ra</span><span>DXF mới · CSV/Excel · glTF/OBJ · nhãn · .mpr (tuỳ máy)</span></div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:14px"><h3>Kiến trúc (một lõi, nhiều cổng vào)</h3>
+<div class="arch">Nguồn ──► Bộ đọc theo định dạng ──► Mô hình bản vẽ (cg.drawing/1) ──► Chỉ mục (SQLite + R-tree) ──► Bộ luật tất định
+  DXF      luồng (ezdxf iterdxf / bộ đọc riêng)      │                                                     │
+  DWG      → DXF (CAD của khách | bộ chuyển có GP)   ├──► Mô hình chi tiết (cg.product/1) ──► 3D (glTF) ──► Luật 3D
+  PDF      trích vector (giấy phép MIT)               │                                        └──► Đầu ra sản xuất ──► Luật CNC
+  Ảnh      VLM → tham số → mẫu ezdxf                  └──► Trình xem theo ô (web, WebGL)   ◄──── Trợ lý (MCP, chỉ đọc + đề xuất)</div></div>
+    <div class="card" style="margin-top:14px"><h3>Kết nối AI</h3><ul><li>Mặc định khoá API của công ty (BYOK); CLI agent của người dùng là tuỳ chọn.</li><li>AI chỉ nhận kết quả công cụ đã ẩn danh (Bậc 1); không nhận tệp gốc.</li><li>AI không ra quyết định đúng/sai, không sinh chương trình máy.</li></ul></div>
+  </div></div></main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+// màn hình
+$$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+$$('[data-open]').forEach(r=>{r.onclick=()=>go(r.dataset.open);r.onkeydown=e=>{if(e.key==='Enter')go(r.dataset.open)}});
+function go(n){$$('.nav [data-go]').forEach(b=>b.setAttribute('aria-selected',b.dataset.go===n));$$('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+n))}
+// bước
+const INTRO={intake:'<p>Đã nhận 4 tệp. DXF 455 MB lập chỉ mục trong 31 giây, đọc theo luồng nên bộ nhớ ở mức 1,8 GB. DWG chưa đọc được: bạn xuất DXF từ CAD rồi thả vào, hoặc bật bộ chuyển ở màn Hệ thống nếu công ty đã có giấy phép.</p>',
+check:'<p>Có <b>12 cảnh báo</b>, nặng nhất là 7 kích thước bị ghi đè chữ (TX-09). Tôi đề xuất bản v2 nháp: đưa 412 đối tượng về đúng layer, xoá 23 layer xref rỗng. Xem ở tab Thay đổi trước khi đồng ý.</p>',
+extract:'<p>Rút được 142 tấm và 38 phụ kiện từ bảng trong bản vẽ và khối có thuộc tính. <b>3 tấm thiếu cạnh dán</b>: P-117, P-118, P-121. Hỏi phòng Kỹ thuật hay áp quy ước "cạnh thấy được dán 1 mm" của công ty?</p>',
+three:'<p>Mô hình 3D dựng từ 142 tấm. Luật va chạm thấy tấm hậu chồng tấm hông 12 mm ở khối H-03; thường do bảng ghi sâu 580 thay vì 568. Bạn muốn tôi đánh dấu trên 2D không?</p>',
+prod:'<p>Gói sản xuất chưa gửi được vì 3 tấm thiếu dữ liệu ở bước 3. 139 tấm còn lại đã qua kiểm CNC. Tôi không sinh G-code; gói gồm bảng cắt, DXF theo tấm và nhãn cho phần mềm nesting của máy.</p>'};
+const SUG={intake:['Hướng dẫn xuất DXF từ ZWCAD','So khớp PDF với DXF'],check:['Giải thích TX-09','Áp dụng v2 nháp'],extract:['Áp quy ước cạnh dán','Hỏi phòng Kỹ thuật'],three:['Đánh dấu trên 2D','Xuất glTF cho diễn hoạ'],prod:['Vì sao chưa gửi được?','Xem khác biệt gói']};
+function stage(k){
+  $$('.stage').forEach(b=>b.setAttribute('aria-selected',b.dataset.st===k));
+  $$('[data-panel]').forEach(p=>{const on=p.dataset.panel===k;p.hidden=!on;if(p.dataset.panel==='check'||p.dataset.panel==='three')p.style.display=on?'flex':'none'});
+  $('#log').innerHTML=`<div class="msg ai">${INTRO[k]}</div>`;
+  $('#sug').innerHTML=SUG[k].map(s=>`<button class="btn-s btn-sm">${s}</button>`).join('');
+  $$('#sug button').forEach(b=>b.onclick=()=>toast('Bản mẫu: "'+b.textContent+'"'));
+}
+$$('.stage').forEach(b=>b.onclick=()=>stage(b.dataset.st));
+// bảng tấm
+const PARTS=[['P-101','Hông trái H-03',2500,580,18,'MDF 18 chống ẩm','T,D,P','Khoan 32 · 3 chốt',''],['P-102','Hông phải H-03',2500,580,18,'MDF 18 chống ẩm','T,D,P','Khoan 32 · 3 chốt',''],['P-110','Đáy H-03',1764,568,18,'MDF 18 chống ẩm','T','Khoan 32',''],['P-117','Hậu H-03',1800,2464,9,'MDF 9','?','—','Cạnh dán'],['P-118','Đợt H-03 (1)',1764,560,18,'MDF 18','?','Khoan đỡ đợt','Cạnh dán'],['P-121','Cánh H-03 trái',896,597,18,'MDF 18 phủ laminate','?','Bản lề 35 · 2','Cạnh dán'],['P-130','Nóc H-04',900,580,18,'MDF 18','T,D,P','—','']];
+$('#parts').innerHTML=PARTS.map(r=>`<tr tabindex="0" class="${r[8]?'sel':''}"><td class="mono">${r[0]}</td><td>${r[1]}</td><td class="num">${r[2]}</td><td class="num">${r[3]}</td><td class="num">${r[4]}</td><td>${r[5]}</td><td class="mono">${r[6]}</td><td>${r[7]}</td><td>${r[8]?'<span class="pill err">'+r[8]+'</span>':'<span class="pill ok">Đủ</span>'}</td></tr>`).join('');
+// lỗi và thay đổi
+const F=[['E','TX-09','7 kích thước có chữ ghi đè khác số đo','Số hiển thị có thể khác số thật; xuống máy sẽ sai.'],['W','VS-03','412 đối tượng trên layer 0','Khó lọc theo layer khi bóc tách.'],['W','VS-01','23 layer xref rỗng','Phình tệp, gây nhiễu.'],['W','PR-14','3 tấm thiếu cạnh dán','Chặn bước 5.'],['I','TX-12','Phông tiếng Việt cũ (VNI) ở 4 kiểu chữ','Chữ có thể hiển thị sai ở máy khác.']];
+$('#finds').innerHTML=F.map((f,i)=>`<button class="f-card"><div class="f-top"><span class="f-no">${i+1}</span><span class="pill ${f[0]==='E'?'err':f[0]==='W'?'warn':'info'}">${f[0]==='E'?'Lỗi':f[0]==='W'?'Cảnh báo':'Thông tin'}</span><span class="f-rule">${f[1]}</span></div><div class="f-title">${f[2]}</div><div class="f-d">${f[3]}</div></button>`).join('');
+$('#chg').innerHTML=['Đưa 412 đối tượng từ layer 0 về layer theo khối chứa','Xoá 23 layer xref rỗng','Đổi 4 kiểu chữ VNI sang Unicode (giữ nội dung)'].map(t=>`<label class="f-card" style="display:flex;gap:10px;align-items:flex-start"><input type="checkbox" checked><span>${t}</span></label>`).join('')+'<div class="cs-foot" style="display:flex;gap:8px;padding:6px 0"><button class="btn-p">Ghi v2 nháp và xem trước</button><button class="btn-s">Bỏ</button></div>';
+// tab phải
+$$('.tabs [data-p]').forEach(b=>b.onclick=()=>{$$('.tabs [data-p]').forEach(x=>x.setAttribute('aria-selected',x===b));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='p-'+b.dataset.p))});
+$('#form').onsubmit=e=>{e.preventDefault();const v=$('#inp').value.trim();if(!v)return;$('#log').insertAdjacentHTML('beforeend',`<div class="msg me"><p>${v.replace(/</g,'&lt;')}</p></div><div class="msg ai"><p>Bản mẫu: trợ lý sẽ gọi công cụ cad-guard (chỉ đọc) rồi trả lời dựa trên kết quả tất định.</p></div>`);$('#inp').value='';$('#log').scrollTop=1e9};
+// theme
+const sun='<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',moon='<path d="M21 13A9 9 0 1111 3a7 7 0 0010 10z"/>';
+function setTheme(t){document.documentElement.dataset.theme=t;$('#themeIc').innerHTML=t==='dark'?sun:moon}
+$('#themeBtn').onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+setTheme(location.hash==='#dark'?'dark':'light');
+function toast(m){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(t._h);t._h=setTimeout(()=>t.style.display='none',1800)}
+stage('check');
+</script>
+</body>
+</html>
