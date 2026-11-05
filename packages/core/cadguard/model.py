@@ -55,6 +55,10 @@ class EntityRec(BaseModel):
     pos: tuple[float, float] | None = None  # TEXT/MTEXT: điểm chèn
     dim_value: float | None = None  # DIMENSION: số đo thật
     radius: float | None = None  # CIRCLE/ARC (tâm ở `pts[0]`)
+    # Cho hình xem trước đơn giản hoá của `cadguard app` (thêm sau; mô hình cũ không có vẫn hợp lệ)
+    text_height: float | None = None  # TEXT/MTEXT: chiều cao chữ (đơn vị bản vẽ)
+    text_rotation: float | None = None  # TEXT/MTEXT: góc xoay (độ)
+    arc: tuple[float, float, float, float, float] | None = None  # ARC: (tâm x, tâm y, bán kính, góc đầu, góc cuối) độ
 
 
 class StyleRec(BaseModel):

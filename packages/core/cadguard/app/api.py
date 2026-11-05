@@ -22,6 +22,7 @@ from ..reader_select import DEFAULT_STREAM_THRESHOLD_MB
 from ..runner import audit_model
 from ..standard import CompanyProfile, ProfileError, Standard, find_standards_dir, load_profile, load_standard
 from .geometry import drawing_geometry
+from .preview import PreviewManager
 from .history import History, audit_entry
 
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9.\-]*$")
@@ -65,6 +66,14 @@ class AppData:
     standards_dir: Path = field(init=False)
     departments: dict = field(init=False)
     history: History = field(init=False)
+    previews: PreviewManager = field(init=False)
+    _reviews: Any = field(init=False, default=None)
+
+    def reviews(self):
+        if self._reviews is None:
+            from ..review.service import ReviewService
+            self._reviews = ReviewService(self.ws.root, self.standards_dir, self.config.profile_path)
+        return self._reviews
 
     def __post_init__(self) -> None:
         try:
@@ -72,6 +81,7 @@ class AppData:
         except PathDenied:
             raise ApiError("Thư mục dự án không tồn tại hoặc không đọc được.") from None
         self.history = History(self.ws.root)
+        self.previews = PreviewManager(self.ws.root)
         self.standards_dir = Path(self.config.standards_dir or find_standards_dir(Path(__file__).resolve())).resolve()
         if self.config.profile_path:
             self.profile = load_profile(self.config.profile_path)  # ProfileError -> lệnh dừng với thông điệp tiếng Việt
@@ -526,6 +536,21 @@ def geometry(app: AppData, rel: Any) -> dict:
     return out
 
 
+def preview(app: AppData, rel: Any, wait: Any = None, layout: Any = "Model") -> dict:
+    """Xem trước chính xác (bộ vẽ ezdxf, dựng nền + cache theo băm nội dung).
+
+    `status`: `ready` (kèm `svg` đã lọc, `viewbox`, `boxes` theo handle), `pending` (đang dựng: hỏi lại sau) hoặc
+    `fallback` (kèm `reason`: giao diện dùng `/api/geometry` — hình đơn giản hoá).
+    """
+    path = app.resolve(rel)
+    w = float(wait) if isinstance(wait, (int, float)) and not isinstance(wait, bool) else 0.0
+    if not isinstance(layout, str) or not 1 <= len(layout) <= 255:
+        raise ApiError("Layout không hợp lệ.")
+    out = app.previews.status(path, wait=min(max(w, 0.0), 5.0), layout_name=layout)
+    out["file"] = app.rel(path)
+    return out
+
+
 MAX_BOXES = 5000
 
 
@@ -581,4 +606,4 @@ def handover(app: AppData, rel: Any, dept: Any) -> dict:
 
 __all__ = ["ApiError", "AppConfig", "AppData", "FIXABLE_RULES", "apply_changeset", "audit_all", "audit_file",
            "check_dept", "explain", "geometry", "get_changeset", "handover", "list_changesets", "list_drawings",
-           "load_departments", "propose_changeset", "rules_table", "scene3d", "suggest_ops", "summary", "undo_changeset"]
+           "load_departments", "preview", "propose_changeset", "rules_table", "scene3d", "suggest_ops", "summary", "undo_changeset"]

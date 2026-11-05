@@ -27,3 +27,6 @@ Data[ ]sample/
 
 # Danh sách từ cấm cục bộ (tên khách...) cho scripts/check_repo_hygiene.py — không bao giờ commit
 .cadguard-forbidden.txt
+
+# Cache, hồ sơ duyệt và metadata tiến trình chỉ nằm tại máy người dùng
+.cadguard/

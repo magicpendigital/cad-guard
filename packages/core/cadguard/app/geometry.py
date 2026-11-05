@@ -1,8 +1,13 @@
-"""Hình học 2D rút gọn để xem trước bản vẽ trên canvas (chỉ không gian mô hình, đủ để định vị lỗi).
+"""Hình 2D ĐƠN GIẢN HOÁ để xem trước bản vẽ (đường dự phòng khi tệp quá lớn hoặc bộ vẽ ezdxf lỗi, xem `preview.py`).
 
-Lấy từ mô hình `cg.drawing/1` đã có (không đọc lại DXF): LINE, LWPOLYLINE, CIRCLE/ARC (vẽ thành đường tròn), TEXT/MTEXT
-(điểm chèn + chữ), INSERT (điểm chèn + tên khối). Toạ độ đã đổi sang khung nhìn SVG (gốc trên trái, trục y xuống).
-Không đọc hình trong định nghĩa khối, kích thước, hatch: đây là bản xem để định vị, không phải trình xem CAD.
+Lấy từ mô hình `cg.drawing/1` đã có (không đọc lại DXF), chỉ không gian mô hình: LINE, LWPOLYLINE, CIRCLE, ARC (đúng
+cung khi mô hình có góc), TEXT/MTEXT (điểm chèn + chữ, kèm chiều cao/góc nếu có để giao diện chỉ hiện chữ khi phóng đủ
+lớn), INSERT (điểm chèn: chấm nhỏ, không vẽ nội dung khối). Toạ độ đã đổi sang khung nhìn SVG (gốc trên trái, trục y
+xuống). Không có kích thước, hatch, nội dung khối: giao diện ghi rõ "Hình đơn giản hoá".
+
+Mục `items`: `[handle, kiểu, dữ liệu]` với kiểu
+  L: [x1, y1, x2, y2] · P/Q: [x, y, ...] (Q khép kín) · C: [cx, cy, r] · A: [cx, cy, r, góc đầu, góc cuối] (độ, DXF)
+  T: [x, y, chữ, cao, góc] (cao theo đơn vị khung nhìn, 0 = không rõ) · I: [x, y, tên khối]
 """
 from __future__ import annotations
 
@@ -28,10 +33,13 @@ def drawing_geometry(model: DrawingModel, max_items: int = MAX_ITEMS) -> dict:
             raw.append((e.handle, "L", [e.pts[0], e.pts[1]]))
         elif t == "LWPOLYLINE" and e.pts and len(e.pts) >= 2:
             raw.append((e.handle, "P" if not e.closed else "Q", list(e.pts)))
-        elif t in ("CIRCLE", "ARC") and e.pts and e.radius:
+        elif t == "CIRCLE" and e.pts and e.radius:
             raw.append((e.handle, "C", [e.pts[0], e.radius]))
+        elif t == "ARC" and e.arc is not None and e.arc[2]:
+            cx, cy, r, a0, a1 = e.arc
+            raw.append((e.handle, "A", [(cx, cy), r, a0, a1]))
         elif t in ("TEXT", "MTEXT") and e.pos is not None:
-            raw.append((e.handle, "T", [e.pos, (e.text or "")[:MAX_TEXT]]))
+            raw.append((e.handle, "T", [e.pos, (e.text or "")[:MAX_TEXT], e.text_height or 0.0, e.text_rotation or 0.0]))
         elif t == "INSERT" and e.insert is not None:
             raw.append((e.handle, "I", [e.insert, e.block or ""]))
         else:
@@ -48,9 +56,9 @@ def drawing_geometry(model: DrawingModel, max_items: int = MAX_ITEMS) -> dict:
     base = {"items": [], "viewbox": [0, 0, VIEW_W, VIEW_W * 0.6], "model_entities": len(ents),
             "drawn": 0, "skipped_types": skipped, "truncated": truncated,
             "records_capped": bool(model.stats is not None and model.stats.entity_records_truncated),
-            "insunits": model.insunits}
+            "insunits": model.insunits, "simplified": True}
     if not xs:
-        base["empty_reason"] = ("Không có hình trong không gian mô hình để vẽ (LINE/LWPOLYLINE/CIRCLE/TEXT/INSERT)."
+        base["empty_reason"] = ("Không có hình trong không gian mô hình để vẽ (LINE/LWPOLYLINE/CIRCLE/ARC/TEXT/INSERT)."
                                 if ents else "Bản vẽ không có đối tượng trong không gian mô hình.")
         return base
     sx, sy = sorted(xs), sorted(ys)
@@ -77,7 +85,11 @@ def drawing_geometry(model: DrawingModel, max_items: int = MAX_ITEMS) -> dict:
             pts = [c for p in d for c in tx(p)]
             items.append([handle, kind, pts])
         elif kind == "C":
-            items.append([handle, kind, tx(d[0]) + [round(d[1] * k, 2)]])
+            items.append([handle, kind, tx(d[0]) + [round(d[1] * k, 3)]])
+        elif kind == "A":
+            items.append([handle, kind, tx(d[0]) + [round(d[1] * k, 3), d[2], d[3]]])
+        elif kind == "T":
+            items.append([handle, kind, tx(d[0]) + [d[1], round(d[2] * k, 4), d[3]]])
         else:
             items.append([handle, kind, tx(d[0]) + [d[1]]])
     base.update(items=items, viewbox=[0, 0, vw, vh], drawn=len(items), text_size=round(max(vw, vh) * 0.011, 2),

@@ -81,8 +81,16 @@ def _entity_rec(e, space: str) -> EntityRec:
             rec.pts, rec.radius = [_pt(e.dxf.center)], _r(e.dxf.radius)
         elif t == "ARC":
             rec.dup_key = f"ARC|{rec.layer}|{_pt(e.dxf.center)}|{_r(e.dxf.radius)}|{_r(e.dxf.start_angle)}|{_r(e.dxf.end_angle)}"
+            c = _pt(e.dxf.center)
+            rec.arc = (c[0], c[1], _r(e.dxf.radius), _r(e.dxf.start_angle), _r(e.dxf.end_angle))
         elif t in ("TEXT", "MTEXT"):
             rec.text_style = str(e.dxf.get("style", "Standard"))
+            if t == "MTEXT":
+                rec.text_height = _r(e.dxf.get("char_height", 2.5))
+                rec.text_rotation = _r(e.get_rotation())
+            else:
+                rec.text_height = _r(e.dxf.get("height", 2.5))
+                rec.text_rotation = _r(e.dxf.get("rotation", 0.0) or 0.0)
             try:
                 rec.text = (e.plain_text() if t == "MTEXT" else str(e.dxf.get("text", "")))[:TEXT_MAX]
                 rec.pos = _pt(e.dxf.insert)

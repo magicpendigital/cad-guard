@@ -23,6 +23,7 @@ from typing import Any, Callable
 from urllib.parse import parse_qs, urlsplit
 
 from .. import __version__
+from ..review.types import ReviewError, LOCAL
 from ..standard import ProfileError, find_standards_dir, load_profile
 from . import api, connect, history
 from .api import DEPARTMENTS_FILE, NAME_RE, ApiError, AppConfig, AppData, load_departments
@@ -40,7 +41,7 @@ STATIC_FILES = {
 MAX_BODY = 1_000_000
 SMALL_BODY = {"/api/ai/key": 4096, "/api/ai/key/delete": 1024, "/api/ai/key/test": 1024}
 TOKEN_HEADER = "X-CadGuard-Token"
-CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; font-src 'self'; "
+CSP = ("default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; connect-src 'self'; font-src 'self'; "
        "base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 SECURITY_HEADERS = {
     "Content-Security-Policy": CSP,
@@ -277,6 +278,8 @@ class CadGuardApp:
                 "agy_account": a.effective()["account"]}, **kw))
 
         return {
+            ("GET", "/api/review/state"): lambda q, b: d().reviews().state(LOCAL),
+            ("POST", "/api/review/action"): lambda q, b: d().reviews().call(LOCAL, b.get("action", ""), {k: v for k, v in b.items() if k != "action"}),
             ("GET", "/api/session"): lambda q, b: self.session(),
             ("GET", "/api/projects"): lambda q, b: {"current": self.session()["project"], "recent": self.settings.recent(),
                                                     "dialog_available": self.dialog_ok},
@@ -292,6 +295,7 @@ class CadGuardApp:
             ("GET", "/api/explain"): lambda q, b: api.explain(d(), q1(q, "rule"), q1(q, "standard")),
             ("POST", "/api/summary"): lambda q, b: api.summary(d(), b.get("file")),
             ("POST", "/api/geometry"): lambda q, b: api.geometry(d(), b.get("file")),
+            ("POST", "/api/preview"): lambda q, b: api.preview(d(), b.get("file"), b.get("wait"), b.get("layout", "Model")),
             ("POST", "/api/scene"): lambda q, b: api.scene3d(d(), b.get("file")),
             ("POST", "/api/handover"): lambda q, b: api.handover(d(), b.get("file"), b.get("dept")),
             ("GET", "/api/home"): lambda q, b: self.home(q1(q, "dept")),
@@ -347,6 +351,20 @@ def make_handler(app: CadGuardApp):
                 self.wfile.write(body)
 
         def _error(self, status: int, message: str) -> None:
+            # Windows gửi RST nếu đóng socket còn thân POST chưa đọc: client mất cả phản hồi 4xx.
+            if self.command == "POST" and not getattr(self, "_body_consumed", False):
+                try:
+                    n = int(self.headers.get("Content-Length", "0"))
+                    if 0 < n <= MAX_BODY:
+                        old_timeout = self.connection.gettimeout()
+                        try:
+                            self.connection.settimeout(.25)
+                            self.rfile.read(n)
+                        finally:
+                            self.connection.settimeout(old_timeout)
+                except (ValueError, OSError):
+                    pass
+                self._body_consumed = True
             self._json(status, {"error": message})
 
         def _allowed_hosts(self) -> set[str]:
@@ -375,11 +393,13 @@ def make_handler(app: CadGuardApp):
                 raise ApiError("Yêu cầu quá lớn.", 413)
             if n == 0:
                 return {}
+            self._body_consumed = True
+            raw = self.rfile.read(n)
             ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
             if ctype != "application/json":
                 raise ApiError("Chỉ nhận JSON (Content-Type: application/json).", 415)
             try:
-                data = json.loads(self.rfile.read(n).decode("utf-8"))
+                data = json.loads(raw.decode("utf-8"))
             except (UnicodeDecodeError, ValueError):
                 raise ApiError("JSON không hợp lệ.") from None
             if not isinstance(data, dict):
@@ -389,11 +409,20 @@ def make_handler(app: CadGuardApp):
         # ----- xử lý -----
 
         def _handle(self, method: str) -> None:
+            self._body_consumed = False
             if not self._host_ok():
                 self._error(421, "Host không hợp lệ: chỉ nhận 127.0.0.1 hoặc localhost với đúng cổng của phiên.")
                 return
             parts = urlsplit(self.path)
             path = parts.path
+            if method in ("GET", "HEAD") and path in ("/review.html", "/review.js", "/review.css"):
+                from ..review.server import STATIC
+                filename, kind = {"/review.html": ("index.html", "text/html; charset=utf-8"), "/review.js": ("review.js", "text/javascript"), "/review.css": ("review.css", "text/css")}[path]
+                content = (STATIC / filename).read_bytes()
+                self._headers(200, kind, len(content))
+                if method != "HEAD":
+                    self.wfile.write(content)
+                return
             if not path.startswith("/api/"):
                 if method in ("GET", "HEAD") and path in STATIC_FILES:
                     name, ctype = STATIC_FILES[path]
@@ -420,7 +449,7 @@ def make_handler(app: CadGuardApp):
                     self._error(404 if not any(p == path for _, p in routes) else 405, "Không có API này.")
                     return
                 self._json(200, fn(parse_qs(parts.query), body))
-            except ApiError as exc:
+            except (ApiError, ReviewError) as exc:
                 self._error(exc.status, str(exc))
             except (BrokenPipeError, ConnectionResetError):
                 pass

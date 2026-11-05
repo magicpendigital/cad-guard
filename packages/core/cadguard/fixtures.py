@@ -313,6 +313,156 @@ SCENE_FIXTURES = {
 }
 
 
+# ---- Bộ xem trước (preview): mặt bằng sảnh TỔNG HỢP để test và QC bằng mắt bộ vẽ xem trước của `cadguard app`.
+# Không nằm trong ALL (không đổi kết quả luật của bộ chính); sinh vào thư mục con preview/.
+
+PV_LAYERS = {  # tên: màu ACI (7 = đen/trắng theo nền)
+    "SYN-TUONG": 7, "SYN-COT": 8, "SYN-CUA": 3, "SYN-NOI-THAT": 4, "SYN-HATCH": 9, "SYN-KICH-THUOC": 1,
+    "SYN-CHU": 2, "SYN-KHUNG-TEN": 7, "SYN-TRUC": 5,
+}
+
+
+def _pv_blocks(doc) -> None:
+    """Khối đồ nội thất có hình bên trong: bàn họp, ghế, sofa, tủ, cây cảnh (đơn vị mm, gốc ở tâm/góc)."""
+    ban = doc.blocks.new("SYN-BAN-HOP")  # bàn 2400x1200 bo góc + mặt kính + chân
+    ban.add_lwpolyline([(-1200, -600), (1200, -600), (1200, 600), (-1200, 600)], close=True)
+    ban.add_lwpolyline([(-1100, -500), (1100, -500), (1100, 500), (-1100, 500)], close=True)
+    for x in (-1000, 1000):
+        for y in (-400, 400):
+            ban.add_circle((x, y), 40)
+    ban.add_line((-1100, 0), (1100, 0))
+    ghe = doc.blocks.new("SYN-GHE")  # ghế 500x500, lưng là cung
+    ghe.add_lwpolyline([(-250, -250), (250, -250), (250, 200), (-250, 200)], close=True)
+    ghe.add_arc((0, 150), 260, 20, 160)
+    ghe.add_line((-200, -200), (200, -200))
+    sofa = doc.blocks.new("SYN-SOFA")  # sofa 2000x900: lưng, tay, 3 đệm
+    sofa.add_lwpolyline([(0, 0), (2000, 0), (2000, 900), (0, 900)], close=True)
+    sofa.add_lwpolyline([(0, 700), (2000, 700)])
+    sofa.add_lwpolyline([(200, 0), (200, 700)])
+    sofa.add_lwpolyline([(1800, 0), (1800, 700)])
+    for i in range(3):
+        x0 = 200 + i * 533.3
+        sofa.add_lwpolyline([(x0 + 20, 40), (x0 + 513, 40), (x0 + 513, 660), (x0 + 20, 660)], close=True)
+    tu = doc.blocks.new("SYN-TU")  # tủ 1200x600: 2 cánh + đường chéo mở cánh + hatch chéo
+    tu.add_lwpolyline([(0, 0), (1200, 0), (1200, 600), (0, 600)], close=True)
+    tu.add_line((600, 0), (600, 600))
+    tu.add_line((0, 0), (600, 600), dxfattribs={"linetype": "DASHED"})
+    tu.add_line((1200, 0), (600, 600), dxfattribs={"linetype": "DASHED"})
+    h = tu.add_hatch(color=9)
+    h.set_pattern_fill("ANSI31", scale=20)
+    h.paths.add_polyline_path([(20, 20), (580, 20), (580, 120), (20, 120)], is_closed=True)
+    cay = doc.blocks.new("SYN-CAY")  # chậu cây: tròn + lá elip xoay + spline
+    cay.add_circle((0, 0), 300)
+    for a in range(0, 360, 60):
+        cay.add_ellipse((0, 0), major_axis=(260, 0), ratio=0.3, start_param=0, end_param=6.283185).rotate_z(a * 0.0174533)
+    cay.add_spline([(-200, -50), (-80, 120), (60, -100), (200, 60)])
+    # khung tên: khung + bảng kẻ ô + thuộc tính (chữ nhỏ dày đặc như bản vẽ thật)
+    kt = doc.blocks.new("SYN-KHUNG-TEN")
+    kt.add_lwpolyline([(0, 0), (6000, 0), (6000, 3000), (0, 3000)], close=True)
+    for i in range(1, 12):
+        kt.add_line((0, i * 250), (6000, i * 250))
+    kt.add_line((2000, 0), (2000, 3000))
+    kt.add_line((4200, 0), (4200, 3000))
+    for i, tag in enumerate(("SO_BV", "TEN_BV", "DU_AN", "TY_LE", "NGUOI_VE", "NGAY")):
+        kt.add_attdef(tag, (2100, 2780 - i * 250), dxfattribs={"height": 120, "style": "SYN-ST"})
+
+
+def make_preview_lobby(path: Path) -> None:
+    """Mặt bằng sảnh TỔNG HỢP (mm), tái hiện các thứ bộ xem trước cũ vẽ sai: khung tên chữ dày đặc, MTEXT nhiều dòng,
+    hàng trăm INSERT khối đồ nội thất (xoay/co giãn), kích thước, hatch, ARC, ELLIPSE, SPLINE, POLYLINE cũ, chữ xoay.
+    Toạ độ đặt sẵn: LINE `SYN-MOC` từ (1000, 1000) tới (3000, 1000) để test định vị phát hiện.
+    """
+    doc = ezdxf.new("R2010", setup=True)  # AC1024 như bản vẽ thật hay gặp
+    doc.header["$INSUNITS"] = 4
+    for name, color in PV_LAYERS.items():
+        doc.layers.add(name, color=color)
+    doc.styles.add("SYN-ST", font="arial.ttf")
+    _pv_blocks(doc)
+    msp = doc.modelspace()
+    W, H = 30000.0, 18000.0
+    # tường: hai đường bao (LWPOLYLINE) + một đoạn POLYLINE kiểu cũ
+    msp.add_lwpolyline([(0, 0), (W, 0), (W, H), (0, H)], close=True, dxfattribs={"layer": "SYN-TUONG"})
+    msp.add_lwpolyline([(200, 200), (W - 200, 200), (W - 200, H - 200), (200, H - 200)], close=True,
+                       dxfattribs={"layer": "SYN-TUONG"})
+    msp.add_polyline2d([(12000, 200), (12000, 6000), (14000, 6000), (14000, 200)], dxfattribs={"layer": "SYN-TUONG"})
+    msp.add_line((1000, 1000), (3000, 1000), dxfattribs={"layer": "SYN-TRUC"})  # mốc định vị (handle trả về dưới)
+    # cột: hatch đặc
+    for cx in range(3000, int(W), 6000):
+        for cy in (3000, 9000, 15000):
+            pts = [(cx - 300, cy - 300), (cx + 300, cy - 300), (cx + 300, cy + 300), (cx - 300, cy + 300)]
+            msp.add_lwpolyline(pts, close=True, dxfattribs={"layer": "SYN-COT"})
+            hc = msp.add_hatch(color=8, dxfattribs={"layer": "SYN-HATCH"})
+            hc.paths.add_polyline_path(pts, is_closed=True)
+    # sàn khu chờ: hatch mẫu
+    hs = msp.add_hatch(dxfattribs={"layer": "SYN-HATCH"})
+    hs.set_pattern_fill("ANSI37", scale=200)
+    hs.paths.add_polyline_path([(16000, 10000), (26000, 10000), (26000, 16000), (16000, 16000)], is_closed=True)
+    # cửa: cung mở cánh + lá cửa
+    for i, x in enumerate((5000, 9000, 20000, 24000)):
+        msp.add_line((x, 200), (x, 1100), dxfattribs={"layer": "SYN-CUA"})
+        msp.add_arc((x, 200), 900, 0 if i % 2 else 90, 90 if i % 2 else 180, dxfattribs={"layer": "SYN-CUA"})
+    # đồ nội thất: bàn họp + ghế quanh bàn (xoay), sofa, tủ (co giãn), cây
+    n = 0
+    for bx in (4000, 9000):
+        for by in (5000, 12000):
+            msp.add_blockref("SYN-BAN-HOP", (bx, by), dxfattribs={"layer": "SYN-NOI-THAT"})
+            for k in range(-2, 3):
+                msp.add_blockref("SYN-GHE", (bx + k * 450, by - 900), dxfattribs={"layer": "SYN-NOI-THAT"})
+                msp.add_blockref("SYN-GHE", (bx + k * 450, by + 900), dxfattribs={"layer": "SYN-NOI-THAT", "rotation": 180})
+                n += 2
+            msp.add_blockref("SYN-GHE", (bx - 1600, by), dxfattribs={"layer": "SYN-NOI-THAT", "rotation": 270})
+            msp.add_blockref("SYN-GHE", (bx + 1600, by), dxfattribs={"layer": "SYN-NOI-THAT", "rotation": 90})
+            n += 3
+    for i in range(6):
+        msp.add_blockref("SYN-SOFA", (16500 + (i % 3) * 3000, 10500 + (i // 3) * 3000),
+                         dxfattribs={"layer": "SYN-NOI-THAT", "rotation": (i * 30) % 90})
+    for i in range(8):
+        msp.add_blockref("SYN-TU", (16000 + i * 1300, 16900), dxfattribs={"layer": "SYN-NOI-THAT",
+                                                                         "xscale": 1.0 + (i % 3) * 0.1, "yscale": 0.8})
+    for i in range(30):
+        msp.add_blockref("SYN-CAY", (1500 + (i % 10) * 2700, 7500 + (i // 10) * 300 + (i % 2) * 150),
+                         dxfattribs={"layer": "SYN-NOI-THAT", "xscale": 0.6 + (i % 4) * 0.15, "yscale": 0.6 + (i % 4) * 0.15})
+    # kích thước
+    dims = [((0, -1200), (0, 0), (W, 0)), ((0, -600), (0, 0), (6000, 0)), ((6000, -600), (6000, 0), (12000, 0))]
+    for base, p1, p2 in dims:
+        msp.add_linear_dim(base=base, p1=p1, p2=p2, dxfattribs={"layer": "SYN-KICH-THUOC"}).render()
+    msp.add_linear_dim(base=(-1200, 0), p1=(0, 0), p2=(0, H), angle=90, dxfattribs={"layer": "SYN-KICH-THUOC"}).render()
+    msp.add_aligned_dim(p1=(16000, 10000), p2=(26000, 16000), distance=500,
+                        dxfattribs={"layer": "SYN-KICH-THUOC"}).render()
+    # chữ: nhãn phòng nhiều cỡ, chữ xoay, MTEXT ghi chú nhiều dòng
+    labels = [("SẢNH CHỜ SYN", (17000, 9200), 450, 0), ("PHÒNG HỌP 1 SYN", (2500, 3000), 300, 0),
+              ("PHÒNG HỌP 2 SYN", (7500, 3000), 300, 0), ("HÀNH LANG SYN", (13000, 8000), 250, 90),
+              ("LỐI THOÁT HIỂM SYN", (27000, 4000), 200, 45), ("kho SYN", (12500, 3000), 150, 0)]
+    for text, at, height, rot in labels:
+        msp.add_text(text, height=height, rotation=rot, dxfattribs={"layer": "SYN-CHU", "style": "SYN-ST"}).set_placement(at)
+    note = ("GHI CHÚ SYN:\\P1. Kích thước tính bằng mm, đo tại công trình trước khi sản xuất.\\P"
+            "2. Gỗ công nghiệp MDF chống ẩm, phủ melamine vân sồi SYN.\\P"
+            "3. Dán cạnh nhựa PVC 1 ly các cạnh lộ.\\P4. Phụ kiện bản lề giảm chấn, ray bi 3 tầng.\\P"
+            "5. Mọi sai khác báo lại phòng kỹ thuật SYN.")
+    msp.add_mtext(note, dxfattribs={"layer": "SYN-CHU", "char_height": 180, "width": 5200, "style": "SYN-ST"}
+                  ).set_location((W + 600, H - 400))
+    # khung tên ngoài khung bản vẽ (phải dưới) + bảng ghi chú chữ nhỏ dày đặc
+    kt = msp.add_blockref("SYN-KHUNG-TEN", (W + 600, 0), dxfattribs={"layer": "SYN-KHUNG-TEN"})
+    kt.add_auto_attribs({"SO_BV": "SYN-MB-01", "TEN_BV": "MẶT BẰNG SẢNH TỔNG HỢP", "DU_AN": "DỰ ÁN MẪU SYN",
+                         "TY_LE": "1:100", "NGUOI_VE": "A", "NGAY": "2026-11-05"})
+    for i in range(1, 12):
+        y = 3000 + 3000 - i * 250
+        msp.add_text(f"{i:02d}", height=100, dxfattribs={"layer": "SYN-KHUNG-TEN", "style": "SYN-ST"}
+                     ).set_placement((W + 700, y - 180))
+        msp.add_text(f"Vật liệu hoàn thiện hạng mục số {i} SYN", height=100,
+                     dxfattribs={"layer": "SYN-KHUNG-TEN", "style": "SYN-ST"}).set_placement((W + 1300, y - 180))
+    msp.add_lwpolyline([(W + 600, 3000), (W + 6600, 3000), (W + 6600, 6000), (W + 600, 6000)], close=True,
+                       dxfattribs={"layer": "SYN-KHUNG-TEN"})
+    for i in range(1, 12):
+        msp.add_line((W + 600, 3000 + i * 250), (W + 6600, 3000 + i * 250), dxfattribs={"layer": "SYN-KHUNG-TEN"})
+    doc.saveas(path)
+
+
+PREVIEW_FIXTURES = {
+    "preview_lobby.dxf": make_preview_lobby,
+}
+
+
 ALL = {
     "ok_sheet.dxf": make_ok_sheet,
     "model_features.dxf": make_model_features,
@@ -336,6 +486,12 @@ def make_all(out_dir: Path) -> list[Path]:
     scene_dir.mkdir(exist_ok=True)
     for name, fn in SCENE_FIXTURES.items():
         p = scene_dir / name
+        fn(p)
+        paths.append(p)
+    preview_dir = out_dir / "preview"
+    preview_dir.mkdir(exist_ok=True)
+    for name, fn in PREVIEW_FIXTURES.items():
+        p = preview_dir / name
         fn(p)
         paths.append(p)
     return paths

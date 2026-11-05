@@ -54,6 +54,8 @@ class Workspace:
             base_path = Path(base)
             safe_dirs = []
             for name in dirs:
+                if name.casefold() in (".cadguard", ".git", ".venv", ".claude"):
+                    continue
                 child = base_path / name
                 try:
                     if not child.is_symlink() and not getattr(child, "is_junction", lambda: False)() and child.resolve(strict=True).is_relative_to(self.root):

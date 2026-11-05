@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Hồ sơ duyệt · CAD Guard</title>
+    <link rel="stylesheet" href="/review.css" />
+    <script src="/review.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <strong>CAD Guard · Hồ sơ duyệt</strong><span id="identity"></span
+      ><button id="listToggle" type="button">Bộ hồ sơ</button
+      ><button id="notesToggle" type="button">Thảo luận</button
+      ><button id="refresh" type="button">Tải lại</button
+      ><a id="back" href="/">Ứng dụng</a>
+    </header>
+    <div id="error" role="alert" hidden></div>
+    <div id="notice" role="status"></div>
+    <main>
+      <aside id="packages">
+        <h2>Bộ hồ sơ</h2>
+        <div id="packageList"></div>
+        <details id="admin" hidden>
+          <summary>Công bố và cấp quyền</summary>
+          <form id="memberForm">
+            <h3>Thành viên Tailscale</h3>
+            <label
+              >Email đăng nhập<input
+                id="memberLogin"
+                type="email"
+                required /></label
+            ><label
+              >Vai trò<select id="memberRole">
+                <option value="customer">Khách</option>
+                <option value="designer">Thiết kế</option>
+                <option value="technical">Kỹ thuật</option>
+              </select></label
+            ><button>Cấp quyền</button>
+          </form>
+          <div id="members"></div>
+          <form id="publishForm">
+            <h3>Công bố phiên bản</h3>
+            <label
+              >Tên bộ hồ sơ<input
+                id="packageName"
+                required
+                maxlength="120" /></label
+            ><label
+              >Tạo từ phiên bản<select id="previous">
+                <option value="">Bộ hồ sơ mới</option>
+              </select></label
+            ><label
+              >Khách được chỉ định chốt<select
+                id="customers"
+                multiple
+                required
+              ></select
+            ></label>
+            <div id="drawings"></div>
+            <label
+              ><input id="cadChecked" type="checkbox" required />Đã đối chiếu
+              bản vẽ và phông trong CAD</label
+            >
+            <p>
+              Chọn nhiều layout bằng Ctrl/Command. Snapshot đã công bố giữ
+              nguyên; sửa tệp cần công bố phiên bản mới.
+            </p>
+            <button>Công bố bộ hồ sơ</button>
+          </form>
+          <form id="originForm">
+            <h3>Địa chỉ Tailscale</h3>
+            <label>HTTPS .ts.net<input id="origin" type="url" required /></label
+            ><button>Lưu địa chỉ</button>
+          </form>
+          <p id="serverNote">
+            Chạy cổng riêng bằng lệnh cadguard review; máy chủ phải đang hoạt
+            động.
+          </p>
+        </details>
+      </aside>
+      <section id="drawing">
+        <h1 id="title">Chọn bộ hồ sơ để rà soát</h1>
+        <div class="tools">
+          <select id="items" aria-label="Bản vẽ và layout"></select
+          ><button id="zoomIn" type="button">Phóng to</button
+          ><button id="zoomOut" type="button">Thu nhỏ</button
+          ><button id="fit" type="button">Vừa khung</button
+          ><select id="tool" aria-label="Công cụ ghi chú">
+            <option value="pan">Di chuyển</option>
+            <option value="point">Ghim điểm</option>
+            <option value="rect">Khoanh vùng</option>
+          </select>
+        </div>
+        <div
+          id="canvas"
+          tabindex="0"
+          aria-label="Bản vẽ, dùng nút thu phóng và danh sách ghi chú để điều hướng"
+        ></div>
+        <p id="limitations"></p>
+        <div class="tools">
+          <button id="copyLink" type="button">Sao chép link nội bộ</button
+          ><button id="qrToggle" type="button">Mã QR</button
+          ><button id="approve" type="button" hidden>
+            Chốt thiết kế phiên bản này</button
+          ><button id="audit" type="button" hidden>Quét hồ sơ bàn giao</button
+          ><button id="release" type="button" hidden>
+            Duyệt bàn giao sản xuất</button
+          ><button id="export" type="button" hidden>Tải hồ sơ sản xuất</button>
+        </div>
+        <img id="qr" alt="Mã QR truy cập Tailscale nội bộ" hidden />
+        <p id="gateMessage"></p>
+        <div id="reports"></div>
+        <div id="warnings"></div>
+      </section>
+      <aside id="discussion">
+        <h2>Thảo luận theo phiên bản</h2>
+        <form id="noteForm">
+          <label
+            >Ghi chú<textarea
+              id="noteText"
+              required
+              maxlength="4000"
+            ></textarea></label
+          ><label
+            >Phạm vi<select id="visibility">
+              <option value="internal">Nội bộ</option>
+              <option value="shared">Trao đổi với khách</option>
+            </select></label
+          ><label
+            >Phân công (email, tùy chọn)<input id="assignee" type="email"
+          /></label>
+          <p id="anchorText">
+            Ghi chú chung; chọn Ghim điểm hoặc Khoanh vùng để gắn vị trí.
+          </p>
+          <button id="centerAnchor" type="button">
+            Ghim tại tâm khung nhìn</button
+          ><button id="clearAnchor" type="button">Bỏ vị trí</button
+          ><button>Gửi ghi chú</button>
+        </form>
+        <div id="notes"></div>
+        <details>
+          <summary>Lịch sử xác nhận</summary>
+          <pre id="history"></pre>
+        </details>
+        <section id="agent" hidden>
+          <h3>Studio · Trao đổi với Agent</h3>
+          <p id="agentInfo"></p>
+          <details>
+            <summary>Dữ liệu sẽ gửi</summary>
+            <pre id="agentContext"></pre>
+          </details>
+          <label
+            ><input id="consent" type="checkbox" />Đồng ý gửi đúng dữ liệu trên
+            cho LLM trong phiên này</label
+          ><button id="revoke" type="button">Thu hồi đồng ý</button>
+          <form id="agentForm">
+            <label
+              >Câu hỏi<textarea
+                id="agentMessage"
+                required
+                maxlength="4000"
+              ></textarea></label
+            ><button>Hỏi Agent</button>
+          </form>
+          <pre id="agentReply"></pre>
+          <p>
+            Phản hồi giữ nội bộ. Chỉ chia sẻ sau khi xem lại; Agent không quyết
+            định duyệt hoặc tự sửa bản vẽ.
+          </p>
+          <button id="copyAgent" type="button">
+            Đưa vào ô ghi chú nội bộ để xem lại
+          </button>
+        </section>
+      </aside>
+    </main>
+  </body>
+</html>

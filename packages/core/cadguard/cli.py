@@ -575,10 +575,19 @@ def main(argv: list[str] | None = None) -> int:
     st.add_argument("--open", action="store_true", help="mở trình duyệt")
     st.set_defaults(fn=cmd_studio)
 
+    from .review.server import run as run_review
+    from .review.store import ReviewError
+    rv = sub.add_parser("review", help="cổng duyệt hồ sơ riêng qua Tailscale Serve")
+    rv.add_argument("--workspace", required=True)
+    rv.add_argument("--port", type=int, default=8781)
+    rv.add_argument("--public-origin", help="HTTPS .ts.net của Tailscale Serve")
+    rv.add_argument("--profile", help="hồ sơ công ty YAML")
+    rv.set_defaults(fn=run_review)
+
     args = p.parse_args(argv)
     try:
         return int(args.fn(args))
-    except (FileNotFoundError, ProfileError) as exc:
+    except (FileNotFoundError, ProfileError, ReviewError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
 

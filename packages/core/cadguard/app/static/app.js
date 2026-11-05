@@ -645,7 +645,7 @@
   // ---------- BẢN VẼ: mở một tệp ----------
   function resetDrawing(clearFile) {
     if (clearFile) S.file = null;
-    S.geo = null; S.geoOut = null; S.audits = {}; S.findings = []; S.sel = null;
+    S.geo = null; S.geoOut = null; S.geoPending = false; S.audits = {}; S.findings = []; S.sel = null;
     S.suggest = null; S.preview = null; S.applied = null; S.cmp = "after"; S.recheck = null;
     if (S.v3d) { S.v3d.stop(); S.v3d = null; }
     $("cmp").hidden = true; $("cmpLabel").hidden = true;
@@ -657,6 +657,7 @@
     const isOut = OUT_RE.test(path);
     resetDrawing(false);
     S.file = path;
+    S.layout = "Model"; $("layoutSel").replaceChildren(el("option", {text:"Model",value:"Model"}));
     $("cvTitle").textContent = path;
     renderFiles();
     renderWorkSide();
@@ -670,17 +671,74 @@
 
   async function loadGeometry(path) {
     renderSheet();
+    const wantedLayout = S.layout || "Model";
     try {
-      const g = await api("/api/geometry", {file: path});
-      if (S.file !== path) return;
-      S.geo = g;
+      const g = await fetchView(path, () => S.file === path && (S.layout || "Model") === wantedLayout && !S.geo, () => {
+        if (S.file === path && (S.layout || "Model") === wantedLayout && !S.geo && !S.geoPending) { S.geoPending = true; renderSheet(); }
+      });
+      if (S.file !== path || (S.layout || "Model") !== wantedLayout || !g) return;
+      if(g.layouts) $("layoutSel").replaceChildren(...g.layouts.map(n=>el("option",{value:n,text:n,selected:n===wantedLayout})));
+      S.geo = g; S.geoPending = false;
       S.view = null;
       renderSheet();
     } catch (e) {
       if (S.file !== path) return;
-      S.geo = {error: e.message};
+      S.geo = {error: e.message}; S.geoPending = false;
       renderSheet();
     }
+  }
+
+  // Xem trước: hình đầy đủ do bộ vẽ ezdxf dựng ở máy chủ (SVG đã lọc, cache theo nội dung tệp); tệp quá lớn hoặc bộ vẽ
+  // lỗi thì máy chủ trả "fallback" và dùng hình đơn giản hoá (/api/geometry).
+  async function fetchView(path, wanted, onPending) {
+    const requestedLayout = S.layout || "Model";
+    let r = await api("/api/preview", {file: path, layout:requestedLayout, wait: 1.5});
+    while (r.status === "pending") {
+      if (!wanted()) return null;
+      if (onPending) onPending();
+      await new Promise((ok) => setTimeout(ok, 400));
+      if (!wanted()) return null;
+      r = await api("/api/preview", {file: path, layout:requestedLayout, wait: 3});
+    }
+    if (r.status === "ready") {
+      try { return svgView(r); } catch (_) { r = {status: "fallback", reason: "Hình xem trước không đọc được."}; }
+    }
+    if(requestedLayout !== "Model") return {empty_reason:r.reason || "Không dựng được layout này; hãy mở trong CAD.",viewbox:[0,0,1,1],items:[]};
+    const g = await api("/api/geometry", {file: path});
+    g.simplified = true;
+    g.fallback_reason = r.reason || "";
+    return g;
+  }
+
+  // Danh sách trắng phía trình duyệt (máy chủ đã lọc; lọc lại ở đây cho chắc): chỉ g/path, thuộc tính vẽ, không URL.
+  const SVG_ATTR_OK = {
+    d: /^[MLQCZmlqcz0-9 .\-]*$/, class: /^(dxf-g|dxf-s|dxf-f|dxf-hs|dxf-hf)$/, stroke: /^(none|currentColor)$/,
+    fill: /^(none|currentColor)$/, "stroke-opacity": /^[01](\.\d{1,3})?$/, "fill-opacity": /^[01](\.\d{1,3})?$/,
+    "fill-rule": /^evenodd$/, "stroke-linecap": /^round$/, "stroke-linejoin": /^round$/,
+  };
+  function copySafe(src, dst, depth) {
+    if (depth > 4) return;
+    for (const ch of src.children) {
+      const name = ch.localName;
+      if (name !== "g" && name !== "path") continue;
+      const n = document.createElementNS(SVGNS, name);
+      for (const a of ch.attributes) {
+        const re = SVG_ATTR_OK[a.name];
+        if (re && re.test(a.value)) n.setAttribute(a.name, a.value);
+      }
+      if (name === "g") copySafe(ch, n, depth + 1);
+      dst.appendChild(n);
+    }
+  }
+  function svgView(r) {
+    const doc = new DOMParser().parseFromString(r.svg, "image/svg+xml");
+    const root = doc.documentElement;
+    if (!root || root.localName !== "svg" || doc.getElementsByTagName("parsererror").length) throw new Error("svg");
+    const node = document.createElementNS(SVGNS, "g");
+    node.setAttribute("class", "dxf");
+    copySafe(root, node, 0);
+    return {mode: "svg", node, layout:r.layout, layouts:r.layouts, limitations:r.limitations, viewbox: r.viewbox, boxes: new Map(Object.entries(r.boxes || {})), model_entities: r.model_entities,
+      insunits: r.insunits, dxf_version: r.dxf_version, paths: r.paths, render_seconds: r.render_seconds, cached: r.cached};
   }
 
   async function doScan(fromOpen) {
@@ -741,14 +799,16 @@
   // ---------- canvas 2D ----------
   function geoIndex() {
     const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
+    if (g && g.boxes) return g.boxes;
     if (!g || !g.items) return null;
     if (g._idx) return g._idx;
     const idx = new Map();
     for (const [h, k, d] of g.items) {
       let xs, ys;
       if (k === "L" || k === "P" || k === "Q") { xs = d.filter((_, i) => i % 2 === 0); ys = d.filter((_, i) => i % 2 === 1); }
-      else if (k === "C") { xs = [d[0] - d[2], d[0] + d[2]]; ys = [d[1] - d[2], d[1] + d[2]]; }
-      else { const s = g.text_size || 10; xs = [d[0], d[0] + (k === "T" ? s * Math.min(30, String(d[2]).length) * 0.6 : s)]; ys = [d[1] - s, d[1]]; }
+      else if (k === "C" || k === "A") { xs = [d[0] - d[2], d[0] + d[2]]; ys = [d[1] - d[2], d[1] + d[2]]; }
+      else if (k === "T") { const s = d[3] || g.text_size || 10; xs = [d[0], d[0] + s * Math.min(30, String(d[2]).length) * 0.6]; ys = [d[1] - s, d[1]]; }
+      else { const s = (g.text_size || 10) * 0.5; xs = [d[0] - s, d[0] + s]; ys = [d[1] - s, d[1] + s]; }
       idx.set(h, [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
     }
     g._idx = idx;
@@ -760,13 +820,15 @@
     for (const f of S.findings) {
       f.box = null;
       if (!idx) continue;
-      let bb = null;
+      let bb = null; f.positions = [];
       for (const h of f.handles) {
         const x = idx.get(h);
         if (!x) continue;
+        f.positions.push(x.slice());
         bb = bb ? [Math.min(bb[0], x[0]), Math.min(bb[1], x[1]), Math.max(bb[2], x[2]), Math.max(bb[3], x[3])] : x.slice();
       }
-      f.box = bb;
+      f.position = Math.min(f.position || 0, Math.max(0,f.positions.length-1));
+      f.box = f.positions[f.position] || bb;
     }
   }
 
@@ -782,41 +844,96 @@
     $("viewTag").hidden = true;
     if (!hasProject()) { fill(sheet, emptyBox("Chưa mở dự án", "Chọn thư mục dự án ở nút Dự án trên cùng.")); return; }
     if (!S.file) { fill(sheet, emptyBox("Chưa mở bản vẽ", "Chọn một bản vẽ ở cột trái để xem trước và quét.")); $("cvInfo").textContent = ""; return; }
-    if (!g) { fill(sheet, emptyBox("Đang đọc bản vẽ…", "Tệp lớn có thể mất vài giây.")); return; }
+    if (!g) {
+      fill(sheet, S.geoPending && !(S.cmp === "after" && S.applied)
+        ? emptyBox("Đang dựng hình…", "Bộ vẽ đang dựng bản vẽ đầy đủ (khối, chữ, kích thước, hatch). Tệp lớn có thể mất vài chục giây; lần mở sau dùng lại hình đã lưu.")
+        : emptyBox("Đang đọc bản vẽ…", "Tệp lớn có thể mất vài giây."));
+      return;
+    }
     if (g.error) { fill(sheet, emptyBox("Không đọc được hình bản vẽ", g.error)); return; }
     const units = {4: "mm", 5: "cm", 6: "m", 1: "inch", 0: "không đơn vị"}[g.insunits];
-    $("viewTag").textContent = "Không gian mô hình" + (units ? " · " + units : "");
+    $("viewTag").textContent = (g.simplified ? "Hình đơn giản hoá" : "Không gian mô hình") + (units ? " · " + units : "");
     $("viewTag").hidden = false;
     const a = Object.values(S.audits)[0];
-    $("cvInfo").textContent = `${fmt(g.model_entities)} đối tượng` + (a && a.dxf_version ? ` · DXF ${a.dxf_version}` : "") + ` · vẽ ${fmt(g.drawn)}` + (units ? ` · ${units}` : "");
+    const ver = (a && a.dxf_version) || g.dxf_version;
+    $("cvInfo").textContent = `${fmt(g.model_entities)} đối tượng` + (ver ? ` · DXF ${ver}` : "") + (g.simplified ? ` · vẽ ${fmt(g.drawn)}` : "") + (units ? ` · ${units}` : "");
     if (g.empty_reason) { fill(sheet, emptyBox("Không có hình để xem trước", g.empty_reason, el("br"), "Kết quả quét vẫn đầy đủ ở tab Lỗi.")); return; }
     const vb = viewOf(g);
     const svg = svgEl("svg", {viewBox: vb.join(" "), role: "img", "aria-label": "Xem trước bản vẽ " + (S.cmp === "after" && S.geoOut ? S.applied.output : S.file),
-      "data-scanned": Object.keys(S.audits).length ? "1" : "0", preserveAspectRatio: "xMidYMid meet"});
+      "data-scanned": Object.keys(S.audits).length ? "1" : "0", "data-mode": g.mode === "svg" ? "full" : "simple",
+      class: g.mode === "svg" ? "dxf-view" : "simple-view", preserveAspectRatio: "xMidYMid meet"});
     const scale = Math.max(g.viewbox[2], g.viewbox[3]) / 820;
-    const draw = svgEl("g", {});
-    const ts = g.text_size || 10;
-    for (const [h, k, d] of g.items) {
-      let n;
-      if (k === "L") n = svgEl("line", {class: "ln thin", x1: d[0], y1: d[1], x2: d[2], y2: d[3]});
-      else if (k === "P" || k === "Q") n = svgEl(k === "Q" ? "polygon" : "polyline", {class: "ln thin", points: d.join(" ")});
-      else if (k === "C") n = svgEl("circle", {class: "ln thin", cx: d[0], cy: d[1], r: d[2]});
-      else if (k === "T") { n = svgEl("text", {class: "cv-txt", x: d[0], y: d[1], "font-size": ts}); n.textContent = String(d[2]); }
-      else { const s = ts * 0.7; n = svgEl("path", {class: "cv-ins", d: `M${d[0] - s} ${d[1]}h${2 * s}M${d[0]} ${d[1] - s}v${2 * s}`}); const t = svgEl("title"); t.textContent = "Khối " + d[2]; n.appendChild(t); }
-      draw.appendChild(n);
-    }
-    svg.appendChild(draw);
+    if (g.mode === "svg") svg.appendChild(g.node);
+    else svg.appendChild(simpleDrawing(g));
     locateFindings();
     const marks = svgEl("g", {});
     for (const f of S.findings) if (f.box) marks.appendChild(markerSvg(f, scale));
     svg.appendChild(marks);
     const note = [];
+    if (g.limitations) note.push(g.limitations);
+    if (g.simplified) note.push("Hình đơn giản hoá" + (/lớn hơn/.test(g.fallback_reason || "") ? " (tệp lớn)" : "") + ": không vẽ nội dung khối, kích thước, hatch." + (g.fallback_reason ? " " + g.fallback_reason : ""));
     if (g.truncated) note.push(`Chỉ vẽ ${fmt(g.drawn)} đối tượng đầu.`);
     if (g.records_capped) note.push("Tệp rất lớn: danh sách đối tượng đã bị cắt ở trần bộ nhớ.");
     const unlocated = S.findings.filter((f) => !f.box).length;
     if (Object.keys(S.audits).length && unlocated) note.push(`${unlocated} nhóm phát hiện không có vị trí trên hình (bảng layer, kiểu chữ, khung tên…).`);
     fill(sheet, svg, note.length ? el("div", {class: "sheet-note", text: note.join(" ")}) : null);
     attachPanZoom(svg, g);
+    applyLod(svg, g);
+  }
+
+  // Hình đơn giản hoá: chữ xếp theo nhóm cỡ để ẩn/hiện theo mức phóng (level-of-detail); INSERT là chấm nhỏ.
+  function simpleDrawing(g) {
+    const draw = svgEl("g", {});
+    const ts = g.text_size || 10;
+    const texts = new Map();
+    const ins = svgEl("g", {class: "lod-ins"});
+    for (const [, k, d] of g.items) {
+      let n;
+      if (k === "L") n = svgEl("line", {class: "ln thin", x1: d[0], y1: d[1], x2: d[2], y2: d[3]});
+      else if (k === "P" || k === "Q") n = svgEl(k === "Q" ? "polygon" : "polyline", {class: "ln thin", points: d.join(" ")});
+      else if (k === "C") n = svgEl("circle", {class: "ln thin", cx: d[0], cy: d[1], r: d[2]});
+      else if (k === "A") n = svgEl("path", {class: "ln thin", d: arcPath(d)});
+      else if (k === "T") {
+        const hgt = d[3] > 0 ? d[3] : ts;
+        const b = Math.round(Math.log2(hgt) * 2);
+        if (!texts.has(b)) texts.set(b, svgEl("g", {class: "lod-txt", "data-h": String(2 ** (b / 2))}));
+        n = svgEl("text", {class: "cv-txt", x: d[0], y: d[1], "font-size": hgt});
+        if (d[4]) n.setAttribute("transform", `rotate(${-d[4]} ${d[0]} ${d[1]})`);
+        n.textContent = String(d[2]);
+        texts.get(b).appendChild(n);
+        continue;
+      } else {
+        n = svgEl("path", {class: "cv-ins", d: `M${d[0]} ${d[1]}h0`});
+        const t = svgEl("title"); t.textContent = "Khối " + d[2]; n.appendChild(t);
+        ins.appendChild(n);
+        continue;
+      }
+      draw.appendChild(n);
+    }
+    draw.appendChild(ins);
+    for (const grp of texts.values()) draw.appendChild(grp);
+    return draw;
+  }
+
+  function arcPath(d) {
+    const [cx, cy, r, a0, a1] = d;
+    let sweep = ((a1 - a0) % 360 + 360) % 360;
+    if (sweep === 0) sweep = 360;
+    if (sweep >= 359.99) return `M${cx + r} ${cy}a${r} ${r} 0 1 0 ${-2 * r} 0a${r} ${r} 0 1 0 ${2 * r} 0`;
+    const p = (ang) => [cx + r * Math.cos(ang * Math.PI / 180), cy - r * Math.sin(ang * Math.PI / 180)];
+    const [x0, y0] = p(a0), [x1, y1] = p(a0 + sweep);
+    return `M${x0} ${y0}A${r} ${r} 0 ${sweep > 180 ? 1 : 0} 0 ${x1} ${y1}`;
+  }
+
+  // Hình đơn giản hoá: ẩn chữ quá nhỏ trên màn (dưới ~5 px); ẩn chấm INSERT khi nhìn toàn cảnh mà có quá nhiều.
+  function applyLod(svg, g) {
+    if (g.mode === "svg") return;
+    const r = svg.getBoundingClientRect();
+    if (!r.width || !S.view) return;
+    const px = Math.min(r.width / S.view[2], (r.height || r.width) / S.view[3]);
+    for (const grp of svg.querySelectorAll(".lod-txt")) grp.style.display = Number(grp.dataset.h) * px >= 5 ? "" : "none";
+    const ins = svg.querySelector(".lod-ins");
+    if (ins) ins.style.display = ins.childElementCount > 300 && S.view[2] > g.viewbox[2] * 0.5 ? "none" : "";
   }
 
   function markerSvg(f, k) {
@@ -842,7 +959,7 @@
   }
 
   function attachPanZoom(svg, g) {
-    const setVB = () => svg.setAttribute("viewBox", S.view.join(" "));
+    const setVB = () => { svg.setAttribute("viewBox", S.view.join(" ")); applyLod(svg, g); };
     const toUser = (cx, cy) => {
       const r = svg.getBoundingClientRect();
       const v = S.view;
@@ -856,20 +973,24 @@
       zoomAt(e.deltaY < 0 ? 0.8 : 1.25, ux, uy, g);
       setVB();
     }, {passive: false});
-    let drag = null;
+    let drag = null; const pointers = new Map(); let pinch = null;
     svg.addEventListener("pointerdown", (e) => {
       if (e.target.closest && e.target.closest(".mk")) return;
-      drag = {x: e.clientX, y: e.clientY, v: S.view.slice()};
+      pointers.set(e.pointerId,[e.clientX,e.clientY]);
+      if(pointers.size===2){const pts=[...pointers.values()]; pinch=Math.hypot(pts[0][0]-pts[1][0],pts[0][1]-pts[1][1]);drag=null;}
+      else drag = {x: e.clientX, y: e.clientY, v: S.view.slice()};
       svg.setPointerCapture(e.pointerId);
       svg.classList.add("drag");
     });
     svg.addEventListener("pointermove", (e) => {
+      if(pointers.has(e.pointerId))pointers.set(e.pointerId,[e.clientX,e.clientY]);
+      if(pointers.size===2){const pts=[...pointers.values()];const d=Math.hypot(pts[0][0]-pts[1][0],pts[0][1]-pts[1][1]);const [ux,uy]=toUser((pts[0][0]+pts[1][0])/2,(pts[0][1]+pts[1][1])/2);if(pinch&&d>0)zoomAt(pinch/d,ux,uy,g);pinch=d;setVB();return;}
       if (!drag) return;
       const [, , sc] = toUser(e.clientX, e.clientY);
       S.view = [drag.v[0] - (e.clientX - drag.x) * sc, drag.v[1] - (e.clientY - drag.y) * sc, drag.v[2], drag.v[3]];
       setVB();
     });
-    const end = () => { drag = null; svg.classList.remove("drag"); };
+    const end = (e) => { pointers.delete(e.pointerId);pinch=null;drag = null; svg.classList.remove("drag"); };
     svg.addEventListener("pointerup", end);
     svg.addEventListener("pointercancel", end);
   }
@@ -877,7 +998,7 @@
   function zoomAt(f, ux, uy, g) {
     const v = S.view;
     const full = g.viewbox;
-    const w = Math.min(full[2] * 4, Math.max(full[2] / 400, v[2] * f));
+    const w = Math.min(full[2] * 4, Math.max(full[2] / (g.mode === "svg" ? 5000 : 400), v[2] * f));
     const h = w * v[3] / v[2];
     const cx = ux === undefined ? v[0] + v[2] / 2 : ux, cy = uy === undefined ? v[1] + v[3] / 2 : uy;
     const rx = (cx - v[0]) / v[2], ry = (cy - v[1]) / v[3];
@@ -886,10 +1007,10 @@
 
   function zoomButton(f) {
     const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
-    if (!g || !g.items || !g.items.length) return;
+    if (!g || !g.viewbox || g.empty_reason || g.error || !S.view) return;
     if (f === 0) S.view = g.viewbox.slice(); else zoomAt(f, undefined, undefined, g);
     const svg = $("sheet").querySelector("svg");
-    if (svg) svg.setAttribute("viewBox", S.view.join(" "));
+    if (svg) { svg.setAttribute("viewBox", S.view.join(" ")); applyLod(svg, g); }
   }
 
   function focusBox(bb) {
@@ -1045,6 +1166,13 @@
           : el("div", {class: "f-meta"}, icon("hand"), "Cần người sửa trong phần mềm CAD. Trợ lý không tự sửa."),
       el("div", {class: "f-meta"}, icon("search"), f.box ? `Vị trí: đánh dấu số ${f.no} trên bản vẽ` + (where ? " · " + where : "")
         : (where ? where + " · " : "") + "không có vị trí trên hình mô hình")));
+    }
+    for (const f of S.findings) if (f.positions && f.positions.length > 1) {
+      const card=out.find(n=>n.dataset && n.dataset.no===String(f.no));
+      if(card)card.appendChild(el("div",{class:"position-nav"},
+        el("button",{type:"button",class:"btn-s",text:"Trước",onclick:(e)=>{e.stopPropagation();f.position=(f.position+f.positions.length-1)%f.positions.length;selectFinding(f.no,false);}}),
+        el("span",{text:`Vị trí ${f.position+1}/${f.positions.length}`}),
+        el("button",{type:"button",class:"btn-s",text:"Tiếp",onclick:(e)=>{e.stopPropagation();f.position=(f.position+1)%f.positions.length;selectFinding(f.no,false);}})));
     }
     const sk = Object.values(S.audits).flatMap((r) => r.skipped.map((s) => ({...s, std: r.standard})));
     if (sk.length) out.push(el("details", {class: "skipped"}, el("summary", {text: `${sk.length} luật bỏ qua (thiếu dữ liệu trong bản vẽ)`}),
@@ -1238,7 +1366,7 @@
   async function recheckApplied() {
     const out = S.applied.output;
     try {
-      S.geoOut = await api("/api/geometry", {file: out});
+      S.geoOut = await fetchView(out, () => S.applied && S.applied.output === out, null);
     } catch (_) { S.geoOut = null; }
     S.view = null;
     const remain = new Set();
@@ -1970,6 +2098,12 @@
     });
     $("mpForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("mpPath").value.trim(); if (v) setProfile(v); });
     $("scanAll").addEventListener("click", scanAll);
+    $("layoutSel").addEventListener("change",()=>{S.layout=$("layoutSel").value;S.geo=null;S.view=null;loadGeometry(S.file);});
+    const togglePanel=(kind)=>{const mobile=window.matchMedia("(max-width:900px)").matches;document.body.classList.toggle((mobile?"show-":"hide-")+kind);};
+    $("toggleFiles").addEventListener("click",()=>togglePanel("files"));
+    $("toggleDiscussion").addEventListener("click",()=>togglePanel("discussion"));
+    $("closeFiles").addEventListener("click",()=>{document.body.classList.remove("show-files");document.body.classList.add("hide-files");});
+    $("closeDiscussion").addEventListener("click",()=>{document.body.classList.remove("show-discussion");document.body.classList.add("hide-discussion");});
     $("zoomIn").addEventListener("click", () => (S.v3d ? S.v3d.zoom(1.25) : zoomButton(0.8)));
     $("zoomOut").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0.8) : zoomButton(1.25)));
     $("zoomFit").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0) : zoomButton(0)));

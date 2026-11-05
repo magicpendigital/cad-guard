@@ -416,6 +416,44 @@ th{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--te
 @media (max-width:1600px){.nav small{display:none}}
 @media (max-width:1180px){#s-work{grid-template-columns:minmax(0,1fr) 400px}.col.left{display:none}}
 @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+
+/* Bố cục rà soát thích ứng: kích thước SVG không được kéo giãn grid. */
+html,body{width:100%;max-width:100%;overflow:hidden}
+.app{min-width:0;width:100%;height:100dvh;grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+.topbar{min-width:0;flex-wrap:wrap;min-height:56px;gap:8px}
+.topbar>*{min-width:0}.topbar .nav{flex-wrap:wrap}.topbar .chip{max-width:100%}
+#s-work{grid-template-columns:minmax(0,240px) minmax(0,1fr) minmax(0,360px);min-width:0;overflow:hidden}
+.col,.pane,.screen,.home-grid>*{min-width:0;min-height:0}
+.center,.cv-wrap,.sheet{min-width:0;min-height:0;overflow:hidden}
+.cv-wrap{padding:10px}.sheet{position:relative;padding:6px;width:100%;height:100%}
+.sheet>svg{width:100%;height:100%;max-width:100%;min-width:0;min-height:0;display:block;touch-action:none}
+.cv-tools{flex-wrap:wrap;min-width:0;gap:6px}.cv-tools strong{overflow:hidden;text-overflow:ellipsis;max-width:100%;white-space:nowrap}
+.cv-tools select{max-width:150px;min-width:0}.cv-status{min-width:0;overflow-wrap:anywhere}
+button,input,select{min-height:44px}textarea{min-height:60px}.seg button,.iconbtn{min-width:44px;min-height:44px}
+.topbar .nav button small{display:none}.files,.chat-log,.list{overscroll-behavior:contain}
+.hide-files #s-work{grid-template-columns:minmax(0,1fr) minmax(0,360px)}
+.hide-files #s-work>.left{display:none}
+.hide-discussion #s-work{grid-template-columns:minmax(0,240px) minmax(0,1fr)}
+.hide-discussion #s-work>.right{display:none}
+.hide-files.hide-discussion #s-work{grid-template-columns:minmax(0,1fr)}
+.panel-close{align-self:flex-end;margin:6px}.position-nav{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:8px}
+@media(max-width:1500px){.topbar .nav{order:3;width:100%;overflow:auto;flex-wrap:nowrap;margin:0}.topbar .spacer{display:none}.topbar{padding:6px 10px}.topbar .chip{font-size:12px}}
+@media(max-width:900px){
+ #s-work,.hide-files #s-work,.hide-discussion #s-work{grid-template-columns:minmax(0,1fr)}
+ #s-work>.col.left,#s-work>.col.right{display:none;position:fixed;top:126px;bottom:0;width:min(92vw,380px);z-index:40;box-shadow:var(--shadow)}
+ #s-work>.col.left{left:0}#s-work>.col.right{right:0}
+ .show-files #s-work>.col.left,.show-discussion #s-work>.col.right{display:flex}
+ .topbar .brand{font-size:14px}.topbar .proj-nm{max-width:110px}.topbar .chip-lbl{display:none}
+ .topbar .chip{padding:3px 6px}.topbar #engineBtn{display:none}.nav button{padding:6px 9px;white-space:nowrap}
+ .cv-wrap{padding:5px}.cv-status{font-size:11px;gap:5px;padding:5px}.cv-status .spacer{display:none}
+ .cv-tools{padding:6px}.cv-tools strong{flex:1 0 100%}.sheet-note{max-width:95%;max-height:48px;overflow:auto;font-size:11px}
+ .home-grid,.grid2{grid-template-columns:minmax(0,1fr)}.page{padding:14px;overflow:auto}.pipe{overflow:auto}
+}
+
+
+/* App thật có banner tùy trạng thái: dùng flex để header tăng chiều cao khi xuống dòng. */
+.app{display:flex;flex-direction:column}.app>.screen.on{flex:1;min-height:0}.topbar{flex:0 0 auto}
+@media(max-width:900px){.topbar #dataChip{display:none}.topbar .nav{min-height:44px}.cv-tools>a{min-height:44px}.topbar #deptBtn{max-width:140px}.topbar #themeBtn{margin-left:auto}}
 </style>
 </head>
 <body>

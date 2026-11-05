@@ -75,7 +75,7 @@
 
   <!-- ============ BẢN VẼ ============ -->
   <main class="screen" id="s-work">
-    <aside class="col left" aria-label="Bản vẽ">
+    <aside class="col left" aria-label="Bản vẽ"><button class="btn-s panel-close" id="closeFiles" type="button">Đóng danh sách</button>
       <div class="col-h" id="projName">Dự án</div>
       <div class="files" id="files" role="list"></div>
       <div class="std-box">
@@ -90,6 +90,10 @@
 
     <section class="center" id="main" aria-label="Bản vẽ đang mở" tabindex="-1">
       <div class="cv-tools">
+        <button class="btn-s" id="toggleFiles" type="button" aria-label="Mở hoặc thu gọn danh sách bản vẽ">Tệp</button>
+        <button class="btn-s" id="toggleDiscussion" type="button" aria-label="Mở hoặc thu gọn thảo luận">Thảo luận</button>
+        <a class="btn-s" href="/review.html">Hồ sơ duyệt</a>
+        <label>Layout <select id="layoutSel" aria-label="Chọn layout"><option>Model</option></select></label>
         <strong id="cvTitle">Chọn một bản vẽ ở cột trái</strong>
         <span class="pill neu" id="viewTag" hidden></span>
         <div class="spacer"></div>
@@ -113,7 +117,7 @@
       </div>
     </section>
 
-    <aside class="col right" aria-label="Trợ lý">
+    <aside class="col right" aria-label="Trợ lý"><button class="btn-s panel-close" id="closeDiscussion" type="button">Đóng thảo luận</button>
       <div class="tabs" role="tablist" id="rightTabs">
         <button role="tab" type="button" data-p="chat" aria-selected="true"><span data-icon="chat"></span>Trợ lý</button>
         <button role="tab" type="button" data-p="finds" aria-selected="false" tabindex="-1"><span data-icon="alert"></span>Lỗi <span class="cnt" id="cntF">–</span></button>

@@ -31,8 +31,10 @@ FLOAT_FIELDS = {"length", "area"}
 REL_TOL = 1e-9
 
 
-# Mọi fixture do `fixtures.make_all` sinh: bộ chính ở thư mục gốc, bộ dựng 3D (scene/studio) ở thư mục con scene/.
-ALL_FIXTURES = sorted(fixtures.ALL) + [f"scene/{n}" for n in sorted(fixtures.SCENE_FIXTURES)]
+# Mọi fixture do `fixtures.make_all` sinh: bộ chính ở thư mục gốc, bộ dựng 3D (scene/studio) ở thư mục con scene/,
+# bộ xem trước của app ở preview/.
+ALL_FIXTURES = sorted(fixtures.ALL) + [f"scene/{n}" for n in sorted(fixtures.SCENE_FIXTURES)] + [
+    f"preview/{n}" for n in sorted(fixtures.PREVIEW_FIXTURES)]
 
 
 def _diff(a, b, path: str = "") -> list[str]:
@@ -71,6 +73,7 @@ def _findings(model, standard) -> Counter:
 def test_synthetic_set_is_complete(synthetic):
     assert {p.name for p in synthetic.glob("*.dxf")} == set(fixtures.ALL)
     assert {p.name for p in (synthetic / "scene").glob("*.dxf")} == set(fixtures.SCENE_FIXTURES)
+    assert {p.name for p in (synthetic / "preview").glob("*.dxf")} == set(fixtures.PREVIEW_FIXTURES)
     assert "model_features.dxf" in fixtures.ALL
 
 
@@ -182,6 +185,11 @@ def test_geometry_and_content_fields_match_ezdxf(tmp_path):
     msp.add_angular_dim_2l(base=(5, 5), line1=((0, 0), (10, 0)), line2=((0, 0), (10, 10))).render()
     msp.add_angular_dim_3p(base=(5, 5), center=(0, 0), p1=(10, 0), p2=(0, 10)).render()
     msp.add_ordinate_x_dim(feature_location=(3, 4), offset=(2, 2)).render()
+    # trường cho hình xem trước đơn giản hoá: chiều cao/góc chữ (MTEXT theo hướng 11/21 hoặc góc 50), cung ARC
+    msp.add_text("Xoay SYN", height=3.5, rotation=37.5, dxfattribs={"insert": (1, 2)})
+    msp.add_mtext("Hướng SYN", dxfattribs={"insert": (2, 3), "char_height": 4.25, "text_direction": (0.0, 1.0, 0.0)})
+    msp.add_mtext("Góc SYN", dxfattribs={"insert": (2, 9), "char_height": 1.5, "rotation": 12.0})
+    msp.add_arc((4, 5), 6.5, 30, 300)
     path = tmp_path / "fields.dxf"
     doc.saveas(path)
     assert_same_model(path)
@@ -190,6 +198,9 @@ def test_geometry_and_content_fields_match_ezdxf(tmp_path):
     assert len(dims) == 7 and sum(v is not None for v in dims) == 6  # kích thước toạ độ: không có số đo vô hướng
     mtext = next(e for e in ents if e.type == "MTEXT")
     assert mtext.text.startswith("Đậm dòng 1\ndòng 2") and len(mtext.text) == 300
+    tx = {e.text: (e.text_height, e.text_rotation) for e in ents if e.type in ("TEXT", "MTEXT")}
+    assert tx["Xoay SYN"] == (3.5, 37.5) and tx["Hướng SYN"] == (4.25, 90.0) and tx["Góc SYN"] == (1.5, 12.0)
+    assert next(e for e in ents if e.type == "ARC").arc == (4.0, 5.0, 6.5, 30.0, 300.0)
     ins = next(e for e in ents if e.type == "INSERT")
     assert (ins.insert, ins.rotation, ins.xscale, ins.yscale) == ((12.3457, -8.5), 33.3, 2.5, -1.25)
 

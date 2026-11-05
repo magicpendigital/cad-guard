@@ -68,3 +68,8 @@ Khối chỉ đếm mỗi định nghĩa một lần, không nhân theo số INS
 | WIPEOUT/IMAGE/OLE | Các bộ đếm cùng tên trong từng `SpaceStats`. |
 | Chữ ghi đè kích thước | `dim_text_override` và `dim_total` trong từng `SpaceStats`. |
 | Phông không Unicode | `styles[].font`, `bigfont`, `font_kind`; cần danh sách phông hoặc quy tắc mã hóa đã xác minh, đuôi tệp không đủ kết luận. |
+
+
+## Trường hình dự phòng (05/11/2026)
+
+`EntityRec.text_height` và `text_rotation` là số hoặc null; `arc` là `(cx, cy, radius, start_angle, end_angle)` hoặc null. Thêm tương thích ngược vào cả hai bộ đọc. Chúng chứa hình học/nội dung bản vẽ và không nằm trong danh sách trắng truy vấn ẩn danh. Trường `arc` dùng độ DXF; MTEXT ưu tiên hướng 11/21 như ezdxf. Renderer đầy đủ đọc DXF riêng, không thay mô hình hay kết quả luật.

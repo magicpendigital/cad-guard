@@ -121,3 +121,55 @@ Mọi API trả JSON tiếng Việt (`{"error": "…"}` khi lỗi), cần header
 - Chỉ một hồ sơ kết nối mỗi engine trên giao diện (cấu trúc đã cho phép nhiều).
 - Hộp thoại tkinter trên Windows có thể mở phía sau trình duyệt. Mở terminal đăng nhập trên Linux phụ thuộc chương trình terminal có sẵn.
 - Đã kiểm bằng test (engine, kho khoá, hộp thoại, `subprocess` đều giả) và bằng mắt trong trình duyệt trên DXF tổng hợp; **chưa** chạy với mô hình thật, chưa bấm Đăng nhập CLI thật, chưa lưu khoá thật.
+
+
+## Preview và hồ sơ duyệt
+
+Preview mới dựng SVG bằng ezdxf, có chọn layout, cache, hình dự phòng và bố cục điện thoại. Nút **Hồ sơ duyệt** mở ghi chú hai chiều, phiên bản, chốt thiết kế và duyệt sản xuất. Xem [hướng dẫn hồ sơ/Tailscale](review.md). Không gửi mã phiên quản trị cho khách.
+
+
+## Toàn bộ ứng dụng trên thiết bị riêng qua Tailscale
+
+Để dùng chính phiên app đang chạy trên máy chủ, chạy gateway riêng (không khởi động app thứ hai):
+
+```powershell
+python -m cadguard.app.remote --origin https://<máy>.<tailnet>.ts.net:10000 --login <email-chủ> --upstream 8780 --port 8782
+tailscale serve --bg --https=10000 http://127.0.0.1:8782
+```
+
+Chọn cổng HTTPS còn trống, giữ các proxy Serve khác. Trên thiết bị khác, đăng nhập Tailscale bằng đúng tài khoản chủ và mở origin trên với `?t=` là mã phiên app in ra terminal. Không ghi mã phiên vào tệp cấu hình. Gateway không chèn token: API vẫn yêu cầu mã phiên gốc. Khởi động lại app làm mã cũ hết hiệu lực.
+
+Đây là quyền đầy đủ của chính chủ, gồm mở dự án, cấu hình AI và thao tác changeset có xác nhận; không gửi link này cho khách. Khách dùng cổng hồ sơ duyệt riêng. Hộp thoại chọn thư mục, nếu được gọi, xuất hiện trên máy chủ; thiết bị từ xa có thể dùng ô nhập đường dẫn dự án trên máy chủ.
+
+Gateway chỉ nghe localhost, kiểm chính xác Host/Origin và `Tailscale-User-Login` do Serve cung cấp, rồi đổi Host/Origin hợp lệ về localhost cho app. Không mở backend ra LAN, không nhận upstream URL tùy ý, không bật CORS hoặc Funnel. Phần mềm khác trên cùng máy chủ thuộc ranh giới tin cậy cục bộ. Chat NDJSON được chuyển tiếp ngay từng đoạn. Khi dừng chia sẻ, dừng gateway và `tailscale serve --https=10000 off` (chỉ cổng dành cho app riêng).
+
+Có thể dùng `python scripts/share_app.py start|status|stop` tại gốc repo để chạy nền ẩn và kiểm tra đúng tiến trình. Mặc định dùng cổng HTTPS 10000, proxy localhost 8782 tới app 8780, chỉ tài khoản Tailscale đang đăng nhập làm chủ. Metadata PID/origin không chứa token; script không đọc bản vẽ.
+
+
+## Truy cập từ Internet bằng mật khẩu (không cần Tailscale ở thiết bị khách)
+
+Cổng mật khẩu là phương án dành cho chính chủ dùng toàn bộ app. Tailscale chỉ cần cài/đăng nhập ở máy chủ. Máy chủ và app gốc phải tiếp tục chạy. Đây là quyền quản trị đầy đủ; khách hàng thảo luận hồ sơ dùng cổng duyệt riêng.
+
+Cần phụ thuộc tùy chọn `keyring` (`pip install -e .[keyring]`). Mã phiên app hiện tại được lưu qua `assistant/keys.py` vào kho khóa hệ điều hành dưới tên bí mật cục bộ `web-app-token`, tách khỏi nhà cung cấp AI. Không đặt mã phiên hoặc mật khẩu trong đối số lệnh, repo, tệp cấu hình hay nhật ký. Người vận hành cập nhật bí mật này khi khởi động app với mã mới.
+
+Từ gốc repo:
+
+```powershell
+python scripts/share_web.py start
+# Tự mở http://127.0.0.1:8784 trên máy chủ và đặt mật khẩu.
+python scripts/share_web.py publish
+python scripts/share_web.py status
+python scripts/share_web.py stop
+```
+
+`start` chỉ chạy gateway ở localhost 8783 và trang thiết lập ở localhost 8784, chưa bật Funnel. Trang thiết lập là máy chủ riêng không được proxy ra Internet, có kiểm Host, Origin và nonce. Người dùng tự nhập/đổi mật khẩu; verifier PBKDF2-HMAC-SHA256 (salt 32 byte, 600.000 vòng) lưu qua `assistant/keys.py` trong kho khóa Windows. Không lưu mật khẩu gốc. Mật khẩu từ 14 đến 256 ký tự; có thể dùng câu dài dễ nhớ.
+
+`publish` chỉ được chạy khi đã có verifier. Nó đổi cổng 10000 từ Serve riêng của chủ sang Funnel trỏ gateway mật khẩu, giữ các cổng 443/8443 khác. Nếu Tailscale yêu cầu bật quyền Funnel, người dùng tự xác nhận tại trang quản trị Tailscale. Script không tự vượt hộp thoại cấp quyền. Gateway riêng 8782 cũ có thể dừng sau khi kiểm chứng cổng mật khẩu; giữ nó trong thời gian chuẩn bị để có thể quay lại Serve nếu cần.
+
+Link Internet chỉ chứa địa chỉ HTTPS gốc, không cần `?t=`. Sau khi đăng nhập, browser dùng marker `web-session`; gateway chèn mã app thật ở phía máy chủ. Mã app không xuất hiện trong HTML/JS/cookie gửi ra Internet. Token app cũ hay header Tailscale giả không bỏ qua được đăng nhập web.
+
+Cookie opaque có Secure, HttpOnly và SameSite=Strict. Phiên chỉ lưu mã băm trong RAM, tối đa 32 phiên; hết hạn sau 30 phút không hoạt động hoặc 8 giờ tổng cộng. Nút Đăng xuất web thu hồi phiên tại máy chủ. Đổi mật khẩu thu hồi mọi phiên. Khởi động lại gateway yêu cầu đăng nhập lại. Tất cả POST yêu cầu Origin trùng địa chỉ HTTPS; form đăng nhập thêm challenge cookie/CSRF có hạn 5 phút. Tối đa 5 lần thử mỗi địa chỉ/phút và 30 lần toàn cổng/phút; có giới hạn bộ nhớ chống tạo nhiều địa chỉ giả.
+
+Mỗi lần khởi động app gốc với token mới cần cập nhật `web-app-token` trong kho khóa và khởi động lại gateway; không bỏ kiểm token app để chữa lỗi. Không tự mở/quét/công bố bản vẽ khi bật đường truy cập web.
+
+Tham khảo [Tailscale Funnel](https://tailscale.com/docs/features/tailscale-funnel), [OWASP Password Storage](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html), [OWASP Session Management](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html).

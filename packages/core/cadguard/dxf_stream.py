@@ -356,8 +356,15 @@ def _entity_rec(t: str, handle: str, layer: str, color, lw, tc, spec: dict, xs: 
         elif t == "ARC":
             f["dup_key"] = (f"ARC|{layer}|{(_r(_float(spec, 10)), _r(_float(spec, 20)))}|{_r(_float(spec, 40, 1.0))}"
                             f"|{_r(_float(spec, 50))}|{_r(_float(spec, 51, 360.0))}")
+            f["arc"] = (_r(_float(spec, 10)), _r(_float(spec, 20)), _r(_float(spec, 40, 1.0)), _r(_float(spec, 50)),
+                        _r(_float(spec, 51, 360.0)))
         elif t in ("TEXT", "MTEXT"):
             f["text_style"] = spec.get(7, "Standard")
+            f["text_height"] = _r(_float(spec, 40, 2.5))
+            if t == "MTEXT" and 11 in spec:  # như ezdxf MText.get_rotation(): hướng chữ (11/21) thắng góc 50
+                f["text_rotation"] = _r(math.degrees(math.atan2(_float(spec, 21), _float(spec, 11))))
+            else:
+                f["text_rotation"] = _r(_float(spec, 50) or 0.0)
             f["text"] = (_mtext_plain(tags or []) if t == "MTEXT" else spec.get(1, ""))[:TEXT_MAX]
             f["pos"] = (_r(_float(spec, 10)), _r(_float(spec, 20)))
         elif t == "DIMENSION":

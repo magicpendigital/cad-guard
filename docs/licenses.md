@@ -7,6 +7,8 @@ Cập nhật khi thêm phụ thuộc. Nguyên tắc: không đưa vào sản ph�
 | Thành phần | Dùng để | Giấy phép | Ghi chú |
 | --- | --- | --- | --- |
 | ezdxf | Đọc/ghi DXF | MIT | Lõi chỉ xử lý DXF. DWG chỉ qua add-on `odafc` (không dùng) |
+| Pillow 13.0.0 (yêu cầu >=10.4) | Phụ thuộc renderer ezdxf, xử lý QR | MIT-CMU | Kiểm metadata cài ngày 05/11/2026: License-Expression MIT-CMU; không cài toàn bộ extras draw của ezdxf |
+| qrcode 8.2 (yêu cầu >=8) | QR link nội bộ, dựng cục bộ | BSD | Kiểm metadata cài ngày 05/11/2026: License BSD |
 | pydantic | Mô hình dữ liệu | MIT | |
 | PyYAML | Nạp chuẩn | MIT | |
 | pytest (dev) | Test | MIT | |

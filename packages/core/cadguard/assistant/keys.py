@@ -87,3 +87,37 @@ def key_status(provider: str) -> dict:
         except Exception:  # noqa: BLE001
             in_kr = False
     return {"provider": provider, "env_var": env, "env": bool(os.environ.get(env)), "keyring": in_kr}
+
+
+# Bí mật vận hành cục bộ, tách khỏi danh sách nhà cung cấp LLM.
+LOCAL_SECRET_ENV = {
+    "web-password-hash": "CADGUARD_WEB_PASSWORD_HASH",
+    "web-app-token": "CADGUARD_WEB_APP_TOKEN",
+}
+
+
+def get_local_secret(name: str) -> str | None:
+    if name not in LOCAL_SECRET_ENV:
+        raise KeyStoreError("Tên bí mật cục bộ không hợp lệ.")
+    value = os.environ.get(LOCAL_SECRET_ENV[name])
+    if value:
+        return value
+    kr = _keyring()
+    if kr is None:
+        return None
+    try:
+        return kr.get_password(SERVICE, name) or None
+    except Exception:
+        return None
+
+
+def set_local_secret(name: str, value: str) -> None:
+    if name not in LOCAL_SECRET_ENV or not isinstance(value, str) or not value:
+        raise KeyStoreError("Bí mật cục bộ không hợp lệ.")
+    kr = _keyring()
+    if kr is None:
+        raise KeyStoreError("Cần keyring và kho khóa hệ điều hành; không có phương án ghi bí mật ra tệp.")
+    try:
+        kr.set_password(SERVICE, name, value)
+    except Exception:
+        raise KeyStoreError("Không lưu được bí mật trong kho khóa hệ điều hành.") from None
