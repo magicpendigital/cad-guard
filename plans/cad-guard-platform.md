@@ -1,6 +1,6 @@
 # cad-guard — Nền tảng: tệp nặng, nhiều định dạng, một giao diện hợp nhất
 
-Trạng thái: **ĐÁNH GIÁ + ĐỀ XUẤT, chờ CEO duyệt** (05/11/2026). Bổ sung cho `plans/cad-guard-direction.md` (hướng theo tệp, DXF chung) và `plans/cad-guard-vision-assessment.md` (năm khối, mô hình chi tiết là trục). Bản mẫu giao diện: `design/ui-mockup.html` (theo phòng, đã chọn), `design/ui-unified.html` (tham khảo). Chưa viết code lõi chỉ mục. Cập nhật 05/11/2026: thêm mục 7a (phòng Thiết kế 3D); **ưu tiên phòng Kỹ thuật trước, phần 3D đi sau** theo chỉ đạo CEO.
+Trạng thái: **ĐÁNH GIÁ + ĐỀ XUẤT, chờ CEO duyệt** (05/11/2026). Bổ sung cho `plans/cad-guard-direction.md` (hướng theo tệp, DXF chung) và `plans/cad-guard-vision-assessment.md` (năm khối, mô hình chi tiết là trục). Bản mẫu giao diện: `design/ui-mockup.html` (theo phòng, đã chọn), `design/ui-unified.html` (tham khảo). Chưa viết code lõi chỉ mục. Cập nhật 05/11/2026: thêm mục 7a (phòng Thiết kế 3D); **ưu tiên phòng Kỹ thuật trước, phần 3D đi sau** theo chỉ đạo CEO. CEO đã chốt 5 quyết định của mục 7a.5 (05/11/2026).
 Quy tắc dữ liệu: các số đo dưới đây lấy từ bản vẽ thật **ở ngoài repo**, bằng kịch bản chỉ in số tổng hợp (kích thước, thời gian, bộ nhớ, số đối tượng). Không có tên tệp, layer, khối hay nội dung chữ.
 
 ## 1. Kết luận ngắn
@@ -225,6 +225,16 @@ Không bắt đầu V1 trước khi cổng V0 đạt.
 | 3 | Có làm góc máy/ánh sáng (khối D) hay dừng ở "gói khối đúng kích thước + tên + không va chạm" | Dừng ở V4, quyết V5 sau khi hỏi hoạ viên (V1) |
 | 4 | Render tầng B/C: làm, và nếu C thì cục bộ (cần GPU) hay dịch vụ ngoài (Bậc 2) | Chưa làm; quyết sau V4 |
 | 5 | Cho phép hỏi phòng diễn hoạ của công ty (V1) | Có, khi tới lượt |
+
+**Đã chốt (CEO, 05/11/2026):**
+
+| # | Quyết định |
+| --- | --- |
+| 1 | Đồng ý: phòng 3D chỉ bắt đầu sau khi khảo sát phòng Kỹ thuật xong và P1a' đạt. |
+| 2 | Đồng ý đề xuất: đầu vào 3D từ hình chiếu DXF trước (tầng A hiện có); chuyển sang mô hình chi tiết khi khối E có. |
+| 3 | Làm trước "gói khối đúng kích thước + tên + không va chạm" (tới V4). Góc máy/ánh sáng (khối D, V5) chỉ phát triển sau khi gói đúng kích thước chạy chính xác. |
+| 4 | Render tầng B/C: chưa làm; quyết sau V4. |
+| 5 | Đồng ý hỏi phòng diễn hoạ của công ty khi tới lượt (V1). |
 
 ## 8. Nguồn
 
