@@ -216,6 +216,103 @@ def make_hygiene_bad(path: Path) -> None:
     doc.saveas(path)
 
 
+def _room_doc():
+    doc = ezdxf.new("R2018", setup=True)
+    doc.header["$INSUNITS"] = 4
+    doc.layers.add("FN-ROOM-WALL")
+    mod = doc.blocks.new("FN_MOD_BASE")
+    for tag in ("W", "D", "H", "MAT", "KIND"):
+        mod.add_attdef(tag, (0, 0), dxfattribs={"height": 20})
+    msp = doc.modelspace()
+    msp.add_lwpolyline([(0, 0), (4000, 0), (4000, 3000), (0, 3000)], close=True, dxfattribs={"layer": "FN-ROOM-WALL"})
+    return doc, msp
+
+
+def _cab(msp, at, rot, attribs):
+    ref = msp.add_blockref("FN_MOD_BASE", at, dxfattribs={"rotation": rot})
+    ref.add_auto_attribs(attribs)
+
+
+def make_room_ok(path: Path) -> None:
+    doc, msp = _room_doc()
+    _cab(msp, (60, 60), 0, {"W": "1800", "D": "600", "H": "2200", "MAT": "MFC-OAK", "KIND": "wardrobe"})
+    _cab(msp, (3940, 60), 90, {"W": "900", "D": "560", "H": "850", "MAT": "MFC-WHITE", "KIND": "base"})
+    _cab(msp, (2000, 2940), 180, {"W": "1200", "D": "350", "H": "720", "MAT": "MFC-WHITE", "KIND": "wall"})
+    doc.saveas(path)
+
+
+def make_room_missing_height(path: Path) -> None:
+    doc, msp = _room_doc()
+    _cab(msp, (60, 60), 0, {"W": "1800", "D": "600", "H": "2200", "MAT": "MFC-OAK"})
+    _cab(msp, (2000, 60), 0, {"W": "900", "D": "560", "MAT": "MFC-OAK"})  # thiếu H
+    _cab(msp, (3000, 60), 0, {"W": "abc", "D": "560", "H": "850"})  # W sai
+    doc.saveas(path)
+
+
+def _rect(msp, x0, y0, x1, y1, layer):
+    msp.add_lwpolyline([(x0, y0), (x1, y0), (x1, y1), (x0, y1)], close=True, dxfattribs={"layer": layer})
+
+
+def make_cabinet_views(path: Path, with_side: bool = True, with_top: bool = True, top_w: float = 800.0, layers: bool = True) -> None:
+    """Tủ 800x2000x500: 5 tấm ván (hông trái/phải, nóc, đáy, đợt giữa lùi 20mm). Ba hình chiếu đặt rời nhau."""
+    doc = ezdxf.new("R2018", setup=True)
+    doc.header["$INSUNITS"] = 4
+    for lay in ("FN-VIEW-FRONT", "FN-VIEW-TOP", "FN-VIEW-SIDE"):
+        doc.layers.add(lay)
+    msp = doc.modelspace()
+    F = "FN-VIEW-FRONT" if layers else "0"
+    _rect(msp, 0, 0, 18, 2000, F)  # hông trái
+    _rect(msp, 782, 0, 800, 2000, F)  # hông phải
+    _rect(msp, 18, 1982, 782, 2000, F)  # nóc
+    _rect(msp, 18, 0, 782, 18, F)  # đáy
+    _rect(msp, 18, 1000, 782, 1018, F)  # đợt giữa
+    if with_top:  # đặt phía trên mặt đứng
+        T = "FN-VIEW-TOP" if layers else "0"
+        oy = 3000
+        _rect(msp, 0, oy, 18, oy + 500, T)
+        _rect(msp, top_w - 18, oy, top_w, oy + 500, T)
+        _rect(msp, 18, oy, top_w - 18, oy + 500, T)
+    if with_side:  # đặt bên phải mặt đứng; ngang = chiều sâu từ mặt trước
+        S = "FN-VIEW-SIDE" if layers else "0"
+        ox = 1500
+        _rect(msp, ox, 0, ox + 500, 2000, S)  # hông
+        _rect(msp, ox, 1982, ox + 500, 2000, S)  # nóc
+        _rect(msp, ox, 0, ox + 500, 18, S)  # đáy
+        _rect(msp, ox + 20, 1000, ox + 480, 1018, S)  # đợt giữa lùi 20mm
+    doc.saveas(path)
+
+
+def make_cabinet_nolayers(path: Path) -> None:
+    """Cùng bản vẽ nhưng mọi nét ở layer 0: code theo quy ước layer không nhận ra hình chiếu; LLM + cụm hình học thì có."""
+    make_cabinet_views(path, layers=False)
+    import ezdxf as _e
+
+    doc = _e.readfile(path)
+    msp = doc.modelspace()
+    msp.add_text("MAT DUNG", dxfattribs={"layer": "0", "height": 40, "insert": (0, -150)})
+    msp.add_text("MAT BEN", dxfattribs={"layer": "0", "height": 40, "insert": (1500, -150)})
+    msp.add_text("MAT BANG", dxfattribs={"layer": "0", "height": 40, "insert": (0, 2900)})
+    doc.saveas(path)
+
+
+def make_cabinet_front_only(path: Path) -> None:
+    make_cabinet_views(path, with_side=False, with_top=False)
+
+
+def make_cabinet_conflict(path: Path) -> None:
+    make_cabinet_views(path, top_w=810.0)
+
+
+SCENE_FIXTURES = {
+    "cabinet_views_ok.dxf": make_cabinet_views,
+    "cabinet_nolayers.dxf": make_cabinet_nolayers,
+    "cabinet_views_front_only.dxf": make_cabinet_front_only,
+    "cabinet_views_conflict.dxf": make_cabinet_conflict,
+    "room_ok.dxf": make_room_ok,
+    "room_missing_height.dxf": make_room_missing_height,
+}
+
+
 ALL = {
     "ok_sheet.dxf": make_ok_sheet,
     "model_features.dxf": make_model_features,
@@ -233,6 +330,12 @@ def make_all(out_dir: Path) -> list[Path]:
     paths = []
     for name, fn in ALL.items():
         p = out_dir / name
+        fn(p)
+        paths.append(p)
+    scene_dir = out_dir / "scene"
+    scene_dir.mkdir(exist_ok=True)
+    for name, fn in SCENE_FIXTURES.items():
+        p = scene_dir / name
         fn(p)
         paths.append(p)
     return paths

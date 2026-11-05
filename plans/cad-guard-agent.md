@@ -197,6 +197,7 @@ A0–A1 không cần bản vẽ khách và không phụ thuộc P0, nên có th�
 | --- | --- | --- |
 | 04/11/2026 | CEO xác nhận bối cảnh: **công ty sản xuất có ba phòng nối tiếp: Thiết kế, Kỹ thuật, Lập trình sản xuất** (rồi xưởng). Năm bản vẽ thật đã có thuộc khâu thiết kế/kỹ thuật (triển khai). Dữ liệu mẫu đã chuyển ra ngoài repo | Bắt đầu từ **vệ sinh và nhất quán bản vẽ** (đo được trên mẫu thật), bộ đọc bản vẽ lớn, hỏi đáp/khảo sát, chuẩn cấu hình theo công ty. `furniture-v0` giữ nguyên cho khâu cuối. Cần mẫu khâu kỹ thuật chi tiết và lập trình sản xuất để chọn luật hai khâu này (xem `docs/real-sample-profile.md` mục 4.1). Chuẩn mới cho khâu đầu: `design-hygiene-v0` |
 | 04/11/2026 (đính chính) | Một bản ghi trước đó ghi "người dùng đích là đơn vị thiết kế" là **hiểu sai** bối cảnh; thay bằng dòng trên | Giao MCA lần 2 (w-4c26ae) viết theo hiểu biết cũ; phần nền (hợp nhất nhánh, bộ đọc lớn, MCP, hygiene) không đổi, phần `knowledge/` và lời văn "đơn vị thiết kế" cần chỉnh khi nghiệm thu |
+| 05/11/2026 | CEO chốt cho danh mục luật: (1) **mỗi nhóm luật do một tài khoản admin phụ trách** (sửa và duyệt); (2) **được nới lỏng luật khi có giải trình rõ ràng và được admin phê duyệt** | Thay cho đề xuất trưởng phòng phụ trách và ngoại lệ do trưởng phòng duyệt; xem mục 9b |
 
 Giao diện mẫu (`design/ui-mockup.html`) đã cập nhật theo chuỗi ba phòng (chọn phòng ở góc trên; mỗi phòng có bản vẽ, lỗi và gói bàn giao riêng; mã luật VS-/CN- là minh hoạ). Dữ liệu trong mẫu hoàn toàn minh hoạ, chưa qua người dùng thật.
 
@@ -209,19 +210,20 @@ Mô hình ba lớp (tệp là nguồn sự thật, giao diện chỉ đọc/ghi 
 | Lớp | Tệp (đề xuất) | Nội dung | Sửa thế nào |
 | --- | --- | --- | --- |
 | Chuẩn công ty | `standards/furniture-v0.yaml` (đã có) | Luật, ngưỡng, mức độ, nguồn | Sửa = phiên bản chuẩn mới, không sửa đè (đúng `AGENTS.md`) |
-| Gắn kết | `standards/assignments.yaml` | Mỗi mã luật: phòng áp dụng, vị trí tuân theo, **người phụ trách**, task liên quan | Tách khỏi chuẩn để đổi người/task không phải đổi phiên bản luật |
-| Overlay dự án | `standards/projects/<mã>.yaml` | Luật riêng của dự án, ngoại lệ có hạn và người duyệt | Có phiên bản riêng |
+| Gắn kết | `standards/assignments.yaml` | Mỗi mã luật: phòng áp dụng, vị trí tuân theo, task liên quan; mỗi nhóm luật: tài khoản admin | Tách khỏi chuẩn để đổi người/task không phải đổi phiên bản luật |
+| Overlay dự án | `standards/projects/<mã>.yaml` | Luật riêng của dự án, ngoại lệ có hạn, giải trình và admin duyệt | Có phiên bản riêng |
 
 Các quy ước đã đặt trong bản mẫu (cần CEO/trưởng phòng xác nhận):
 
 - **Luật riêng phải kiểm được, AI không chấm đúng/sai.** Thêm luật dự án chỉ có ba cách: chỉnh tham số một mẫu luật có sẵn; mục **kiểm tay** (người kiểm tick ở bước ký duyệt); hoặc gửi yêu cầu cho lập trình viên viết luật mới (chưa chạy tới khi có code và ca thử). Không có kiểu "gõ câu tự do rồi để mô hình phán".
-- **Dự án chỉ thêm luật, không âm thầm nới luật công ty.** Muốn nới thì tạo **ngoại lệ** có người duyệt và ngày hết hạn; hết hạn thì luật gốc chạy lại.
+- **Phụ trách theo nhóm luật, không theo từng luật.** Nhóm = tiền tố mã (SH khung tên, LY layer, TX chữ & kích thước, VW viewport, FN nội thất, DH hình học, PR bảng kê & CNC, VS vệ sinh, PJ luật riêng dự án). Mỗi nhóm có một tài khoản admin sửa và duyệt luật trong nhóm; tên tài khoản do công ty gán (bản mẫu chỉ đặt nhãn "Admin · <nhóm>").
+- **Nới lỏng được, nhưng phải có giải trình và admin duyệt.** Nới lỏng gồm: tắt luật, đổi tham số, ngoại lệ cho dự án (có ngày hết hạn). Giải trình tối thiểu 10 ký tự, thiếu thì không gửi được; chưa duyệt thì luật gốc vẫn chạy. Mỗi admin chỉ duyệt phần luật của nhóm mình; thay đổi chạm nhiều nhóm thì chờ đủ các admin.
 - **Mọi chỉnh sửa vào bản nháp**, xem diff + ảnh hưởng (số cảnh báo mới trên bản vẽ tổng hợp), rồi qua duyệt mới thành phiên bản mới. Đổi chỉ phòng/vị trí/task thì không đổi kết quả quét, giao diện nói rõ điều đó.
-- **Ba vai trò** xem màn này: thợ vẽ (chỉ xem, được "báo luật sai"), trưởng phòng (sửa luật mình phụ trách và luật dự án), quản trị tiêu chuẩn (duyệt và công bố).
+- **Ba vai trò** xem màn này: thợ vẽ (chỉ xem, được "báo luật sai"); trưởng phòng (đề xuất sửa luật áp dụng cho phòng mình và luật dự án, không tự duyệt); admin nhóm luật (sửa và duyệt luật trong nhóm của mình).
 - **Task có thể là bước chặn bàn giao** (Thiết kế→Kỹ thuật, Kỹ thuật→Lập trình sản xuất, xuất cho máy): các luật gắn với task đó phải sạch mới được bàn giao. Màn "Việc của tôi" và thẻ lỗi liên kết ngược về danh mục.
 - Luật chưa gắn đủ phòng/vị trí/task được đếm thành một thẻ riêng (bản mẫu: 34 trên 58), vì lỗi của chúng không có người nhận.
 
-Cần quyết trước khi làm thật: (1) danh sách vị trí và task thật của công ty (bản mẫu tự đặt 8 vị trí, 8 task); (2) ai phụ trách từng nhóm luật; (3) có cho dự án nới luật bằng ngoại lệ không; (4) bộ luật `design-hygiene-v0` có tên chính thức chưa (mã `VS-*`, `PJ-K1-*` trong mẫu chỉ là minh hoạ). Việc kỹ thuật theo sau: `cadguard rules --json` xuất thêm phòng/vị trí/task; bước bàn giao đọc tập luật của task; `stats` tính theo phòng.
+Còn cần quyết trước khi làm thật: (1) danh sách vị trí và task thật của công ty (bản mẫu tự đặt 7 vị trí, 8 task); (2) tài khoản admin cụ thể của từng nhóm luật, và ai được đổi người phụ trách nhóm; (3) cách chia nhóm có đúng ý công ty không (bản mẫu chia theo tiền tố mã); (4) bộ luật `design-hygiene-v0` có tên chính thức chưa (mã `VS-*`, `PJ-K1-*` trong mẫu chỉ là minh hoạ). Việc kỹ thuật theo sau: `cadguard rules --json` xuất thêm phòng/vị trí/task; bước bàn giao đọc tập luật của task; `stats` tính theo phòng.
 
 ## 9c. Tình trạng triển khai (05/11/2026)
 

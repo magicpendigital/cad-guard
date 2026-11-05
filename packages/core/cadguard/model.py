@@ -99,6 +99,17 @@ class ModelStats(BaseModel):
     # TEXT/MTEXT có ký tự ngoài ASCII (thường là tiếng Việt có dấu, hoặc mã \U+/\M+), đếm theo tên kiểu chữ
     # của đối tượng, gồm cả không gian mô hình, giấy và định nghĩa khối. Mới thêm, mặc định rỗng (tương thích ngược).
     text_non_ascii_by_style: dict[str, int] = Field(default_factory=dict)
+    # Hình học (tuỳ chọn, thêm ở 3D tầng A; mô hình cũ không có các trường này vẫn hợp lệ)
+    pts: list[tuple[float, float]] | None = None  # LINE: 2 điểm; LWPOLYLINE: các đỉnh (xy)
+    insert: tuple[float, float] | None = None  # INSERT: điểm chèn (xy)
+    rotation: float | None = None  # INSERT: độ
+    xscale: float | None = None  # INSERT
+    yscale: float | None = None  # INSERT
+    # Nội dung để LLM đọc (thêm cho studio): chữ, số đo, đường tròn
+    text: str | None = None  # TEXT/MTEXT (cắt tối đa 300 ký tự)
+    pos: tuple[float, float] | None = None  # TEXT/MTEXT: điểm chèn
+    dim_value: float | None = None  # DIMENSION: số đo thật
+    radius: float | None = None  # CIRCLE/ARC (tâm ở `pts[0]`)
 
 
 class ViewportRec(BaseModel):

@@ -13,6 +13,7 @@ from .model import BlockRec, DrawingModel, EntityRec, LayerRec, LayoutRec, Model
 
 Z_TOL = 1e-6
 PROXY_TYPES = {"ACAD_PROXY_ENTITY", "PROXY", "ACAD_PROXY_OBJECT"}
+MAX_PTS = 10000
 POINT_ATTRS = ("start", "end", "center", "insert", "location")
 
 
@@ -69,19 +70,36 @@ def _entity_rec(e, space: str) -> EntityRec:
             a, b = Vec3(e.dxf.start), Vec3(e.dxf.end)
             rec.length = float((b - a).magnitude)
             rec.dup_key = f"LINE|{rec.layer}|{sorted([_pt(a), _pt(b)])}"
+            rec.pts = [_pt(a), _pt(b)]
         elif t == "LWPOLYLINE":
             rec.length, rec.area, rec.closed = _polyline_metrics(e)
+            if len(e) <= MAX_PTS:
+                rec.pts = [(_r(x), _r(y)) for x, y in e.get_points("xy")]
         elif t == "CIRCLE":
             rec.dup_key = f"CIRCLE|{rec.layer}|{_pt(e.dxf.center)}|{_r(e.dxf.radius)}"
+            rec.pts, rec.radius = [_pt(e.dxf.center)], _r(e.dxf.radius)
         elif t == "ARC":
             rec.dup_key = f"ARC|{rec.layer}|{_pt(e.dxf.center)}|{_r(e.dxf.radius)}|{_r(e.dxf.start_angle)}|{_r(e.dxf.end_angle)}"
         elif t in ("TEXT", "MTEXT"):
             rec.text_style = str(e.dxf.get("style", "Standard"))
+            try:
+                rec.text = (e.plain_text() if t == "MTEXT" else str(e.dxf.get("text", "")))[:300]
+                rec.pos = _pt(e.dxf.insert)
+            except Exception:  # noqa: BLE001
+                pass
         elif t == "DIMENSION":
             rec.dim_text = str(e.dxf.get("text", "") or "")
+            try:
+                rec.dim_value = _r(e.get_measurement())
+            except Exception:  # noqa: BLE001
+                pass
         elif t == "INSERT":
             rec.block = str(e.dxf.name)
             rec.attribs = {str(a.dxf.tag): str(a.dxf.get("text", "")) for a in e.attribs}
+            rec.insert = _pt(e.dxf.insert)
+            rec.rotation = _r(e.dxf.get("rotation", 0.0) or 0.0)
+            rec.xscale = _r(e.dxf.get("xscale", 1.0))
+            rec.yscale = _r(e.dxf.get("yscale", 1.0))
     except Exception:  # noqa: BLE001
         pass
     return rec

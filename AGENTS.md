@@ -15,6 +15,8 @@ Windows (PowerShell):
 - Liệt kê luật và tình trạng: `python -m cadguard rules`
 - Số tổng hợp cho MCA: `python -m cadguard stats --json`
 - Sinh lại DXF tổng hợp: `python -m cadguard fixtures fixtures/synthetic`
+- Dựng 3D tất định: `python -m cadguard scene <dxf> --out cảnh.glb|.html|.json [--form form.html] [--supplement x.cgsup.json] [--with khac.dxf]`
+- Studio (web cục bộ + LLM): `python -m cadguard studio [--backend auto|api|cli|none]` (xem `plans/cad-guard-3d.md` mục 3c)
 
 macOS/Linux: thay `.venv\Scripts\` bằng `.venv/bin/`.
 
@@ -38,7 +40,7 @@ macOS/Linux: thay `.venv\Scripts\` bằng `.venv/bin/`.
 
 - Chỉ ghi tệp bằng công cụ sửa tệp của agent hoặc Python `Path.write_text(..., encoding="utf-8")`; không dùng PowerShell `Set-Content`, `Out-File` hay `>` để ghi mã nguồn hoặc tài liệu. `tests/test_source_encoding.py` sẽ chặn chữ hỏng mã hoá.
 - Phát hiện lỗi bằng code tất định. LLM chỉ giải thích/đề xuất, không ra quyết định đúng sai.
-- Test chỉ dùng DXF tổng hợp tạo bằng ezdxf. **Không đọc, không sao chép bản vẽ thật của khách vào repo, vào prompt hay vào worktree của agent.** Bản vẽ thật để ở thư mục ngoài repo (xem `docs/samples-intake.md`).
+- Test chỉ dùng DXF tổng hợp tạo bằng ezdxf. **Không đọc, không sao chép bản vẽ thật của khách vào repo, vào prompt hay vào worktree của agent phát triển.** Ngoại lệ có điều kiện (quyết định 05/11/2026): sản phẩm Studio, chạy trên máy người dùng, được gửi nội dung bản vẽ của phiên đang mở cho LLM sau khi người dùng đồng ý trong phiên đó; vẫn không đưa bản vẽ thật vào repo/test/telemetry. Bản vẽ thật để ở thư mục ngoài repo (xem `docs/samples-intake.md`).
 - Mọi luật có id ổn định, nguồn, mức độ; sửa luật hoặc ngưỡng = tạo phiên bản chuẩn mới (`furniture-v0.1`…), không sửa đè.
 - Không bật `realtime_ok` cho luật chưa đo độ chính xác (P1c).
 - Không sửa bản vẽ nếu thiếu bước xem trước + xác nhận + hoàn tác; chỉnh sửa luôn ghi ra tệp **mới**.
