@@ -19,6 +19,7 @@ from ..agent.workspace import PathDenied, Workspace
 from ..changeset.apply import ID_RE, STORE_DIR, ChangesetError, apply, load_changeset, propose, undo
 from ..changeset.ops import OP_HELP, OpError, parse_ops
 from ..reader_select import DEFAULT_STREAM_THRESHOLD_MB
+from ..contracts import FIXABLE_RULES, NO_FIX_NOTE, audit_report
 from ..runner import audit_model
 from ..standard import CompanyProfile, ProfileError, Standard, find_standards_dir, load_profile, load_standard
 from .geometry import drawing_geometry
@@ -193,16 +194,15 @@ def audit_file(app: AppData, rel: Any, standard: Any, dept: Any = None) -> dict:
     std = app.load_std(standard)
     dep = check_dept(app, dept)
     model = app.model(path)
-    res = audit_model(model, std)
-    counts = Counter(f.severity for f in res.findings)
+    rep = audit_report(model, std)  # hợp đồng cg.audit/1 dùng chung với CLI/trợ lý; ở đây chỉ nhóm để hiển thị
     per_rule: Counter = Counter()
-    for f in res.findings:
+    for f in rep.findings:
         per_rule[f.rule_id] += max(1, int(f.count or 1))
     app.history.record("audit", **audit_entry(app.history.file_id(app.rel(path)), model.file_hash,
-                                               dep["id"] if dep else None, std.name, std.version, counts, per_rule))
+                                               dep["id"] if dep else None, std.name, std.version, rep.counts, per_rule))
     groups: dict[str, list[dict]] = {s: [] for s in SEVERITIES}
     by_rule: dict[tuple[str, str], dict] = {}
-    for f in res.findings[:MAX_FINDINGS]:
+    for f in rep.findings[:MAX_FINDINGS]:
         spec = std.rule(f.rule_id)
         key = (f.severity, f.rule_id)
         g = by_rule.get(key)
@@ -212,17 +212,17 @@ def audit_file(app: AppData, rel: Any, standard: Any, dept: Any = None) -> dict:
             by_rule[key] = g
             groups.setdefault(f.severity, []).append(g)
         g["items"].append({"message": f.message, "layer": f.layer, "layout": f.layout, "count": f.count,
-                           "handles": list(f.handles)[:20]})
+                           "handles": list(f.handles)[:20], "bbox": f.bbox})
         g["count"] += max(1, int(f.count or 1))
     fixable = sorted({g["rule_id"] for gs in groups.values() for g in gs} & set(FIXABLE_RULES))
-    skipped = [{"rule_id": r, "reason": "Lỗi nội bộ của luật." if r in res.internal_errors else reason}
-               for r, reason in res.skipped]
+    skipped = [{"rule_id": s.rule_id, "reason": s.reason} for s in rep.skipped]
+    counts = rep.counts
     return {
         "file": app.rel(path), "standard": std.name, "version": std.version, "profile": std.profile,
-        "counts": {s: counts.get(s, 0) for s in SEVERITIES}, "rules_run": res.rules_run,
+        "schema": rep.schema_id, "counts": {s: counts.get(s, 0) for s in SEVERITIES}, "rules_run": rep.rules_run,
         "groups": [{"severity": s, "label": SEVERITY_VI[s], "rules": groups.get(s, [])} for s in SEVERITIES],
-        "skipped": skipped, "truncated": len(res.findings) > MAX_FINDINGS, "fixable_rules": fixable,
-        "records_capped": bool(model.stats is not None and model.stats.entity_records_truncated),
+        "skipped": skipped, "truncated": len(rep.findings) > MAX_FINDINGS, "fixable_rules": fixable,
+        "records_capped": rep.records_capped,
         "rules_total": len(std.rules), "rules_enabled": sum(1 for r in std.rules if r.enabled and r.implemented),
         "entity_count": len(model.entities), "dxf_version": model.dxf_version, "insunits": model.insunits,
     }
@@ -306,18 +306,7 @@ def rules_table(app: AppData, standard: Any) -> dict:
 
 # ---------- gợi ý thao tác sửa từ phát hiện (docs/changeset.md mục 3) ----------
 
-# Luật có thao tác sửa trong từ vựng cố định. VS-05 không có (bớt IMAGE/WIPEOUT là xoá đối tượng).
-FIXABLE_RULES: dict[str, list[str]] = {
-    "VS-01": ["merge_layers", "purge_unused"],
-    "VS-02": ["purge_unused", "replace_text_style", "replace_dim_style"],
-    "VS-03": ["move_to_layer"],
-    "VS-04": ["set_bylayer"],
-    "VS-06": ["clear_dim_text_override"],
-    "VS-07": ["replace_text_style"],
-}
-NO_FIX_NOTE = {
-    "VS-05": "Bớt WIPEOUT/IMAGE/OLE là xoá đối tượng, ngoài từ vựng thao tác: hãy xử lý trong phần mềm CAD.",
-}
+# Luật có thao tác sửa: một nguồn ở `contracts.FIXABLE_RULES` (dẫn lại ở đây cho mã cũ).
 _VS07_STYLE = re.compile(r"kiểu chữ '([^']+)' với phông")
 _SPECIAL_LAYERS = {"0", "defpoints"}
 

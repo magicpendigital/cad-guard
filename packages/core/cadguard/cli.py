@@ -1,5 +1,5 @@
 """Dòng lệnh: cadguard audit | stats | rules | profile | fixtures | mcp | propose | apply | undo | diff | validate
-| ask | chat | engines | keys | app.
+| ask | chat | engines | keys | app | scene | studio | review | watch | doctor | mcp-config | autocad.
 
 Mã thoát của `audit`: 0 = không có lỗi mức E; 1 = có lỗi mức E; 2 = không đọc được đầu vào/chuẩn.
 `propose`/`validate`: 0 = đạt, 1 = kiểm không đạt, 2 = lỗi/từ chối. `apply`/`undo`: 0 = xong, 2 = từ chối/lỗi.
@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, fixtures, report, telemetry
+from . import __version__, report, telemetry
 from .rules import REGISTRY
 from .runner import audit_model
 from .standard import ProfileError, find_standards_dir, load_profile, load_standard
@@ -150,6 +150,8 @@ def cmd_profile(args: argparse.Namespace) -> int:
 
 
 def cmd_fixtures(args: argparse.Namespace) -> int:
+    from . import fixtures  # nạp lười: kéo ezdxf
+
     paths = fixtures.make_all(Path(args.out_dir))
     for p in paths:
         print(p)
@@ -387,6 +389,65 @@ def cmd_mcp(args: argparse.Namespace) -> int:
     return run_from_args(args)
 
 
+def cmd_watch(args: argparse.Namespace) -> int:
+    from . import watch
+    from .reader_select import check_threshold
+
+    try:
+        check_threshold(args.stream_threshold_mb)
+    except ValueError as exc:
+        print(f"--stream-threshold-mb: {exc}", file=sys.stderr)
+        return 2
+    profile = load_profile(args.profile) if args.profile else None
+    name = args.standard or (profile.standard if profile else DEFAULT_STANDARD)
+    std = load_standard(name, Path(args.standards_dir) if args.standards_dir else None, profile=profile)
+    return watch.run(Path(args.folder), std, interval=args.interval, once=args.once, reader=args.reader,
+                     threshold_mb=args.stream_threshold_mb)
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    from .doctor import run_doctor
+
+    return run_doctor(probe_mcp=args.mcp, as_json=args.json)
+
+
+def cmd_mcp_config(args: argparse.Namespace) -> int:
+    from .mcp_config import render
+
+    try:
+        text, note = render(args.client, Path(args.workspace), profile=Path(args.profile) if args.profile else None,
+                            allow_propose=args.allow_propose)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(text)
+    print(note, file=sys.stderr)
+    return 0
+
+
+def cmd_autocad(args: argparse.Namespace) -> int:
+    import shutil
+
+    src = Path(__file__).with_name("autocad") / "cadguard.lsp"
+    if args.copy_to:
+        dest_dir = Path(args.copy_to)
+        if not dest_dir.is_dir():
+            print("Thư mục đích không tồn tại.", file=sys.stderr)
+            return 2
+        dest = dest_dir / src.name
+        shutil.copyfile(src, dest)
+        src = dest
+        print(f"Đã chép: {dest}")
+    print(f"Tệp AutoLISP: {src}")
+    print("Trong AutoCAD: APPLOAD -> chọn tệp trên (nên đặt thư mục chứa tệp vào Trusted Locations), rồi:\n"
+          "  CGTHUMUC  đặt thư mục làm việc (trùng thư mục của `cadguard watch` / `cadguard mcp --workspace`)\n"
+          "  CGXUAT    xuất bản vẽ đang mở ra DXF (bản sao, DWG giữ nguyên)\n"
+          "  CGTOI     nhập handle do cad-guard/trợ lý báo để phóng tới đối tượng\n"
+          "  CGBAOCAO  mở báo cáo HTML của bản vẽ đang mở\n"
+          "Hướng dẫn và danh sách kiểm tay: docs/autocad.md")
+    return 0
+
+
 def cmd_scene(args: argparse.Namespace) -> int:
     import json
 
@@ -448,8 +509,22 @@ def cmd_studio(args: argparse.Namespace) -> int:
     return 0
 
 
+def _main_mcp(argv: list[str]) -> int:
+    """Đường nhanh cho `cadguard mcp`: không dựng parser của mọi lệnh khác (chúng kéo ezdxf, ứng dụng, Studio), để máy
+    chủ trả `initialize` sớm và không chạm trần thời gian khởi động của máy khách MCP."""
+    from .mcp_server import add_arguments, run_from_args
+
+    p = argparse.ArgumentParser(prog="cadguard mcp", add_help=False,
+                                description="Máy chủ MCP stdio của cad-guard, mặc định CHỈ ĐỌC. Cần SDK: pip install cadguard[agent].")
+    add_arguments(p)
+    return run_from_args(p.parse_args(argv))
+
+
 def main(argv: list[str] | None = None) -> int:
     _utf8()
+    args_in = sys.argv[1:] if argv is None else list(argv)
+    if args_in[:1] == ["mcp"]:
+        return _main_mcp(args_in[1:])
     p = argparse.ArgumentParser(prog="cadguard", description="cad-guard: kiểm tra bản vẽ theo luật tất định")
     p.add_argument("--version", action="version", version=f"cadguard {__version__}")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -583,6 +658,34 @@ def main(argv: list[str] | None = None) -> int:
     rv.add_argument("--public-origin", help="HTTPS .ts.net của Tailscale Serve")
     rv.add_argument("--profile", help="hồ sơ công ty YAML")
     rv.set_defaults(fn=run_review)
+
+    w = sub.add_parser("watch", help="theo dõi thư mục: tự kiểm DXF mới/vừa đổi (vd. từ lệnh CGXUAT trong AutoCAD)",
+                       description="Theo dõi thư mục; mỗi DXF mới hoặc vừa đổi được kiểm và ghi báo cáo vào "
+                       "<thư mục>/.cadguard/reports/<tên>.html|.json. Chỉ đọc DXF, không ghi bản vẽ.")
+    w.add_argument("folder", help="thư mục theo dõi (nên trùng --workspace của `cadguard mcp`)")
+    w.add_argument("--interval", type=float, default=2.0, help="giây giữa hai lần quét (mặc định 2)")
+    w.add_argument("--once", action="store_true", help="kiểm mọi DXF hiện có một lần rồi thoát")
+    w.add_argument("--profile", default=None, help="hồ sơ công ty (YAML cg.company-profile/1)")
+    w.add_argument("--reader", choices=["ezdxf", "stream", "auto"], default="auto")
+    w.add_argument("--stream-threshold-mb", type=float, default=50.0)
+    common(w)
+    w.set_defaults(fn=cmd_watch)
+
+    dr = sub.add_parser("doctor", help="kiểm môi trường: Python, thư viện, SDK MCP, kho khoá, tệp AutoLISP, tốc độ MCP")
+    dr.add_argument("--mcp", action="store_true", help="chạy thử máy chủ MCP thật qua stdio trên DXF tổng hợp và đo thời gian")
+    dr.add_argument("--json", action="store_true")
+    dr.set_defaults(fn=cmd_doctor)
+
+    mc = sub.add_parser("mcp-config", help="in cấu hình MCP cho máy khách (claude-desktop, claude-code, codex); không ghi tệp")
+    mc.add_argument("client", choices=["claude-desktop", "claude-code", "codex"])
+    mc.add_argument("--workspace", required=True, help="thư mục làm việc (DXF của phiên)")
+    mc.add_argument("--profile", default=None, help="hồ sơ công ty (YAML)")
+    mc.add_argument("--allow-propose", action="store_true", help="bật công cụ propose_changeset (mặc định TẮT)")
+    mc.set_defaults(fn=cmd_mcp_config)
+
+    ac = sub.add_parser("autocad", help="đường dẫn và cách nạp cadguard.lsp (CGXUAT, CGTOI, CGBAOCAO) cho AutoCAD")
+    ac.add_argument("--copy-to", metavar="THƯ_MỤC", help="chép cadguard.lsp vào thư mục này")
+    ac.set_defaults(fn=cmd_autocad)
 
     args = p.parse_args(argv)
     try:

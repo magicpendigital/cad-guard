@@ -1,5 +1,7 @@
 # cad-guard — Đánh giá hướng mở rộng: ảnh/phác thảo → bản vẽ → kiểm → 3D/render → lập trình sản xuất
 
+> Tham chiếu. Trạng thái hiện tại và lộ trình chạy thử: xem `PLAN.md` ở gốc repo (cập nhật 07/11/2026).
+
 Trạng thái: **ĐÁNH GIÁ, chờ CEO đọc** (05/11/2026). Bổ sung cho `plans/cad-guard.md`, `plans/cad-guard-direction.md` (hướng theo tệp, DXF chung, đã duyệt) và `plans/cad-guard-agent.md` (đề xuất agent). Chưa viết code, chưa thay đổi lộ trình đã duyệt.
 Cách đọc nguồn: mục 7 tách rõ nguồn **đã kiểm** (trang chính thức, bài nghiên cứu) và nguồn **thứ cấp** (blog, tin tuyển dụng, bài PR của hãng). Các số liệu thị trường của công ty nghiên cứu thị trường chỉ để tham khảo thứ tự độ lớn.
 

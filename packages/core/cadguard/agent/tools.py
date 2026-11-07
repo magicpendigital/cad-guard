@@ -10,15 +10,13 @@ import json
 from pathlib import Path
 import re
 
-from ..dxf_stream import DEFAULT_MAX_ENTITY_RECORDS
-from ..reader_select import DEFAULT_STREAM_THRESHOLD_MB, choose_reader, read_with
-from ..runner import audit_model
+from ..limits import DEFAULT_MAX_ENTITY_RECORDS, DEFAULT_STREAM_THRESHOLD_MB
+from ..contracts import audit_report
 from ..standard import CompanyProfile, find_standards_dir, load_standard
 from .anonymize import Anonymizer
 from .workspace import Workspace
 
-MAX_QUERY_RECORDS = 500
-MAX_QUERY_BYTES = 65536
+from .registry import MAX_QUERY_BYTES, MAX_QUERY_RECORDS  # một nguồn với mô tả công cụ
 # Trường `EntityRec` mà query_model trả về khi bật ẩn danh (Bậc 1): danh sách TRẮNG, nên trường mới thêm vào mô hình
 # không tự lọt ra cho trợ lý. Không có nội dung chữ (`text`, `attribs`, `dim_text`), không có toạ độ (`pts`, `pos`,
 # `insert`, `dup_key` chứa toạ độ); chỉ số liệu vô hướng. Tắt ẩn danh (--no-anonymize) thì trả mọi trường như trước.
@@ -63,6 +61,8 @@ def _safe(fn):
 
 @lru_cache(maxsize=8)
 def _cached_model(path: Path, mtime: int, size: int, reader: str, max_entity_records: int | None):
+    from ..reader_select import read_with
+
     # Khoá đệm gồm bộ đọc và trần bản ghi: ezdxf và stream (hoặc hai trần khác nhau) không dùng chung mục.
     if reader == "stream":
         return read_with(path, "stream", max_entity_records)
@@ -75,6 +75,8 @@ def load_model(path: Path, stream_threshold_mb: float | None = None, max_entity_
     Bộ đọc chọn bằng `reader_select.choose_reader` (như `cadguard audit --reader auto`):
     `stream_threshold_mb` None/âm = luôn ezdxf, 0 = luôn theo dòng, dương = theo dòng khi tệp >= ngưỡng MiB.
     """
+    from ..reader_select import choose_reader  # nạp lười: ezdxf chỉ khi đọc bản vẽ thật
+
     try:
         path = Path(path)
         stat = path.stat()
@@ -142,13 +144,21 @@ def audit(ctx: ToolContext, file: str, standard: str = "furniture-v0") -> dict:
     """Kiểm tra tệp hoặc mã phiên theo chuẩn; giới hạn số phát hiện theo cấu hình."""
     std = _standard(ctx, standard)
     path, model = _model(ctx, file)
-    result = audit_model(model, std)
+    rep = audit_report(model, std)  # hợp đồng cg.audit/1 dùng chung với CLI/App; ở đây chỉ ẩn danh và cắt bớt
     names = _names(model)
     anon = ctx.anonymizer
-    findings = [{"rule_id": f.rule_id, "severity": f.severity, "message": anon.scrub_text(f.message, names), "layout": anon.token("layout", f.layout) if f.layout else None, "layer": anon.token("layer", f.layer) if f.layer else None, "count": f.count, "handles": f.handles} for f in result.findings[:max(0, ctx.max_findings)]]
-    counts = {s: sum(f.severity == s for f in result.findings) for s in ("E", "W", "I")}
-    skipped = [{"rule_id": rule, "reason": ("Lỗi nội bộ của luật." if rule in result.internal_errors else anon.scrub_text(reason, names))} for rule, reason in result.skipped]
-    return {"file": _file_id(ctx, path), "standard": std.name, "version": std.version, "profile": std.profile, "counts": counts, "rules_run": result.rules_run, "skipped": skipped, "findings": findings, "truncated": len(result.findings) > max(0, ctx.max_findings), "records_capped": _records_capped(model)}
+    limit = max(0, ctx.max_findings)
+    findings = [{"rule_id": f.rule_id, "severity": f.severity, "message": anon.scrub_text(f.message, names),
+                 "layout": anon.token("layout", f.layout) if f.layout else None,
+                 "layer": anon.token("layer", f.layer) if f.layer else None, "count": f.count, "handles": f.handles,
+                 "fix_ops": f.fix_ops}  # không có bbox: toạ độ ngoài Bậc 1
+                for f in rep.findings[:limit]]
+    skipped = [{"rule_id": s.rule_id, "reason": s.reason if s.internal_error else anon.scrub_text(s.reason, names)}
+               for s in rep.skipped]
+    return {"schema": rep.schema_id, "file": _file_id(ctx, path), "standard": rep.standard, "version": rep.version,
+            "profile": std.profile, "counts": rep.counts, "rules_run": rep.rules_run, "skipped": skipped,
+            "findings": findings, "fixable_rules": rep.fixable_rules, "truncated": len(rep.findings) > limit,
+            "records_capped": rep.records_capped}
 
 
 @_safe

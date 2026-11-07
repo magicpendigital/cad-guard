@@ -18,24 +18,21 @@ Chạy: `python -m cadguard mcp --workspace <thư mục>`.
 """
 
 import argparse
-import json
 import os
-import re
 import sys
 from io import TextIOWrapper
 from pathlib import Path
 
-from .agent import tools
+from .agent import registry, tools
 from .agent.anonymize import Anonymizer
 from .agent.workspace import PathDenied, Workspace
-from .dxf_stream import DEFAULT_MAX_ENTITY_RECORDS
-from .reader_select import DEFAULT_STREAM_THRESHOLD_MB, check_threshold
+from .limits import DEFAULT_MAX_ENTITY_RECORDS, DEFAULT_STREAM_THRESHOLD_MB, check_threshold
 from .standard import ProfileError, find_standards_dir, load_profile
 
 SERVER_NAME = "cad-guard"
 DEFAULT_STANDARD = "furniture-v0"
-TOOL_NAMES = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff")
-PROPOSE_TOOL = "propose_changeset"  # chỉ có khi --allow-propose
+TOOL_NAMES = registry.READ_TOOLS
+PROPOSE_TOOL = registry.PROPOSE_TOOL  # chỉ có khi --allow-propose
 
 INSTALL_HINT = (
     "Thiếu SDK MCP cho Python (gói `mcp`), nên chưa chạy được máy chủ MCP của cad-guard.\n"
@@ -43,8 +40,8 @@ INSTALL_HINT = (
     "  pip install cadguard[agent]\n"
     "  python scripts/test.py --extras agent      (trong repo cad-guard, venv dùng chung)\n"
 )
-PATH_DENIED_MSG = "Đường dẫn không được phép: chỉ nhận tệp .dxf nằm trong thư mục làm việc, viết dạng tương đối."
-GENERIC_ERROR_MSG = "Không thể thực hiện yêu cầu; hãy kiểm tra dữ liệu và đường dẫn."
+PATH_DENIED_MSG = registry.PATH_DENIED_MSG
+GENERIC_ERROR_MSG = registry.GENERIC_ERROR_MSG
 
 INSTRUCTIONS = (
     "Công cụ CHỈ ĐỌC của cad-guard để kiểm tra bản vẽ nội thất DXF theo luật tất định: list_drawings, audit, "
@@ -130,9 +127,9 @@ def _err(msg: str) -> None:
 def _import_sdk():
     """Import SDK lười. Trả None nếu thiếu."""
     try:
-        from mcp.server.fastmcp import FastMCP  # noqa: F401
+        from mcp.server.lowlevel import Server  # noqa: F401
         from mcp.server.stdio import stdio_server  # noqa: F401
-        from mcp.types import CallToolResult, TextContent, ToolAnnotations  # noqa: F401
+        from mcp.types import CallToolResult, TextContent, Tool, ToolAnnotations  # noqa: F401
     except ImportError:
         return None
     import mcp
@@ -141,161 +138,39 @@ def _import_sdk():
 
 
 def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0", allow_propose: bool = False):
-    """Tạo FastMCP: 6 công cụ chỉ đọc, thêm propose_changeset khi `allow_propose`. Không bao giờ có apply. Cần SDK."""
-    from typing import Annotated
+    """Tạo máy chủ MCP cấp thấp từ sổ khai báo `agent.registry`: 6 công cụ chỉ đọc, thêm propose_changeset khi
+    `allow_propose`. Không bao giờ có apply. Tham số kiểm bằng `registry.check_args` (thông điệp tiếng Việt, không lặp
+    lại giá trị), giống hệt engine API. Công cụ chạy trong luồng phụ, tuần tự (khoá) vì bộ ẩn danh giữ trạng thái phiên."""
+    import threading
 
-    from mcp.server.fastmcp import FastMCP
-    from mcp.types import CallToolResult, TextContent, ToolAnnotations
-    from pydantic import BaseModel, ConfigDict, Field
+    import anyio
+    from mcp.server.lowlevel import Server
+    from mcp.types import CallToolResult, TextContent, Tool, ToolAnnotations
 
-    server = FastMCP(SERVER_NAME, instructions=INSTRUCTIONS, log_level="WARNING")
+    from . import __version__
+
+    opts = registry.options_for(ctx, default_standard, allow_propose=allow_propose)
+    server = Server(SERVER_NAME, version=__version__, instructions=INSTRUCTIONS)
     read_only = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+    propose = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
+    listing = [Tool(name=s["name"], description=s["description"], inputSchema=s["schema"],
+                    annotations=read_only if s["read_only"] else propose) for s in registry.specs(opts)]
+    lock = threading.Lock()
 
-    def call(fn, *args, **kwargs) -> CallToolResult:
-        try:
-            data = fn(ctx, *args, **kwargs)
-        except tools.ToolError as exc:  # thông điệp đã an toàn (tiếng Việt, không đường dẫn)
-            return CallToolResult(content=[TextContent(type="text", text=str(exc))], isError=True)
-        except PathDenied:
-            return CallToolResult(content=[TextContent(type="text", text=PATH_DENIED_MSG)], isError=True)
-        except Exception:  # noqa: BLE001 — không lộ chi tiết nội bộ
-            return CallToolResult(content=[TextContent(type="text", text=GENERIC_ERROR_MSG)], isError=True)
-        text = json.dumps(data, ensure_ascii=False)
-        return CallToolResult(content=[TextContent(type="text", text=text)], structuredContent=data)
+    @server.list_tools()
+    async def _list() -> list:
+        return listing
 
-    FileArg = Annotated[
-        str,
-        Field(description="Tệp .dxf: đường dẫn tương đối trong thư mục làm việc (vd. 'a/b.dxf') hoặc mã tệp từ list_drawings."),
-    ]
-    available = sorted(
-        p.stem for p in Path(ctx.standards_dir).glob("*.yaml") if re.fullmatch(r"[a-z0-9][a-z0-9.\-]*", p.stem) and not p.stem.startswith("company-profile")
-    )
-    profile_note = (
-        f" Hồ sơ công ty '{ctx.profile.name}' {ctx.profile.version} được áp khi chuẩn là {ctx.profile.standard}."
-        if ctx.profile is not None
-        else ""
-    )
-    StandardArg = Annotated[
-        str,
-        Field(
-            description=f"Tên chuẩn (mặc định {default_standard}); có: {', '.join(available) or default_standard}.{profile_note}",
-            pattern=r"^[a-z0-9][a-z0-9.\-]*$",
-        ),
-    ]
-    StrOrList = str | list[str] | None
+    def _run(name: str, arguments: dict):
+        with lock:
+            return registry.call(ctx, name, arguments, opts)
 
-    class QueryFilter(BaseModel):
-        """Bộ lọc đối tượng; các khoá kết hợp theo AND, danh sách trong một khoá theo OR."""
-
-        model_config = ConfigDict(extra="forbid")
-        layer: StrOrList = Field(None, description="Tên layer hoặc mã layer (L_…); một giá trị hoặc danh sách.")
-        type: StrOrList = Field(None, description="Loại đối tượng DXF, vd. LINE, LWPOLYLINE, TEXT, INSERT, DIMENSION.")
-        space: StrOrList = Field(None, description="Không gian: 'Model' hoặc tên/mã layout (Y_…).")
-
-    @server.tool(
-        name="list_drawings",
-        description=f"Liệt kê tệp DXF trong thư mục làm việc (tối đa {ctx.max_drawings} mục; 'truncated' báo bị cắt). "
-        "Trả mã tệp (id) dùng cho các công cụ khác, và kích thước.",
-        annotations=read_only,
-        structured_output=False,
-    )
-    def list_drawings(
-        dir: Annotated[str, Field(description="Thư mục con tương đối trong thư mục làm việc; '.' là gốc.")] = ".",
-    ) -> CallToolResult:
-        return call(tools.list_drawings, dir)
-
-    @server.tool(
-        name="audit",
-        description="Kiểm tra một bản vẽ theo chuẩn bằng luật tất định (vd. furniture-v0, hoặc design-hygiene-v0 cho vệ sinh bản vẽ). "
-        "'profile' ghi tên/phiên bản hồ sơ công ty đã áp (null nếu không áp). Trả số lỗi theo mức (E/W/I), "
-        f"luật đã chạy/bỏ qua và tối đa {ctx.max_findings} phát hiện. 'records_capped' = true nghĩa là danh sách đối tượng "
-        "bị cắt ở trần bộ nhớ (tệp rất lớn), phát hiện có thể thiếu.",
-        annotations=read_only,
-        structured_output=False,
-    )
-    def audit(file: FileArg, standard: StandardArg = default_standard) -> CallToolResult:
-        return call(tools.audit, file, standard)
-
-    @server.tool(
-        name="explain_rule",
-        description="Giải thích một mã luật (vd. LY-01): tiêu đề, mức độ, loại, nguồn, tham số chung và đoạn mô tả trong chuẩn.",
-        annotations=read_only,
-        structured_output=False,
-    )
-    def explain_rule(
-        rule_id: Annotated[str, Field(description="Mã luật, vd. 'LY-01'.", min_length=1, max_length=32)],
-        standard: StandardArg = default_standard,
-    ) -> CallToolResult:
-        return call(tools.explain_rule, rule_id, standard)
-
-    @server.tool(
-        name="get_model_summary",
-        description="Tóm tắt Drawing Model của một bản vẽ: số layer/khối, đối tượng theo loại và không gian, "
-        "layout, kiểu chữ, đơn vị, phiên bản DXF (JSON tối đa 16 KB). 'records_capped' = true: số đếm đối tượng bị cắt ở trần bộ nhớ.",
-        annotations=read_only,
-        structured_output=False,
-    )
-    def get_model_summary(file: FileArg) -> CallToolResult:
-        return call(tools.get_model_summary, file)
-
-    @server.tool(
-        name="query_model",
-        description=f"Lọc đối tượng trong bản vẽ theo layer/loại/không gian, có phân trang: mỗi trang tối đa "
-        f"{tools.MAX_QUERY_RECORDS} mục và {tools.MAX_QUERY_BYTES // 1024} KB; còn nữa thì 'next_cursor' khác null, "
-        "gửi lại nguyên bộ lọc cùng cursor để lấy trang sau. 'records_capped' = true: total_matched bị cắt ở trần bộ nhớ.",
-        annotations=read_only,
-        structured_output=False,
-    )
-    def query_model(
-        file: FileArg,
-        filter: Annotated[QueryFilter | None, Field(description="Bộ lọc; bỏ trống = mọi đối tượng.")] = None,
-        limit: Annotated[
-            int, Field(ge=1, le=tools.MAX_QUERY_RECORDS, description=f"Số mục tối đa mỗi trang (1–{tools.MAX_QUERY_RECORDS}).")
-        ] = 100,
-        cursor: Annotated[str | None, Field(description="Giá trị 'next_cursor' của trang trước; bỏ trống ở trang đầu.")] = None,
-    ) -> CallToolResult:
-        flt = filter.model_dump(exclude_none=True) if filter is not None else {}
-        return call(tools.query_model, file, flt, limit, cursor)
-
-    @server.tool(
-        name="diff",
-        description="So hai bản vẽ DXF trong thư mục làm việc theo handle (như git diff): đối tượng thêm/xoá/đổi "
-        "(thuộc tính nào), định nghĩa layer/kiểu chữ/kiểu kích thước/khối thêm/xoá, tóm tắt số liệu. Đã ẩn danh; "
-        "chữ trong bản vẽ bị che. JSON tối đa 64 KB, 'truncated' báo danh sách bị cắt (số tổng trong 'summary' luôn đủ).",
-        annotations=read_only,
-        structured_output=False,
-    )
-    def diff(
-        a: Annotated[str, Field(description="Tệp trước (thường là bản gốc): đường dẫn tương đối hoặc mã tệp.")],
-        b: Annotated[str, Field(description="Tệp sau (vd. tệp .cg-<mã>.dxf do người dùng áp dụng).")],
-        max_items: Annotated[int, Field(ge=1, le=500, description="Số mục tối đa mỗi danh sách (1–500).")] = 100,
-    ) -> CallToolResult:
-        return call(tools.diff, a, b, max_items)
-
-    if allow_propose:
-        from .changeset.ops import OP_HELP
-
-        propose_ann = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
-        ops_doc = "; ".join(f"{k}: {v}" for k, v in OP_HELP.items())
-
-        @server.tool(
-            name="propose_changeset",
-            description="ĐỀ XUẤT sửa bản vẽ bằng từ vựng thao tác cố định, CHẠY KHÔ trên bản sao trong bộ nhớ: kiểm schema, "
-            "đếm đối tượng bị ảnh hưởng, dự báo luật hết/xuất hiện (rules_regressed phải = 0), trả xem trước. Lưu changeset "
-            "JSON vào thư mục phiên; KHÔNG ghi DXF và KHÔNG áp dụng — người dùng tự áp bằng `cadguard apply <changeset_id>`. "
-            "Không có thao tác xoá đối tượng hình học. Tên layer/kiểu chữ dùng mã phiên (L_…, S_…, D_…, Y_…) như các công cụ khác. "
-            f"Thao tác: {ops_doc}. Bộ lọc 'filter': {{layers, exclude_layers, types, spaces}} (AND giữa khoá, OR trong danh sách).",
-            annotations=propose_ann,
-            structured_output=False,
-        )
-        def propose_changeset(
-            file: FileArg,
-            ops: Annotated[list[dict], Field(description="Danh sách thao tác, mỗi mục có 'op' và tham số; tối đa 50.", min_length=1, max_length=50)],
-            standard: Annotated[str, Field(description="Chuẩn dùng để dự báo luật (mặc định design-hygiene-v0).",
-                                           pattern=r"^[a-z0-9][a-z0-9.\-]*$")] = "design-hygiene-v0",
-            protected_layers: Annotated[list[str] | None, Field(description="Layer bảo vệ thêm (tên/mã L_…); thao tác chạm bị từ chối.")] = None,
-        ) -> CallToolResult:
-            return call(tools.propose_changeset, file, ops, standard, protected_layers)
+    @server.call_tool(validate_input=False)  # kiểm bằng registry.check_args: thông điệp tiếng Việt, không lộ giá trị
+    async def _call(name: str, arguments: dict) -> CallToolResult:
+        res = await anyio.to_thread.run_sync(_run, name, arguments)
+        if not res.ok:
+            return CallToolResult(content=[TextContent(type="text", text=res.error)], isError=True)
+        return CallToolResult(content=[TextContent(type="text", text=res.text())], structuredContent=res.data)
 
     return server
 
@@ -322,8 +197,7 @@ def serve(server) -> None:
 
     async def run() -> None:
         async with stdio_server(stdin=anyio.wrap_file(stdin), stdout=anyio.wrap_file(out)) as (read, write):
-            low = server._mcp_server  # SDK 1.x: máy chủ cấp thấp của FastMCP
-            await low.run(read, write, low.create_initialization_options())
+            await server.run(read, write, server.create_initialization_options())
 
     anyio.run(run)
 
@@ -391,6 +265,10 @@ def run_from_args(args: argparse.Namespace) -> int:
         )
     allow_propose = bool(getattr(args, "allow_propose", False))
     server = build_server(ctx, standard, allow_propose=allow_propose)
+    # Nạp bộ đọc DXF (ezdxf) TRƯỚC khi đọc stdin: trên Windows, import lần đầu trong luồng phụ khi một luồng khác đang
+    # chặn đọc ống stdin có thể treo cả tiến trình (đã gặp khi để nạp lười tới lượt gọi công cụ đầu tiên).
+    import cadguard.reader_select  # noqa: F401
+
     mode = "chỉ đọc + đề xuất changeset (không áp dụng)" if allow_propose else "chỉ đọc"
     _err(f"cad-guard MCP: đang phục vụ qua stdio ({mode}). Dừng bằng cách đóng stdin hoặc Ctrl+C.")
     try:

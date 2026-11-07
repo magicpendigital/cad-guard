@@ -77,7 +77,8 @@ $py = $venvPy
 
 # --- 3. Cài lõi + thư viện ---
 & $py -m pip install --upgrade pip | Out-Null
-& $py -m pip install -e ".[dev]"
+# [agent] = SDK MCP cho `cadguard mcp` (trợ lý AI); [keyring] = kho khoá hệ điều hành cho khoá API.
+& $py -m pip install -e ".[dev,agent,keyring]"
 if ($LASTEXITCODE -ne 0) {
   Write-Host 'Cài thư viện thất bại; xem lỗi ở trên. Dừng trước khi chạy test.' -ForegroundColor Red
   Write-Host 'Nếu thấy "Microsoft Visual C++ 14.0 or greater is required": bạn đang dùng Python quá mới. Cài Python 3.13 rồi chạy lại.' -ForegroundColor Yellow

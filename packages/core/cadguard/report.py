@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import html
 import json
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__
+from .contracts import from_result
 from .runner import AuditResult
 from .standard import Standard
 
@@ -16,23 +16,22 @@ SEV_LABEL = {"E": "Lỗi", "W": "Cảnh báo", "I": "Thông tin"}
 
 
 def build_report(standard: Standard, items: list[tuple[str, str, AuditResult]]) -> dict:
-    """items: (tên tệp hiển thị, băm nội dung, kết quả)."""
+    """items: (tên tệp hiển thị, băm nội dung, kết quả). Số đếm/phát hiện lấy từ hợp đồng `cg.audit/1`
+    (`contracts.from_result`), cùng nguồn với App và trợ lý."""
     files = []
     totals = {"E": 0, "W": 0, "I": 0}
     for name, fhash, res in items:
-        counts = {"E": 0, "W": 0, "I": 0}
-        for f in res.findings:
-            counts[f.severity] = counts.get(f.severity, 0) + 1
-        for k, v in counts.items():
+        rep = from_result(res, standard)
+        for k, v in rep.counts.items():
             totals[k] += v
         files.append(
             {
                 "file": name,
                 "file_hash": fhash,
-                "rules_run": res.rules_run,
-                "counts": counts,
-                "findings": [asdict(f) for f in res.findings],
-                "skipped": [{"rule": r, "reason": why} for r, why in res.skipped],
+                "rules_run": rep.rules_run,
+                "counts": dict(rep.counts),
+                "findings": [f.model_dump(exclude={"bbox"}) for f in rep.findings],
+                "skipped": [{"rule": s.rule_id, "reason": s.reason} for s in rep.skipped],
             }
         )
     return {
@@ -89,7 +88,8 @@ def render_html(report: dict) -> str:
                 if it.get("layer"):
                     where.append(f"layer {it['layer']}")
                 if it.get("handles"):
-                    where.append("handle " + ", ".join(it["handles"]))
+                    # Gõ lệnh này trong AutoCAD (cadguard.lsp) để phóng tới đối tượng.
+                    where.append("handle " + ", ".join(it["handles"]) + " — AutoCAD: CGTOI " + ",".join(it["handles"]))
                 parts.append(
                     f"<tr><td><code>{e(it['rule_id'])}</code></td><td class='{e(it['severity'])}'>{SEV_LABEL.get(it['severity'], it['severity'])}</td>"
                     f"<td>{e(it['message'])}</td><td class='mut'>{e(' · '.join(where))}</td></tr>"

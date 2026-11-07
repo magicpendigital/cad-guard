@@ -8,6 +8,7 @@ Thư mục này có mẫu cấu hình để một CLI agent có sẵn gọi máy
 
 | CLI | Tệp mẫu | Đặt ở đâu | Độ chắc về định dạng |
 | --- | --- | --- | --- |
+| Claude Desktop | `claude-desktop/claude_desktop_config.json` | Settings → Developer → Edit Config (gộp vào `mcpServers`), rồi thoát hẳn và mở lại | **Chưa kiểm** trên Claude Desktop. Nên in cấu hình đúng máy bằng `python -m cadguard mcp-config claude-desktop --workspace <THU_MUC_LAM_VIEC>`. Dùng cho vòng chạy thử với AutoCAD: `docs/autocad.md` |
 | Claude Code | `claude-code/.mcp.json` | gốc thư mục làm việc của phiên | **Đã kiểm** với Claude Code 2.1.318 (`claude mcp list` báo `✔ Connected` sau khi tin cậy thư mục). Hai máy chủ: `cad-guard` và `cad-guard-ho-so` (có `--profile`) |
 | Claude Code (quyền) | `claude-code/.claude/settings.json` | `.claude/settings.json` trong thư mục làm việc (giữ nguyên đường dẫn) | **Đã kiểm** tên công cụ bằng `claude doctor`, allowlist máy chủ bằng `claude mcp list`. Chưa kiểm trong phiên có gọi mô hình. Chi tiết: `docs/integrations/claude-code.md` |
 | Codex CLI (khuyến nghị) | `codex/cadguard.config.toml` | `$CODEX_HOME/cadguard.config.toml` (mặc định `~/.codex/`), mở bằng `codex -p cadguard -C <THU_MUC_LAM_VIEC>` | **Đã kiểm với codex-cli 0.165.0** (04/11/2026): hồ sơ cấu hình gồm máy chủ MCP + tắt shell/xem ảnh/web + read-only. Chi tiết và nguồn: `docs/integrations/codex.md` |

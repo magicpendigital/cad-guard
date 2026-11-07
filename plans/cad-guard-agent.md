@@ -1,5 +1,7 @@
 # cad-guard thành "Coding Agent cho nội thất" — research, phân tích, đánh giá
 
+> Tham chiếu. Trạng thái hiện tại và lộ trình chạy thử: xem `PLAN.md` ở gốc repo (cập nhật 07/11/2026).
+
 Trạng thái: **ĐỀ XUẤT, chờ CEO duyệt** (04/11/2026). Bổ sung cho `plans/cad-guard.md` (Tầng 2, Tầng 3) và `plans/cad-guard-direction.md` (hướng theo tệp, DXF chung). Chưa viết code.
 Cách đọc nguồn: mục 2 tách rõ **đã kiểm trên tài liệu chính thức** và **chỉ thấy ở nguồn thứ cấp (blog/diễn đàn), chưa kiểm**. Nhiều thứ trong mảng này đổi theo tháng; trước khi cam kết với khách phải kiểm lại.
 

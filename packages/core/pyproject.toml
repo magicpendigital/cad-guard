@@ -32,6 +32,8 @@ include = ["cadguard*"]
 
 [tool.setuptools.package-data]
 # Giao diện cục bộ `cadguard app`: tệp tĩnh + cấu hình phòng.
+# Cầu nối AutoCAD theo tệp (CGXUAT/CGTOI…): `cadguard autocad` in đường dẫn.
+"cadguard" = ["autocad/*.lsp"]
 "cadguard.app" = ["departments.json", "static/*.html", "static/*.css", "static/*.js"]
 "cadguard.review" = ["static/*.html", "static/*.css", "static/*.js"]
 

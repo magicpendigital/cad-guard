@@ -7,6 +7,7 @@ from xml.etree import ElementTree as ET
 import ezdxf
 import pytest
 from cadguard.fixtures import make_preview_lobby
+from cadguard.app import preview as preview_mod
 from cadguard.app.preview import PreviewManager, PreviewError, render_preview, isolated_render, sanitize_svg, svg_box
 from cadguard.dxf_reader import read_dxf
 from cadguard.runner import audit_model
@@ -70,9 +71,13 @@ def test_cache_changes_with_layout_content_and_fonts(tmp_path):
 def test_hard_timeout_and_large_file_fallback(tmp_path):
     p = tmp_path / "a.dxf"
     make_preview_lobby(p)
+    data = p.read_bytes()
+    with pytest.raises(PreviewError, match="thời gian"):
+        isolated_render(data, .05, "Model")
+    # Đo riêng phần dừng tiến trình (không gồm thời gian chờ khoá dùng chung mà bản dựng nền của test khác có thể giữ).
     start = time.monotonic()
     with pytest.raises(PreviewError, match="thời gian"):
-        isolated_render(p.read_bytes(), .05, "Model")
+        preview_mod._isolated_render(data, .05, "Model")
     assert time.monotonic() - start < 5
     assert PreviewManager(tmp_path, max_mb=.001).status(p)["status"] == "fallback"
 

@@ -1,5 +1,7 @@
 # Kế hoạch dự án cad-guard — trợ lý kiểm tra và chuẩn hoá bản vẽ cho doanh nghiệp sản xuất nội thất
 
+> Tham chiếu. Trạng thái hiện tại và lộ trình chạy thử: xem `PLAN.md` ở gốc repo (cập nhật 07/11/2026).
+
 Trạng thái: **ĐỀ XUẤT, chờ CEO duyệt** (02/11/2026). CEO đã đồng ý hướng: làm ở **project riêng**, MCA chỉ giữ giá trị cốt lõi; chuẩn trình bày lấy từ nghiên cứu ngành làm bản v0 rồi cải tiến theo dữ liệu thật.
 Tên `cad-guard` là tên tạm. Đây là sản phẩm độc lập, MCA là đội phát triển và là nơi đo tăng trưởng (xem mục 7).
 Đọc cùng: `plans/cad-guard-standard-v0.md` (chuẩn trình bày + 58 luật), `guides/cad-guard-bootstrap.md` (tạo dự án, đăng ký MCA, nối `report_signal`), `plans/provider-abilities.md` (Phase Y), `plans/mcp-declare.md` (Phase J).

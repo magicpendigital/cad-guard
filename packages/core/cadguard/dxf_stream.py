@@ -31,9 +31,9 @@ from ezdxf.math import OCS, Vec3
 from ezdxf.tools.text import escape_dxf_line_endings, fast_plain_mtext
 
 from .dxf_reader import MAX_PTS, TEXT_MAX, TEXT_TYPES, _block_depth, _font_kind, is_non_ascii_text
+from .limits import DEFAULT_MAX_ENTITY_RECORDS  # một nguồn, module nhẹ
 from .model import BlockRec, DrawingModel, EntityRec, LayerRec, LayoutRec, ModelStats, SpaceStats, StyleRec, ViewportRec
 
-DEFAULT_MAX_ENTITY_RECORDS = 300_000  # ~1,2 KB/bản ghi -> khoảng 350 MB ở trần
 HASH_CHUNK = 1 << 20
 HEADER_SCAN_MAX_LINES = 200_000
 BINARY_SENTINEL = b"AutoCAD Binary DXF"

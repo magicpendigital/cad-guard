@@ -634,3 +634,41 @@ def test_propose_absent_without_flag(hyg_env):
     res, _ = _session(hyg_env, body, errlog_name="server_noprop.err")
     assert res.isError
     assert not (hyg_env["ws"] / ".cadguard" / "changesets").exists() or len(list((hyg_env["ws"] / ".cadguard" / "changesets").glob("*.json"))) == 2
+
+
+# ---------- một nguồn khai báo: MCP và engine API trùng nhau ----------
+
+
+@needs_sdk
+def test_mcp_tools_identical_to_engine_toolbox(ws_env):
+    """Tên, mô tả, schema và cờ chỉ đọc của MCP phải trùng hệt `ToolBox` của engine API (cùng `agent.registry`)."""
+    from cadguard.assistant.toolspec import ToolBox
+
+    async def body(s):
+        return (await s.list_tools()).tools
+
+    for args, allow in (((), False), (("--allow-propose",), True)):
+        tools, _ = _session(ws_env, body, args=args, errlog_name=f"server_parity_{allow}.err")
+        box = ToolBox(ws_env["ws"], allow_propose=allow)
+        mcp_view = [(t.name, t.description, t.inputSchema, t.annotations.readOnlyHint) for t in tools]
+        api_view = [(s["name"], s["description"], s["schema"], s["read_only"]) for s in box.specs()]
+        assert mcp_view == api_view
+        assert not {"apply_changeset", "apply", "undo"} & {t.name for t in tools}
+
+
+@needs_sdk
+def test_bad_arguments_rejected_in_vietnamese_without_echo(ws_env):
+    async def body(s):
+        return [
+            await s.call_tool("audit", {"file": "ok_sheet.dxf", "standard": "BI_MAT/../x"}),
+            await s.call_tool("audit", {"file": "ok_sheet.dxf", "la": "BI_MAT"}),
+            await s.call_tool("audit", {}),
+            await s.call_tool("query_model", {"file": "ok_sheet.dxf", "limit": "BI_MAT"}),
+        ]
+
+    results, _ = _session(ws_env, body, errlog_name="server_badargs.err")
+    msgs = [_error_text(r) for r in results]
+    assert "sai định dạng" in msgs[0] and "Tham số lạ" in msgs[1] and "Thiếu tham số bắt buộc: file" in msgs[2]
+    assert "phải là integer" in msgs[3]
+    for m in msgs:
+        assert "BI_MAT" not in m and "validation" not in m.lower()

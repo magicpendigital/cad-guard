@@ -1,5 +1,7 @@
 # cad-guard — Dựng 3D và ảnh phối cảnh từ bản vẽ DXF
 
+> Tham chiếu. Trạng thái hiện tại và lộ trình chạy thử: xem `PLAN.md` ở gốc repo (cập nhật 07/11/2026).
+
 Trạng thái: **ĐỀ XUẤT (04/11/2026), chờ CEO duyệt các quyết định ở mục 6. Chưa viết code.**
 Bổ sung cho `plans/cad-guard-direction.md` (hướng theo tệp, DXF chung). Không thay đổi hướng đã duyệt; đây là một tầng mới nằm sau tầng kiểm luật.
 

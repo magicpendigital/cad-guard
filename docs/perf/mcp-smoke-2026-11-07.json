@@ -1,0 +1,49 @@
+{
+  "schema": "cg.mcp-smoke/1",
+  "measured_at": "2026-11-07T10:58:55+00:00",
+  "python": "3.13.9",
+  "os": "Windows",
+  "metrics": {
+    "calls": 100,
+    "errors": 0,
+    "max_result_chars": 18961,
+    "initialize_s": 1.5914155000355095,
+    "startup_s": 1.593665599997621,
+    "tools": [
+      "list_drawings",
+      "audit",
+      "explain_rule",
+      "get_model_summary",
+      "query_model",
+      "diff"
+    ],
+    "drawings": 15,
+    "audit_cold_s": 0.08556739997584373,
+    "audit_warm_s": 0.04160390002653003,
+    "call_p50_s": 0.039187799964565784,
+    "call_p95_s": 0.06726649997290224,
+    "est_tokens": 6321
+  },
+  "criteria": [
+    {
+      "name": "Khởi động tới list_tools",
+      "ok": true,
+      "detail": "1.59 s (≤ 5 s)"
+    },
+    {
+      "name": "audit lần sau (nóng)",
+      "ok": true,
+      "detail": "0.04 s lớn nhất (≤ 1 s); lần đầu 0.09 s"
+    },
+    {
+      "name": "Kích thước kết quả",
+      "ok": true,
+      "detail": "~6321 token ước lượng (18961 ký tự lớn nhất; < 10000)"
+    },
+    {
+      "name": "Gọi liên tiếp",
+      "ok": true,
+      "detail": "100 lượt, 0 lỗi; p50 0.039 s, p95 0.067 s"
+    }
+  ]
+}

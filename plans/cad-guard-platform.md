@@ -1,5 +1,7 @@
 # cad-guard — Nền tảng: tệp nặng, nhiều định dạng, một giao diện hợp nhất
 
+> Tham chiếu. Trạng thái hiện tại và lộ trình chạy thử: xem `PLAN.md` ở gốc repo (cập nhật 07/11/2026).
+
 Trạng thái: **ĐÁNH GIÁ + ĐỀ XUẤT, chờ CEO duyệt** (05/11/2026). Bổ sung cho `plans/cad-guard-direction.md` (hướng theo tệp, DXF chung) và `plans/cad-guard-vision-assessment.md` (năm khối, mô hình chi tiết là trục). Bản mẫu giao diện: `design/ui-mockup.html` (theo phòng, đã chọn), `design/ui-unified.html` (tham khảo). Chưa viết code lõi chỉ mục. Cập nhật 05/11/2026: thêm mục 7a (phòng Thiết kế 3D); **ưu tiên phòng Kỹ thuật trước, phần 3D đi sau** theo chỉ đạo CEO. CEO đã chốt 5 quyết định của mục 7a.5 (05/11/2026).
 Quy tắc dữ liệu: các số đo dưới đây lấy từ bản vẽ thật **ở ngoài repo**, bằng kịch bản chỉ in số tổng hợp (kích thước, thời gian, bộ nhớ, số đối tượng). Không có tên tệp, layer, khối hay nội dung chữ.
 

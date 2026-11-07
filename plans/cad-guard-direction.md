@@ -1,5 +1,7 @@
 # cad-guard — Hướng đi: gắn AutoCAD, fork CAD mã nguồn mở, tự xây phần mềm, hay làm theo tệp?
 
+> Tham chiếu. Trạng thái hiện tại và lộ trình chạy thử: xem `PLAN.md` ở gốc repo (cập nhật 07/11/2026).
+
 Trạng thái: **CEO ĐÃ DUYỆT hướng C (03/11/2026)**. Nếu hướng theo tệp không giải quyết được bài toán, tiếp tục theo hướng plugin AutoCAD (hướng D, phương án dự phòng đã được CEO đồng ý). Repo: `D:\Projects\cad-guard` (CEO đã tạo thư mục). Bổ sung cho `plans/cad-guard.md` (mục 4 Kiến trúc, mục 8 Lộ trình, mục 10 Decision log). Chưa viết code.
 Bối cảnh mới từ CEO (03/11): (1) sẽ dùng AutoCAD bản dùng thử và lấy bản vẽ từ phòng kỹ thuật về chạy rà soát trước; (2) phòng kỹ thuật có thể dùng nhiều phần mềm CAD khác nhau theo bộ phận/vị trí; (3) vì bản quyền, phòng kỹ thuật đang chuyển khỏi AutoCAD; (4) nhu cầu có thể chỉ là một số tính năng đơn giản, cơ bản.
 
