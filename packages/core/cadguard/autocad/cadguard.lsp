@@ -22,9 +22,14 @@
   (vl-filename-base n)
 )
 
+;; Đường dẫn Windows chuẩn (dấu \): explorer.exe không mở được đường dẫn lẫn / và \ (gõ D:/... ở CGTHUMUC) mà mở Documents.
+(defun cg:winpath (p)
+  (vl-string-translate "/" "\\" p)
+)
+
 (defun cg:join (dir name / last)
-  (setq last (substr dir (strlen dir)))
-  (if (or (= last "\\") (= last "/")) (strcat dir name) (strcat dir "\\" name))
+  (setq dir (cg:winpath dir) last (substr dir (strlen dir)))
+  (cg:winpath (if (= last "\\") (strcat dir name) (strcat dir "\\" name)))
 )
 
 (defun c:CGTHUMUC ( / cur f)
@@ -34,6 +39,7 @@
   (cond
     ((= f "") (princ "\n[cad-guard] Giữ nguyên."))
     ((vl-file-directory-p f)
+     (setq f (cg:winpath f))
      (setenv cg:*env* f)
      (princ (strcat "\n[cad-guard] Đã đặt thư mục làm việc: " f)))
     (T (princ "\n[cad-guard] Thư mục không tồn tại. Tạo thư mục trước rồi chạy lại CGTHUMUC.")))

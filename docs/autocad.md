@@ -84,4 +84,4 @@ Dùng bản vẽ tổng hợp (`fixtures/synthetic/*.dxf` mở rồi lưu thành
 
 | Ngày | Bản AutoCAD | Mục 1–7 | Ghi chú |
 | --- | --- | --- | --- |
-| (chưa kiểm) | | | |
+| 09/11/2026 | AutoCAD 2027 bản dùng thử (đầy đủ, Windows 11) | 1 đạt; 2 đạt; 3 đạt; 4 chưa kiểm; 5 đạt; 6 đạt; 7 không có LT | Bản vẽ tổng hợp `bad_layers.dxf` → SAVEAS DWG 2018 → `CGXUAT`. Mục 1: `[cad-guard] Đã nạp…` đúng dấu, có hộp thoại bảo mật "Unsigned Executable File" (chọn Load Once; muốn tắt thì thêm thư mục vào Trusted Locations). Mục 2: thanh tiêu đề vẫn `.dwg`. Mục 3: `watch` báo sau ~4 s. Mục 5: handle A2–B7 giống hệt qua DXF → DWG → DXFOUT; `CGTOI B6` chọn đúng LINE (0,0)→(10,10) trên layer 0 (kiểm bằng `LIST`). Mục 6: `CHPROP` B6 sang `FN-PART-OUTL`, `CGXUAT` lại → cảnh báo 1 → 0. `CGBAOCAO` lỗi khi thư mục gõ dạng `D:/…` (Explorer mở Documents); đã sửa (`cg:winpath`), kiểm lại mở đúng báo cáo. |

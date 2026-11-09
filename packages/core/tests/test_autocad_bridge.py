@@ -129,6 +129,8 @@ def test_lisp_defines_commands_and_never_modifies_drawing():
     for forbidden in ("saveas", "qsave", "_.save", "erase", "entmod", "entdel", "entmake", "_.purge", "_.close", "_.u\""):
         assert forbidden not in low, forbidden
     assert '"_.DXFOUT"' in no_comments and "(handent " in no_comments
+    # Kiểm tay AutoCAD 2027 (09/11/2026): thư mục gõ dạng D:/... làm CGBAOCAO mở Documents thay vì báo cáo.
+    assert re.search(r'\(defun cg:join .*?\(cg:winpath', no_comments, re.S)
 
 
 def test_autocad_command_copies_lisp(tmp_path):

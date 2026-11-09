@@ -44,8 +44,8 @@ Phạm vi kết nối AutoCAD đã duyệt:
 
 ## 4. Quyết định còn mở
 
-1. Bản AutoCAD trên máy thử (đầy đủ hay LT, năm) — quyết định mức tương thích của `cadguard.lsp`.
-2. Handle có giữ nguyên qua DXFOUT trên bản AutoCAD của khách không — phải kiểm tay trước khi hứa `CGTOI`.
+1. Bản AutoCAD trên máy thử: đã kiểm AutoCAD 2027 bản đầy đủ dùng thử (09/11/2026, `docs/autocad.md` mục 5). Còn mở: AutoCAD LT nếu công ty định mua LT.
+2. Handle giữ nguyên qua DXFOUT: đạt trên AutoCAD 2027 với bản vẽ tổng hợp. Còn phải kiểm trên bản vẽ thật có khối/xref (P0) trước khi hứa `CGTOI` với khách.
 3. P0: bộ mẫu thật ngoài repo, đồng ý dữ liệu (`docs/samples-intake.md`).
 4. P1c: đo độ chính xác cùng kỹ sư rà soát trước khi bật bất kỳ cảnh báo thời gian thực nào.
 
