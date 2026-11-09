@@ -1165,7 +1165,11 @@
         : f.fixable ? el("div", {class: "f-meta"}, icon("gear"), "Có thể tự sửa bằng thao tác an toàn: xem tab Thay đổi")
           : el("div", {class: "f-meta"}, icon("hand"), "Cần người sửa trong phần mềm CAD. Trợ lý không tự sửa."),
       el("div", {class: "f-meta"}, icon("search"), f.box ? `Vị trí: đánh dấu số ${f.no} trên bản vẽ` + (where ? " · " + where : "")
-        : (where ? where + " · " : "") + "không có vị trí trên hình mô hình")));
+        : (where ? where + " · " : "") + "không có vị trí trên hình mô hình"),
+      acadTarget(f) ? el("div", {class: "f-acad"},
+        el("button", {class: "btn-s btn-sm", type: "button", title: "Phóng tới và chọn đối tượng trong AutoCAD (bản vẽ phải đang mở)",
+          onclick: (e) => { e.stopPropagation(); showInAutocad(f); }}, icon("arrow"), "Tới trong AutoCAD"),
+        el("span", {class: "muted", text: f.handles.length ? `${fmt(f.handles.length)} đối tượng` : `mọi đối tượng trên ${fmt(acadTarget(f).layers.length)} layer`})) : null));
     }
     for (const f of S.findings) if (f.positions && f.positions.length > 1) {
       const card=out.find(n=>n.dataset && n.dataset.no===String(f.no));
@@ -1178,6 +1182,26 @@
     if (sk.length) out.push(el("details", {class: "skipped"}, el("summary", {text: `${sk.length} luật bỏ qua (thiếu dữ liệu trong bản vẽ)`}),
       el("ul", {}, sk.map((s) => el("li", {}, b(s.rule_id + ": "), s.reason)))));
     fill(box, ...out);
+  }
+
+  // ---------- tới đối tượng trong AutoCAD (ghi .cadguard/goto.txt; M3 đưa thẳng AutoCAD tới qua COM) ----------
+  function acadTarget(f) {
+    if (f.handles && f.handles.length) return {handles: f.handles.slice(0, 200), layers: []};
+    const layers = [...new Set(f.items.map((it) => it.layer).filter(Boolean))];
+    return layers.length ? {handles: [], layers: layers.slice(0, 100)} : null;
+  }
+
+  async function showInAutocad(f) {
+    const t = acadTarget(f);
+    if (!t || !S.file) return;
+    try {
+      const r = await api("/api/autocad/show", {file: S.file, handles: t.handles, layers: t.layers});
+      if (r.sent) toast("Đã chuyển sang AutoCAD và chọn đối tượng." + (r.truncated ? " (Nhóm lớn: chỉ lấy phần đầu.)" : ""));
+      else {
+        if (r.toi_command && navigator.clipboard) navigator.clipboard.writeText(r.toi_command).catch(() => {});
+        toast((r.message ? r.message + " " : "") + "Trong AutoCAD gõ CGDEN rồi Enter để tới đối tượng.");
+      }
+    } catch (e) { toast(e.message); }
   }
 
   async function showExplain(ruleId, standard) {

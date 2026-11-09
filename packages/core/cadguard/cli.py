@@ -416,7 +416,7 @@ def cmd_mcp_config(args: argparse.Namespace) -> int:
 
     try:
         text, note = render(args.client, Path(args.workspace), profile=Path(args.profile) if args.profile else None,
-                            allow_propose=args.allow_propose)
+                            allow_propose=args.allow_propose, allow_autocad=args.allow_autocad)
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -443,6 +443,7 @@ def cmd_autocad(args: argparse.Namespace) -> int:
           "  CGTHUMUC  đặt thư mục làm việc (trùng thư mục của `cadguard watch` / `cadguard mcp --workspace`)\n"
           "  CGXUAT    xuất bản vẽ đang mở ra DXF (bản sao, DWG giữ nguyên)\n"
           "  CGTOI     nhập handle do cad-guard/trợ lý báo để phóng tới đối tượng\n"
+          "  CGDEN     tới đối tượng vừa bấm 'Tới trong AutoCAD' trên giao diện `cadguard app`\n"
           "  CGBAOCAO  mở báo cáo HTML của bản vẽ đang mở\n"
           "Hướng dẫn và danh sách kiểm tay: docs/autocad.md")
     return 0
@@ -681,9 +682,11 @@ def main(argv: list[str] | None = None) -> int:
     mc.add_argument("--workspace", required=True, help="thư mục làm việc (DXF của phiên)")
     mc.add_argument("--profile", default=None, help="hồ sơ công ty (YAML)")
     mc.add_argument("--allow-propose", action="store_true", help="bật công cụ propose_changeset (mặc định TẮT)")
+    mc.add_argument("--allow-autocad", action="store_true",
+                    help="bật công cụ show_in_autocad: trợ lý đưa AutoCAD tới đối tượng lỗi (mặc định TẮT)")
     mc.set_defaults(fn=cmd_mcp_config)
 
-    ac = sub.add_parser("autocad", help="đường dẫn và cách nạp cadguard.lsp (CGXUAT, CGTOI, CGBAOCAO) cho AutoCAD")
+    ac = sub.add_parser("autocad", help="đường dẫn và cách nạp cadguard.lsp (CGXUAT, CGTOI, CGDEN, CGBAOCAO) cho AutoCAD")
     ac.add_argument("--copy-to", metavar="THƯ_MỤC", help="chép cadguard.lsp vào thư mục này")
     ac.set_defaults(fn=cmd_autocad)
 

@@ -571,3 +571,5 @@ details.skipped ul{margin:6px 0 0 18px;padding:0}
 /* App thật có banner tùy trạng thái: dùng flex để header tăng chiều cao khi xuống dòng. */
 .app{display:flex;flex-direction:column}.app>.screen.on{flex:1;min-height:0}.topbar{flex:0 0 auto}
 @media(max-width:900px){.topbar #dataChip{display:none}.topbar .nav{min-height:44px}.cv-tools>a{min-height:44px}.topbar #deptBtn{max-width:140px}.topbar #themeBtn{margin-left:auto}}
+/* Nút "Tới trong AutoCAD" trên thẻ phát hiện */
+.f-acad{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}

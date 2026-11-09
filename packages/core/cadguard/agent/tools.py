@@ -252,6 +252,31 @@ def query_model(ctx: ToolContext, file: str, filter: dict, limit: int = 100, cur
     return result()
 
 
+@_safe
+def show_in_autocad(ctx: ToolContext, file: str, handles=None, layers=None) -> dict:
+    """M3: đưa AutoCAD tới đối tượng (chỉ điều hướng). Mã layer L_… được giải mã về tên thật trước khi gửi; kết quả
+    trả trợ lý chỉ có số đếm và câu báo chung (không tên bản vẽ/layer)."""
+    from ..autocad.bridge import BridgeError, show
+    from .anonymize import TokenError
+
+    path = _path(ctx, file)
+    real_layers = None
+    if layers:
+        _, model = _model(ctx, file)
+        decode = ctx.anonymizer.decoder(_all_names(model))
+        try:
+            real_layers = [decode("layer", x) for x in layers]
+        except TokenError as exc:
+            raise ToolError(str(exc)) from None
+    try:
+        r = show(ctx.workspace.root, path.relative_to(ctx.workspace.root).as_posix(), handles, real_layers)
+    except BridgeError as exc:
+        raise ToolError(str(exc)) from None
+    return {"file": _file_id(ctx, path), "sent": r["sent"], "handles": r["handles"], "layers": r["layers"],
+            "truncated": r["truncated"], "message": r["message"],
+            "fallback": "Người dùng gõ CGDEN trong AutoCAD (đã nạp cadguard.lsp) để tới đối tượng."}
+
+
 # ---------- công cụ đề xuất sửa (A2): chỉ ghi changeset JSON, KHÔNG ghi DXF; áp dụng do người qua CLI ----------
 
 DIFF_MAX_BYTES = 65536

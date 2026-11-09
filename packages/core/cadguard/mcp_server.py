@@ -101,6 +101,12 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
         "vào <thư mục làm việc>/.cadguard/changesets/. Không bao giờ ghi DXF; áp dụng chỉ do người qua `cadguard apply`.",
     )
     p.add_argument(
+        "--allow-autocad",
+        action="store_true",
+        help="BẬT công cụ show_in_autocad (mặc định TẮT): trợ lý được đưa cửa sổ AutoCAD đang mở tới đối tượng lỗi "
+        "(phóng tới + chọn) qua COM. Chỉ điều hướng, không sửa/lưu bản vẽ. Cần Windows, AutoCAD bản đầy đủ, pywin32.",
+    )
+    p.add_argument(
         "--max-entity-records",
         type=_non_negative_int,
         default=DEFAULT_MAX_ENTITY_RECORDS,
@@ -137,7 +143,8 @@ def _import_sdk():
     return mcp
 
 
-def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0", allow_propose: bool = False):
+def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0", allow_propose: bool = False,
+                 allow_autocad: bool = False):
     """Tạo máy chủ MCP cấp thấp từ sổ khai báo `agent.registry`: 6 công cụ chỉ đọc, thêm propose_changeset khi
     `allow_propose`. Không bao giờ có apply. Tham số kiểm bằng `registry.check_args` (thông điệp tiếng Việt, không lặp
     lại giá trị), giống hệt engine API. Công cụ chạy trong luồng phụ, tuần tự (khoá) vì bộ ẩn danh giữ trạng thái phiên."""
@@ -149,12 +156,15 @@ def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0",
 
     from . import __version__
 
-    opts = registry.options_for(ctx, default_standard, allow_propose=allow_propose)
+    opts = registry.options_for(ctx, default_standard, allow_propose=allow_propose, allow_autocad=allow_autocad)
     server = Server(SERVER_NAME, version=__version__, instructions=INSTRUCTIONS)
     read_only = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
     propose = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
+    # show_in_autocad: không đổi dữ liệu nhưng tác động ra ngoài (cửa sổ AutoCAD).
+    navigate = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True)
     listing = [Tool(name=s["name"], description=s["description"], inputSchema=s["schema"],
-                    annotations=read_only if s["read_only"] else propose) for s in registry.specs(opts)]
+                    annotations=read_only if s["read_only"] else
+                    navigate if s["name"] == registry.AUTOCAD_TOOL else propose) for s in registry.specs(opts)]
     lock = threading.Lock()
 
     @server.list_tools()
@@ -264,12 +274,15 @@ def run_from_args(args: argparse.Namespace) -> int:
             "(ngoài Bậc 1). Chỉ dùng khi khách đã đồng ý bằng văn bản."
         )
     allow_propose = bool(getattr(args, "allow_propose", False))
-    server = build_server(ctx, standard, allow_propose=allow_propose)
+    allow_autocad = bool(getattr(args, "allow_autocad", False))
+    server = build_server(ctx, standard, allow_propose=allow_propose, allow_autocad=allow_autocad)
     # Nạp bộ đọc DXF (ezdxf) TRƯỚC khi đọc stdin: trên Windows, import lần đầu trong luồng phụ khi một luồng khác đang
     # chặn đọc ống stdin có thể treo cả tiến trình (đã gặp khi để nạp lười tới lượt gọi công cụ đầu tiên).
     import cadguard.reader_select  # noqa: F401
 
     mode = "chỉ đọc + đề xuất changeset (không áp dụng)" if allow_propose else "chỉ đọc"
+    if allow_autocad:
+        mode += " + đưa AutoCAD tới đối tượng (show_in_autocad)"
     _err(f"cad-guard MCP: đang phục vụ qua stdio ({mode}). Dừng bằng cách đóng stdin hoặc Ctrl+C.")
     try:
         serve(server)

@@ -5,7 +5,8 @@ gọi công cụ qua đây, nên thêm/sửa công cụ chỉ ở MỘT chỗ. H
 nhẹ: không kéo ezdxf khi chỉ cần liệt kê công cụ).
 
 Bất biến:
-- Không bao giờ có công cụ áp dụng (apply). `propose_changeset` chỉ khi `allow_propose`.
+- Không bao giờ có công cụ áp dụng (apply). `propose_changeset` chỉ khi `allow_propose`; `show_in_autocad` chỉ khi
+  `allow_autocad` (đưa AutoCAD tới đối tượng, không sửa bản vẽ).
 - Lỗi trả cho trợ lý là câu tiếng Việt chung: không đường dẫn tuyệt đối, không giá trị tham số, không ngoại lệ nội bộ.
 - Kiểm tham số bằng bộ kiểm nhỏ cho đúng tập con JSON Schema dùng ở đây (không phụ thuộc gói `jsonschema`).
 """
@@ -26,6 +27,7 @@ MAX_PROPOSE_OPS = 50
 
 READ_TOOLS = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff")
 PROPOSE_TOOL = "propose_changeset"
+AUTOCAD_TOOL = "show_in_autocad"  # M3: chỉ khi allow_autocad; điều hướng AutoCAD, không sửa bản vẽ
 BASELINE_TOOL = "audit_khong_ho_so"
 FORBIDDEN_TOOLS = frozenset({"apply_changeset", "apply", "undo", "undo_changeset"})
 
@@ -45,12 +47,13 @@ class SpecOptions:
     max_drawings: int = 500
     allow_propose: bool = False
     compare_without_profile: bool = False
+    allow_autocad: bool = False
 
 
 @dataclass(frozen=True)
 class ToolDef:
     name: str
-    kind: Literal["read", "propose"]
+    kind: Literal["read", "propose", "navigate"]
     describe: Callable[[SpecOptions], str]
     schema: Callable[[SpecOptions], dict]
     run: Callable[[Any, dict, SpecOptions], dict]  # (ToolContext, tham số đã kiểm, tuỳ chọn) -> dict JSON
@@ -221,6 +224,23 @@ def _propose() -> ToolDef:
     )
 
 
+def _show_in_autocad() -> ToolDef:
+    return ToolDef(
+        AUTOCAD_TOOL, "navigate",
+        lambda o: "Đưa người dùng tới đối tượng trong AutoCAD đang mở: phóng tới và CHỌN các đối tượng theo handle (lấy từ "
+                  "audit) hoặc mọi đối tượng trên layer (tên/mã L_…). Chỉ điều hướng, không sửa/lưu bản vẽ. Bản vẽ phải đang mở "
+                  "trong AutoCAD; nếu không gửi thẳng được ('sent' = false) thì người dùng gõ CGDEN trong AutoCAD.",
+        lambda o: _obj({
+            "file": _FILE,
+            "handles": {"type": "array", "items": {"type": "string", "pattern": "^[0-9A-Fa-f]{1,16}$"}, "maxItems": 200,
+                        "description": "Handle đối tượng (từ audit), vd. ['18E', '3A247']."},
+            "layers": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 255}, "maxItems": 100,
+                       "description": "Tên hoặc mã layer (L_…): chọn mọi đối tượng trên layer trong tờ đang xem."},
+        }, ["file"]),
+        lambda ctx, a, o: _tools().show_in_autocad(ctx, a["file"], a.get("handles"), a.get("layers")),
+    )
+
+
 _READ_DEFS: tuple[Callable[[], ToolDef], ...] = (_list_drawings, _audit, _explain_rule, _summary, _query, _diff)
 
 
@@ -231,6 +251,8 @@ def tool_defs(o: SpecOptions) -> list[ToolDef]:
         out.append(_baseline())
     if o.allow_propose:
         out.append(_propose())
+    if o.allow_autocad:
+        out.append(_show_in_autocad())
     assert not FORBIDDEN_TOOLS & {d.name for d in out}  # bất biến: không bao giờ có apply
     return out
 
@@ -241,7 +263,7 @@ def specs(o: SpecOptions) -> list[dict]:
 
 
 def options_for(ctx, default_standard: str | None = None, *, allow_propose: bool = False,
-                compare_without_profile: bool = False) -> SpecOptions:
+                compare_without_profile: bool = False, allow_autocad: bool = False) -> SpecOptions:
     """Tuỳ chọn mô tả từ một `ToolContext`: chuẩn có trong thư mục chuẩn, ghi chú hồ sơ, trần kết quả."""
     from pathlib import Path
 
@@ -255,6 +277,7 @@ def options_for(ctx, default_standard: str | None = None, *, allow_propose: bool
         default_standard=default_standard or (prof.standard if prof is not None else DEFAULT_STANDARD),
         standards_available=available, profile_note=note, max_findings=ctx.max_findings, max_drawings=ctx.max_drawings,
         allow_propose=bool(allow_propose), compare_without_profile=bool(compare_without_profile and prof is not None),
+        allow_autocad=bool(allow_autocad),
     )
 
 
@@ -354,6 +377,6 @@ def call(ctx, name: str, args: Any, o: SpecOptions) -> CallResult:
     return CallResult(True, data=data)
 
 
-__all__ = ["BASELINE_TOOL", "DEFAULT_STANDARD", "FORBIDDEN_TOOLS", "GENERIC_ERROR_MSG", "MAX_QUERY_BYTES",
+__all__ = ["AUTOCAD_TOOL", "BASELINE_TOOL", "DEFAULT_STANDARD", "FORBIDDEN_TOOLS", "GENERIC_ERROR_MSG", "MAX_QUERY_BYTES",
            "MAX_QUERY_RECORDS", "PATH_DENIED_MSG", "PROPOSE_TOOL", "READ_TOOLS", "CallResult", "SpecOptions", "ToolDef",
            "call", "check_args", "options_for", "specs", "tool_defs"]

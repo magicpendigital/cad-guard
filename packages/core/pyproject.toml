@@ -21,6 +21,8 @@ dev = ["pytest>=8"]
 agent = ["mcp>=1.10,<2"]
 # Kho khoá hệ điều hành cho `cadguard keys` (tuỳ chọn; MIT, xem docs/licenses.md). Không có thì dùng biến môi trường.
 keyring = ["keyring>=25,<26"]
+# M3: đưa cửa sổ AutoCAD tới đối tượng lỗi qua COM (chỉ Windows; PSF, xem docs/licenses.md). Không có thì gõ CGDEN.
+autocad = ["pywin32>=306; sys_platform == 'win32'"]
 # Studio (`cadguard studio`) gọi Anthropic qua thư viện chuẩn như trợ lý (assistant/api_engines.py): không cần
 # SDK `anthropic`, nên không có extras `llm` (xem docs/licenses.md mục SDK anthropic).
 
@@ -33,7 +35,7 @@ include = ["cadguard*"]
 [tool.setuptools.package-data]
 # Giao diện cục bộ `cadguard app`: tệp tĩnh + cấu hình phòng.
 # Cầu nối AutoCAD theo tệp (CGXUAT/CGTOI…): `cadguard autocad` in đường dẫn.
-"cadguard" = ["autocad/*.lsp"]
+"cadguard.autocad" = ["*.lsp"]
 "cadguard.app" = ["departments.json", "static/*.html", "static/*.css", "static/*.js"]
 "cadguard.review" = ["static/*.html", "static/*.css", "static/*.js"]
 

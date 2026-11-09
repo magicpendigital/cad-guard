@@ -26,6 +26,8 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--account", choices=["business", "api-key"], default=None,
                    help="agy-cli: loại tài khoản (tài khoản Google cá nhân bị từ chối)")
     p.add_argument("--no-detect", action="store_true", help="không chạy CLI (claude/codex/agy) để kiểm đã cài/đăng nhập")
+    p.add_argument("--no-autocad-com", action="store_true",
+                   help="nút 'Tới trong AutoCAD' chỉ ghi yêu cầu (người dùng gõ CGDEN), không điều khiển AutoCAD qua COM")
     p.add_argument("--standards-dir", default=None, help=argparse.SUPPRESS)
 
 
@@ -40,6 +42,7 @@ def run_from_args(args: argparse.Namespace) -> int:
     cfg = AppConfig(workspace=ws, profile_path=Path(args.profile).resolve() if args.profile else None,
                     anonymize=not args.no_anonymize, experimental=args.experimental,
                     allow_openrouter=args.allow_openrouter, account=args.account,
+                    autocad_com=not args.no_autocad_com,
                     standards_dir=Path(args.standards_dir) if args.standards_dir else None)
     try:
         kwargs = {"cli_detect": lambda name: {"installed": None}} if args.no_detect else {}

@@ -55,6 +55,7 @@ class AppConfig:
     stream_threshold_mb: float | None = DEFAULT_STREAM_THRESHOLD_MB
     standards_dir: Path | None = None
     departments_path: Path | None = None
+    autocad_com: bool = True  # M3: nút "Tới trong AutoCAD" đưa thẳng AutoCAD tới đối tượng (tắt: --no-autocad-com)
 
 
 @dataclass
@@ -226,6 +227,18 @@ def audit_file(app: AppData, rel: Any, standard: Any, dept: Any = None) -> dict:
         "rules_total": len(std.rules), "rules_enabled": sum(1 for r in std.rules if r.enabled and r.implemented),
         "entity_count": len(model.entities), "dxf_version": model.dxf_version, "insunits": model.insunits,
     }
+
+
+def show_in_autocad(app: AppData, rel: Any, handles: Any = None, layers: Any = None) -> dict:
+    """Nút "Tới trong AutoCAD": ghi `.cadguard/goto.txt` (người dùng gõ CGDEN) và, nếu bật, đưa thẳng AutoCAD tới
+    đối tượng qua COM (M3, chỉ điều hướng). Xem `cadguard.autocad.bridge`."""
+    from ..autocad.bridge import BridgeError, show
+
+    path = app.resolve(rel)
+    try:
+        return show(app.ws.root, app.rel(path), handles, layers, com=app.config.autocad_com)
+    except BridgeError as exc:
+        raise ApiError(str(exc)) from None
 
 
 def audit_all(app: AppData, standard: Any, dept: Any = None) -> dict:

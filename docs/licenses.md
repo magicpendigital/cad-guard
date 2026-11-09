@@ -13,6 +13,7 @@ Cập nhật khi thêm phụ thuộc. Nguyên tắc: không đưa vào sản ph�
 | PyYAML | Nạp chuẩn | MIT | |
 | pytest (dev) | Test | MIT | |
 | keyring 25.7.0 (extras tuỳ chọn `[keyring]`) | Kho khoá hệ điều hành cho `cadguard keys` (import lười, không bắt buộc) | MIT | Đã kiểm 04/11/2026 trong `keyring-25.7.0.dist-info` (`License-Expression: MIT`, `licenses/LICENSE`). Bắc cầu trên Windows: jaraco.classes 3.4.0 (MIT, classifier), jaraco.context 6.1.2, jaraco.functools 4.6.0, more-itertools 11.2.1 (MIT), pywin32-ctypes 0.2.3 (BSD-3-Clause, chỉ Windows). Trên Linux/macOS còn kéo SecretStorage/jeepney… — **chưa kiểm** |
+| pywin32 (extras tuỳ chọn `[autocad]`, chỉ Windows) | M3: đưa AutoCAD tới đối tượng lỗi qua COM (`autocad/bridge.py`, import lười) | PSF | Đã nằm trong venv qua `mcp` (xem bảng bắc cầu dưới: pywin32 312, PSF). Dễ dãi, ngoài danh sách MIT/BSD/Apache |
 | mcp 1.30.0 (extras `[agent]`) | SDK MCP chính thức cho Python, chạy `python -m cadguard mcp` | MIT | Đã kiểm 04/11/2026 trong `mcp-1.30.0.dist-info` (METADATA `License: MIT`, `licenses/LICENSE` "Copyright (c) 2024 Anthropic, PBC"). Ràng buộc `mcp>=1.10,<2` |
 
 (Giấy phép trên ghi theo hiểu biết hiện tại; kiểm lại tệp LICENSE của từng gói đã cài trước khi phát hành.)

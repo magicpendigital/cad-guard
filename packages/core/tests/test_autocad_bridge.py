@@ -120,7 +120,7 @@ def test_lisp_defines_commands_and_never_modifies_drawing():
         depth += {"(": 1, ")": -1}.get(ch, 0)
         assert depth >= 0
     assert depth == 0
-    for cmd in ("CGTHUMUC", "CGXUAT", "CGTOI", "CGBAOCAO"):
+    for cmd in ("CGTHUMUC", "CGXUAT", "CGTOI", "CGDEN", "CGBAOCAO"):
         assert re.search(rf"\(defun c:{cmd}\b", code)
     # Lệnh AutoCAD nằm trong chuỗi ("_.DXFOUT"), nên kiểm trên mã đã bỏ chú thích nhưng GIỮ chuỗi.
     no_comments = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith(";"))
@@ -131,6 +131,12 @@ def test_lisp_defines_commands_and_never_modifies_drawing():
     assert '"_.DXFOUT"' in no_comments and "(handent " in no_comments
     # Kiểm tay AutoCAD 2027 (09/11/2026): thư mục gõ dạng D:/... làm CGBAOCAO mở Documents thay vì báo cáo.
     assert re.search(r'\(defun cg:join .*?\(cg:winpath', no_comments, re.S)
+    # CGXUAT không xoá-rồi-ghi-đè khi bản đang mở chính là tệp DXF trong thư mục làm việc.
+    xuat = no_comments[no_comments.index("(defun c:CGXUAT"):no_comments.index("(defun cg:split")]
+    assert xuat.index('"DWGPREFIX"') < xuat.index("vl-file-delete")
+    # cg:den (M2 gõ CGDEN, M3 gọi qua COM) đọc tệp yêu cầu UTF-8 và kiểm đúng bản vẽ trước khi chọn.
+    den = no_comments[no_comments.index("(defun cg:den"):no_comments.index("(defun c:CGDEN")]
+    assert '(open path "r" "utf8")' in den and "(cg:base)" in den and "(close fd)" in den
 
 
 def test_autocad_command_copies_lisp(tmp_path):
@@ -208,3 +214,122 @@ def test_mcp_probe_over_real_stdio(ws):
     assert m["errors"] == 0 and m["calls"] == 12
     assert m["startup_s"] < 30 and m["est_tokens"] < 10_000  # thời gian chặt (≤ 5 s) đo bằng scripts/mcp_smoke.py
     assert len(evaluate(m)) == 4
+
+
+# ---------- tới đối tượng trong AutoCAD: tệp yêu cầu (M2) + COM (M3) ----------
+
+from cadguard.autocad import bridge  # noqa: E402
+
+
+def test_goto_request_validates_and_writes_utf8(tmp_path):
+    req = bridge.make_request("sub/Bản vẽ.dxf", ["18e", "18E", "3A247"], ["Tường-01", "KYHIEU"])
+    assert req.drawing == "Bản vẽ" and req.handles == ["18E", "3A247"] and req.toi_command() == "CGTOI 18E,3A247"
+    p = bridge.write_goto(tmp_path, req)
+    assert p == tmp_path.resolve() / ".cadguard" / "goto.txt"
+    want = ["F Bản vẽ", "H 18E", "H 3A247", "L Tường-01", "L KYHIEU", ""]
+    assert p.read_bytes() == chr(10).join(want).encode("utf-8")  # UTF-8 không BOM, xuống dòng LF
+    for bad in ({"handles": ["18G"]}, {"handles": ["(command)"]}, {"layers": ["a" + chr(10) + "H 1"]}, {"layers": [""]}, {}):
+        with pytest.raises(bridge.BridgeError):
+            bridge.make_request("a.dxf", **bad)
+    big = bridge.make_request("a.dxf", [format(i, "X") for i in range(1, 300)])
+    assert len(big.handles) == bridge.MAX_HANDLES and big.truncated
+
+
+def test_lisp_call_is_single_fixed_expression(tmp_path):
+    call = bridge.lisp_call(tmp_path / ".cadguard" / "goto.txt")
+    assert call.startswith("(progn ") and call.endswith(chr(10)) and call.count(chr(10)) == 1  # một dòng = một lệnh
+    assert '(cg:den "' in call and chr(92) + chr(92) not in call  # đường dẫn dạng /
+    for forbidden in ("(command", "save", "erase", "entmod", "entdel", "vla-"):
+        assert forbidden not in call.lower()
+
+
+class FakeDoc:
+    def __init__(self, name, busy=0):
+        self.Name, self.busy, self.sent, self.activated = name, busy, [], False
+
+    def GetVariable(self, name):
+        assert name == "CMDACTIVE"
+        return self.busy
+
+    def Activate(self):
+        self.activated = True
+
+    def SendCommand(self, text):
+        self.sent.append(text)
+
+
+class FakeAcad:
+    HWND = 1234
+
+    def __init__(self, *docs):
+        self.Documents = list(docs)
+        self.ActiveDocument = docs[0]
+
+
+def test_show_sends_one_expression_to_matching_open_drawing(tmp_path):
+    other, target = FakeDoc("khac.dwg"), FakeDoc("BAD_LAYERS.dxf")
+    acad, raised = FakeAcad(other, target), []
+    r = bridge.show(tmp_path, "bad_layers.dxf", ["B6"], connect=lambda: acad, foreground=raised.append)
+    assert r["sent"] and r["toi_command"] == "CGTOI B6" and raised == [1234]
+    assert target.activated and other.sent == [] and target.sent == [bridge.lisp_call(bridge.goto_path(tmp_path))]
+
+
+def test_show_falls_back_to_cgden_when_autocad_unavailable(tmp_path):
+    def none():
+        raise bridge.BridgeError("Không thấy AutoCAD đang chạy. Gõ CGDEN trong AutoCAD.")
+
+    r = bridge.show(tmp_path, "a.dxf", layers=["0"], connect=none)
+    assert not r["sent"] and "CGDEN" in r["message"] and bridge.goto_path(tmp_path).is_file()
+    r = bridge.show(tmp_path, "a.dxf", ["1F"], connect=lambda: FakeAcad(FakeDoc("khac.dwg")))
+    assert not r["sent"] and "chưa mở" in r["message"]
+    busy = FakeDoc("a.dwg", busy=1)
+    r = bridge.show(tmp_path, "a.dxf", ["1F"], connect=lambda: FakeAcad(busy), foreground=lambda h: None)
+    assert not r["sent"] and "Esc" in r["message"] and busy.sent == []
+
+    class Broken(FakeDoc):
+        def SendCommand(self, text):
+            raise OSError("RPC_E_CALL_REJECTED C:/bi-mat")
+
+    r = bridge.show(tmp_path, "a.dxf", ["1F"], connect=lambda: FakeAcad(Broken("a.dwg")), foreground=lambda h: None)
+    assert not r["sent"] and "bi-mat" not in r["message"]
+    r = bridge.show(tmp_path, "a.dxf", ["1F"], com=False)
+    assert not r["sent"] and "CGDEN" in r["message"]
+
+
+def test_app_show_in_autocad_writes_request(ws):
+    from cadguard.app.api import ApiError, AppConfig, AppData, show_in_autocad
+
+    app = AppData(AppConfig(workspace=ws, autocad_com=False, standards_dir=STDS))
+    r = show_in_autocad(app, "bad_layers.dxf", ["B6"], None)
+    assert r["written"] and not r["sent"]
+    assert (ws / ".cadguard" / "goto.txt").read_text(encoding="utf-8").splitlines() == ["F bad_layers", "H B6"]
+    with pytest.raises(ApiError):
+        show_in_autocad(app, "../ngoai.dxf", ["B6"], None)
+    with pytest.raises(ApiError):
+        show_in_autocad(app, "bad_layers.dxf", None, None)
+
+
+def test_show_in_autocad_tool_is_opt_in_and_anonymized(ws, monkeypatch):
+    from cadguard.agent.anonymize import Anonymizer
+    from cadguard.agent.tools import ToolContext
+    from cadguard.agent.workspace import Workspace
+
+    assert registry.AUTOCAD_TOOL not in {d.name for d in registry.tool_defs(registry.SpecOptions())}
+    opts = registry.SpecOptions(allow_autocad=True)
+    d = {x.name: x for x in registry.tool_defs(opts)}[registry.AUTOCAD_TOOL]
+    assert d.kind == "navigate" and not d.read_only
+    ctx = ToolContext(Workspace(ws), Anonymizer(enabled=True), STDS)
+    sent = []
+    monkeypatch.setattr(bridge, "send_via_com", lambda drawing, path, **k: sent.append(drawing))
+    assert registry.call(ctx, "list_drawings", {}, opts).ok
+    fid = ctx.anonymizer.token("file", "bad_layers.dxf")
+    res = registry.call(ctx, registry.AUTOCAD_TOOL, {"file": fid, "layers": [ctx.anonymizer.token("layer", "Wall")],
+                                                     "handles": ["B6"]}, opts)
+    assert res.ok, res.error
+    assert res.data["sent"] and sent == ["bad_layers"] and res.data["file"] == fid
+    text = res.text()
+    assert "Wall" not in text and "bad_layers" not in text and "goto" not in text  # Bậc 1: không tên thật
+    lines = (ws / ".cadguard" / "goto.txt").read_text(encoding="utf-8").splitlines()
+    assert lines == ["F bad_layers", "H B6", "L Wall"]  # mã L_… đã giải mã về tên thật cho AutoCAD
+    assert not registry.call(ctx, registry.AUTOCAD_TOOL, {"file": fid, "handles": ["(command)"]}, opts).ok
+    assert not registry.call(ctx, registry.AUTOCAD_TOOL, {"file": fid, "layers": ["L_0000000000"]}, opts).ok

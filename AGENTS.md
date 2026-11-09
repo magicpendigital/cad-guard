@@ -17,7 +17,7 @@ Windows (PowerShell):
 - Sinh lại DXF tổng hợp: `python -m cadguard fixtures fixtures/synthetic`
 - Sửa an toàn (xem trước → xác nhận → tệp mới → hoàn tác): `propose`, `apply`, `undo`, `diff`, `validate` (`docs/changeset.md`)
 - Trợ lý AI ẩn danh Bậc 1: máy chủ MCP chỉ đọc `python -m cadguard mcp --workspace <thư mục>` (extras `[agent]`); hỏi một lần `cadguard ask`, trò chuyện `cadguard chat`, `cadguard engines`, khoá API `cadguard keys set|status|delete <nhà cung cấp>` (`docs/assistant.md`)
-- Chạy thử với AutoCAD theo tệp (M1+M2, `docs/autocad.md`): `cadguard watch <thư mục>` (tự kiểm DXF mới), `cadguard autocad --copy-to <thư mục>` (`cadguard.lsp`: CGXUAT/CGTOI/CGBAOCAO), `cadguard mcp-config claude-desktop|claude-code|codex --workspace <thư mục>`, `cadguard doctor [--mcp]`, đo MCP: `python scripts/test.py --extras agent --run ../../scripts/mcp_smoke.py`
+- Chạy thử với AutoCAD theo tệp (M1+M2, `docs/autocad.md`): `cadguard watch <thư mục>` (tự kiểm DXF mới), `cadguard autocad --copy-to <thư mục>` (`cadguard.lsp`: CGXUAT/CGTOI/CGDEN/CGBAOCAO; nút "Tới trong AutoCAD" của `app` + M3 điều hướng qua COM, `autocad/bridge.py`), `cadguard mcp-config claude-desktop|claude-code|codex --workspace <thư mục>`, `cadguard doctor [--mcp]`, đo MCP: `python scripts/test.py --extras agent --run ../../scripts/mcp_smoke.py`
 - Giao diện cục bộ kiểm luật + trợ lý: `python -m cadguard app --workspace <thư mục>` (`docs/app.md`)
 - Dựng 3D tất định: `python -m cadguard scene <dxf> --out cảnh.glb|.html|.json [--form form.html] [--supplement x.cgsup.json] [--with khac.dxf]`
 - Studio (web cục bộ, LLM xem nội dung bản vẽ sau khi đồng ý từng phiên, dựng 3D, bổ sung phần thiếu): `python -m cadguard studio [--backend auto|api|cli|none]` (`plans/cad-guard-3d.md` mục 3c)

@@ -1,6 +1,6 @@
-# Chạy thử cad-guard với AutoCAD (M1 + M2, duyệt 07/11/2026)
+# Chạy thử cad-guard với AutoCAD (M1 + M2 duyệt 07/11/2026; M3 điều hướng duyệt 09/11/2026)
 
-Phạm vi đã duyệt (xem `PLAN.md` mục 3): **theo tệp**, không điều khiển AutoCAD trực tiếp.
+Phạm vi đã duyệt (xem `PLAN.md` mục 3): **theo tệp**; ngoài ra M3 chỉ để **điều hướng** (đưa AutoCAD tới đối tượng lỗi qua COM, mục 6), không sửa bản vẽ.
 
 ```text
 AutoCAD (bản vẽ DWG đang mở)
@@ -14,7 +14,7 @@ Thư mục làm việc ──► cadguard watch: tự kiểm, ghi .cadguard\repo
 AutoCAD: CGTOI <handle>  → phóng tới và chọn đúng đối tượng
 ```
 
-Không có: plugin .NET, điều khiển AutoCAD qua COM, sửa DWG từ trợ lý. Sửa bản vẽ vẫn đi đường `cadguard propose/apply` ra tệp DXF **mới** (`docs/changeset.md`).
+Không có: plugin .NET, sửa DWG từ trợ lý hay qua COM. COM chỉ dùng để phóng tới và chọn đối tượng (mục 6). Sửa bản vẽ vẫn đi đường `cadguard propose/apply` ra tệp DXF **mới** (`docs/changeset.md`).
 
 ## 1. Cài trên máy thử
 
@@ -64,9 +64,10 @@ Trong AutoCAD: `APPLOAD` → chọn `cadguard.lsp` (nên thêm thư mục vào T
 | `CGTHUMUC` | Đặt thư mục làm việc (lưu trong cấu hình AutoCAD của người dùng) |
 | `CGXUAT` | Xuất bản vẽ đang mở ra `<thư mục>\<tên>.dxf` bằng `DXFOUT` (độ chính xác 16, phiên bản DXF mặc định) |
 | `CGTOI` | Nhập một hoặc nhiều handle (vd. `2A3F,2A40`) → phóng tới và chọn |
+| `CGDEN` | Tới đối tượng/layer vừa bấm **Tới trong AutoCAD** trên `cadguard app` (đọc `<thư mục>\.cadguard\goto.txt`) |
 | `CGBAOCAO` | Mở báo cáo HTML của bản vẽ đang mở |
 
-Tệp LISP không dùng ActiveX (`vla-`/`vlax-`), không lưu, không xoá, không sửa đối tượng (có test chặn).
+Tệp LISP không dùng ActiveX (`vla-`/`vlax-`), không lưu, không xoá, không sửa đối tượng (có test chặn). `CGXUAT` từ chối khi bản đang mở chính là tệp DXF trong thư mục làm việc (trước đây sẽ xoá rồi ghi đè tệp gốc).
 
 ### Danh sách kiểm tay trên AutoCAD dùng thử (bắt buộc trước khi hứa với người dùng)
 
@@ -85,3 +86,16 @@ Dùng bản vẽ tổng hợp (`fixtures/synthetic/*.dxf` mở rồi lưu thành
 | Ngày | Bản AutoCAD | Mục 1–7 | Ghi chú |
 | --- | --- | --- | --- |
 | 09/11/2026 | AutoCAD 2027 bản dùng thử (đầy đủ, Windows 11) | 1 đạt; 2 đạt; 3 đạt; 4 chưa kiểm; 5 đạt; 6 đạt; 7 không có LT | Bản vẽ tổng hợp `bad_layers.dxf` → SAVEAS DWG 2018 → `CGXUAT`. Mục 1: `[cad-guard] Đã nạp…` đúng dấu, có hộp thoại bảo mật "Unsigned Executable File" (chọn Load Once; muốn tắt thì thêm thư mục vào Trusted Locations). Mục 2: thanh tiêu đề vẫn `.dwg`. Mục 3: `watch` báo sau ~4 s. Mục 5: handle A2–B7 giống hệt qua DXF → DWG → DXFOUT; `CGTOI B6` chọn đúng LINE (0,0)→(10,10) trên layer 0 (kiểm bằng `LIST`). Mục 6: `CHPROP` B6 sang `FN-PART-OUTL`, `CGXUAT` lại → cảnh báo 1 → 0. `CGBAOCAO` lỗi khi thư mục gõ dạng `D:/…` (Explorer mở Documents); đã sửa (`cg:winpath`), kiểm lại mở đúng báo cáo. |
+| 09/11/2026 | AutoCAD 2027 bản dùng thử (đầy đủ, Windows 11) | M3 + CGDEN (mục 6): đạt | Bản vẽ tổng hợp `thu_bad_layers.dwg` mở chỉ đọc. `bridge.show` qua COM: cửa sổ AutoCAD lên trước, chọn đúng B6; theo layer `0` chọn 1 đối tượng, layer không có báo `layer:…`. Yêu cầu dành cho bản vẽ khác: báo "không phải bản đang mở", không chọn gì. `CGDEN` khi thư mục làm việc khác: báo "Chưa có yêu cầu". Nút **Tới trong AutoCAD** trên `cadguard app` (LY-01, 3 layer): toast "Đã chuyển sang AutoCAD…", AutoCAD chọn đúng. cadguard.lsp tự nạp qua COM khi chưa có `cg:den`, không thấy hộp thoại bảo mật. |
+
+## 6. Tới đối tượng lỗi từ giao diện (CGDEN + M3)
+
+Trong `cadguard app`, mỗi thẻ lỗi có handle hoặc layer có nút **Tới trong AutoCAD**:
+
+1. Giao diện ghi `<thư mục làm việc>\.cadguard\goto.txt` (dòng `F <bản vẽ>`, `H <handle>`, `L <layer>`; tối đa 200 handle, 100 layer).
+2. **M3 (Windows, AutoCAD bản đầy đủ, pywin32 — extras `[autocad]`, đã có sẵn khi cài `[agent]`):** cad-guard tìm bản vẽ cùng tên đang mở trong AutoCAD, chuyển sang tab đó, đưa cửa sổ lên trước và gửi đúng một biểu thức cố định `(cg:den "<tệp yêu cầu>")` (tự nạp `cadguard.lsp` đi kèm gói nếu chưa nạp). Không gửi lệnh nào khác, không đọc/ghi đối tượng qua COM, không lưu. AutoCAD đang chạy lệnh (`CMDACTIVE`) hoặc mở hộp thoại thì không gửi và báo lý do.
+3. **Không có COM (AutoCAD LT, máy không cài pywin32, hoặc `cadguard app --no-autocad-com`):** chuyển sang AutoCAD và gõ `CGDEN`. Thư mục `CGTHUMUC` phải trùng thư mục của `cadguard app`.
+
+`CGDEN`/`cg:den` kiểm tên bản vẽ trong yêu cầu khớp bản đang mở; lỗi theo layer (vd. LY-01) chọn mọi đối tượng trên layer trong tờ đang xem.
+
+Trợ lý AI: `cadguard mcp --allow-autocad` (hoặc `mcp-config … --allow-autocad`) thêm công cụ `show_in_autocad` (mặc định TẮT). Trợ lý gửi handle/mã layer (L_…); máy chủ giải mã về tên thật chỉ để ghi tệp yêu cầu, kết quả trả trợ lý không có tên thật.

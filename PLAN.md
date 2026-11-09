@@ -20,7 +20,7 @@ Cập nhật: 07/11/2026. Đây là **điểm vào duy nhất** để biết d�
 | Trợ lý | MCP stdio chỉ đọc (6 công cụ, `propose_changeset` khi bật cờ); engine CLI/API; kho khoá hệ điều hành | Chưa thử với người dùng thật (A3) |
 | Giao diện | `cadguard app` (cục bộ, mã phiên), `cadguard studio`, `cadguard review` (cổng Tailscale) | Ba server riêng; xem Đợt 4 |
 | 3D | `cg.scene/1` tất định, báo phần thiếu, xuất GLB | Diễn hoạ là nhánh phụ |
-| AutoCAD | Chưa có kết nối nào | Xem Đợt 3 (M1 + M2) |
+| AutoCAD | `cadguard.lsp` (CGXUAT/CGTOI/CGDEN/CGBAOCAO), `watch`, `mcp-config`; M3 điều hướng qua COM (`autocad/bridge.py`) | Kiểm tay AutoCAD 2027 bản đầy đủ; chưa có LT |
 
 ## 3. Lộ trình chạy thử (duyệt 07/11/2026: phạm vi AutoCAD M1 + M2)
 
@@ -28,7 +28,7 @@ Phạm vi kết nối AutoCAD đã duyệt:
 
 - **M1:** trợ lý AI (Claude Desktop/Code, Codex…) ↔ `cadguard mcp` ↔ DXF xuất từ AutoCAD.
 - **M2:** adapter mỏng đúng P1b đã duyệt ("adapter xuất DXF + thư mục theo dõi"): tệp AutoLISP `cadguard.lsp` (`CGXUAT` xuất bản đang mở ra DXF, không đổi DWG; `CGTOI` nhảy tới đối tượng theo handle) và lệnh `cadguard watch`.
-- **Không làm M3** (MCP điều khiển AutoCAD qua COM): cần CEO mở cổng hướng D.
+- **M3 thu hẹp (người dùng duyệt 09/11/2026): chỉ điều hướng.** Nút "Tới trong AutoCAD" trên `cadguard app` và công cụ MCP `show_in_autocad` (cờ `--allow-autocad`, mặc định tắt) đưa AutoCAD tới đối tượng qua COM. Không sửa/lưu bản vẽ qua COM; mọi chỉnh sửa vẫn đi đường changeset. Điều khiển AutoCAD rộng hơn (sửa qua COM, plugin .NET) vẫn cần CEO mở cổng hướng D.
 
 | Đợt | Nội dung | Tiêu chí nghiệm thu |
 | --- | --- | --- |
@@ -48,6 +48,7 @@ Phạm vi kết nối AutoCAD đã duyệt:
 2. Handle giữ nguyên qua DXFOUT: đạt trên AutoCAD 2027 với bản vẽ tổng hợp. Còn phải kiểm trên bản vẽ thật có khối/xref (P0) trước khi hứa `CGTOI` với khách.
 3. P0: bộ mẫu thật ngoài repo, đồng ý dữ liệu (`docs/samples-intake.md`).
 4. P1c: đo độ chính xác cùng kỹ sư rà soát trước khi bật bất kỳ cảnh báo thời gian thực nào.
+5. M3: người dùng duyệt 09/11/2026 phần **điều hướng**; cần CEO xác nhận lại nếu quy định cổng hướng D áp cả cho phần này.
 
 ## 5. Tệp tham chiếu trong `plans/`
 

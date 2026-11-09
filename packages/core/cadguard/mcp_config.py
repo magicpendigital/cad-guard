@@ -63,7 +63,7 @@ def choose_python(python: str | None = None) -> tuple[str, bool]:
 
 
 def server_entry(workspace: Path, *, profile: Path | None = None, allow_propose: bool = False,
-                 python: str | None = None) -> dict:
+                 python: str | None = None, allow_autocad: bool = False) -> dict:
     ws = Path(workspace).resolve()
     if not ws.is_dir():
         raise ValueError("Thư mục làm việc (--workspace) không tồn tại.")
@@ -75,6 +75,8 @@ def server_entry(workspace: Path, *, profile: Path | None = None, allow_propose:
         args += ["--profile", prof.as_posix()]
     if allow_propose:
         args.append("--allow-propose")
+    if allow_autocad:
+        args.append("--allow-autocad")
     command, needs_path = choose_python(python)
     entry: dict = {"command": command, "args": args}
     if needs_path:
@@ -87,11 +89,11 @@ def _toml_str(s: str) -> str:
 
 
 def render(client: str, workspace: Path, *, profile: Path | None = None, allow_propose: bool = False,
-           python: str | None = None) -> tuple[str, str]:
+           python: str | None = None, allow_autocad: bool = False) -> tuple[str, str]:
     """Trả (nội dung in ra stdout, ghi chú cho người dùng in ra stderr)."""
     if client not in CLIENTS:
         raise ValueError(f"Máy khách chưa hỗ trợ: {client}. Có: {', '.join(CLIENTS)}.")
-    e = server_entry(workspace, profile=profile, allow_propose=allow_propose, python=python)
+    e = server_entry(workspace, profile=profile, allow_propose=allow_propose, python=python, allow_autocad=allow_autocad)
     if client == "claude-desktop":
         text = json.dumps({"mcpServers": {SERVER: e}}, ensure_ascii=False, indent=2)
         note = ("Claude Desktop: Settings → Developer → Edit Config, gộp khối trên vào mục \"mcpServers\", lưu, rồi THOÁT hẳn "
@@ -104,7 +106,8 @@ def render(client: str, workspace: Path, *, profile: Path | None = None, allow_p
         note = ("Claude Code: chạy lệnh trên TRONG thư mục làm việc (ghi .mcp.json). Máy chậm: đặt MCP_TIMEOUT=60000 nếu thấy "
                 "'Failed to connect'. Mẫu quyền chặn công cụ đọc tệp/shell: knowledge/mcp/claude-code/.claude/settings.json.")
     else:
-        names = [s["name"] for s in registry.specs(registry.SpecOptions(allow_propose=allow_propose))]
+        names = [s["name"] for s in registry.specs(registry.SpecOptions(allow_propose=allow_propose,
+                                                                              allow_autocad=allow_autocad))]
         lines = [f"[mcp_servers.{SERVER}]", f"command = {_toml_str(e['command'])}",
                  "args = [" + ", ".join(_toml_str(a) for a in e["args"]) + "]",
                  f"cwd = {_toml_str(Path(workspace).resolve().as_posix())}", "startup_timeout_sec = 60",

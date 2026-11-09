@@ -5,6 +5,7 @@
 ;;;   CGTHUMUC  chọn thư mục làm việc của cad-guard (nơi `cadguard watch` / `cadguard mcp --workspace` đang trỏ tới)
 ;;;   CGXUAT    xuất bản vẽ đang mở ra <thư mục>\<tên bản vẽ>.dxf bằng DXFOUT (bản sao; DWG đang mở giữ nguyên)
 ;;;   CGTOI     nhập một hoặc nhiều handle (cách nhau dấu phẩy/khoảng trắng) mà cad-guard hoặc trợ lý AI báo -> phóng tới và chọn
+;;;   CGDEN     tới đối tượng/layer mà người dùng vừa bấm "Tới trong AutoCAD" trên giao diện cad-guard (đọc .cadguard\goto.txt)
 ;;;   CGBAOCAO  mở báo cáo HTML do `cadguard watch` ghi cho bản vẽ đang mở
 ;;; Nạp: APPLOAD -> chọn tệp này (hoặc thêm vào Startup Suite). Thư mục chứa tệp nên nằm trong Trusted Locations.
 ;;; Tệp lưu UTF-8; AutoCAD 2021+ (LISPSYS = 1, mặc định) đọc đúng tiếng Việt.
@@ -52,8 +53,12 @@
      (princ "\n[cad-guard] Bản vẽ chưa có tên. Hãy lưu bản vẽ (SAVE) trước rồi chạy CGXUAT."))
     ((null (setq dir (cg:folder)))
      (princ "\n[cad-guard] Chưa đặt thư mục làm việc. Chạy CGTHUMUC trước."))
+    ;; Bản đang mở là chính tệp DXF trong thư mục làm việc: xuất sẽ xoá rồi ghi đè tệp gốc. Không làm.
+    ((= (strcase (setq out (cg:join dir (strcat (cg:base) ".dxf"))))
+        (strcase (cg:winpath (strcat (getvar "DWGPREFIX") (getvar "DWGNAME")))))
+     (princ (strcat "\n[cad-guard] Bản vẽ đang mở chính là tệp DXF trong thư mục làm việc: CGXUAT không ghi đè tệp này."
+                    "\n[cad-guard] `cadguard watch` đã tự kiểm tệp; sau khi sửa và lưu (SAVE), báo cáo tự cập nhật.")))
     (T
-     (setq out (cg:join dir (strcat (cg:base) ".dxf")))
      (if (findfile out) (vl-file-delete out))
      (setq fd (getvar "FILEDIA") ce (getvar "CMDECHO"))
      (setvar "FILEDIA" 0)
@@ -81,23 +86,87 @@
   (reverse out)
 )
 
-(defun c:CGTOI ( / txt hs ss e missing)
-  (setq txt (getstring T "\n[cad-guard] Nhập handle (vd. 2A3F hoặc 2A3F,2A40): "))
-  (setq hs (cg:split (strcase txt)) ss (ssadd) missing '())
+;; Thêm các handle vào bộ chọn ss; trả danh sách handle không có trong bản vẽ.
+(defun cg:addhandles (hs ss / e missing)
+  (setq missing '())
   (foreach h hs
     (setq e (handent h))
     (if (and e (entget e))
       (ssadd e ss)
       (setq missing (cons h missing))))
+  (reverse missing)
+)
+
+;; Thoát ký tự đại diện của ssget/wcmatch (# @ . * ? ~ [ ] - , `) để lọc đúng tên layer.
+(defun cg:wcesc (s / out i ch)
+  (setq out "" i 1)
+  (while (<= i (strlen s))
+    (setq ch (substr s i 1))
+    (setq out (strcat out (if (vl-string-search ch "#@.*?~[]-,`") "`" "") ch))
+    (setq i (1+ i)))
+  out
+)
+
+;; Thêm mọi đối tượng trên layer (trong không gian/tờ đang xem) vào ss; trả T nếu có.
+(defun cg:addlayer (name ss / sel i)
+  (if (setq sel (ssget "_X" (list (cons 8 (cg:wcesc name)) (cons 410 (getvar "CTAB")))))
+    (progn
+      (setq i 0)
+      (while (< i (sslength sel)) (ssadd (ssname sel i) ss) (setq i (1+ i)))
+      T))
+)
+
+;; Phóng tới và chọn ss; in những gì không tìm thấy.
+(defun cg:show (ss missing)
   (if (> (sslength ss) 0)
     (progn
       (command "_.ZOOM" "_Object" ss "")
       (sssetfirst nil ss)
-      (princ (strcat "\n[cad-guard] Đã phóng tới và chọn " (itoa (sslength ss)) " đối tượng.")))
+      (princ (strcat "\n[cad-guard] Đã phóng tới và chọn " (itoa (sslength ss)) " đối tượng. Nhấn Esc để bỏ chọn.")))
     (princ "\n[cad-guard] Không tìm thấy đối tượng nào."))
   (if missing
-    (princ (strcat "\n[cad-guard] Không có trong bản vẽ đang mở (bản vẽ đã đổi sau khi xuất, hoặc đối tượng nằm trong khối): "
-                   (apply 'strcat (mapcar '(lambda (x) (strcat x " ")) (reverse missing))))))
+    (princ (strcat "\n[cad-guard] Không có trong bản vẽ/tờ đang mở (bản vẽ đã đổi sau khi kiểm, đối tượng nằm trong khối, "
+                   "hoặc ở tờ khác): "
+                   (apply 'strcat (mapcar '(lambda (x) (strcat x " ")) missing)))))
+  (princ)
+)
+
+(defun c:CGTOI ( / txt ss)
+  (setq txt (getstring T "\n[cad-guard] Nhập handle (vd. 2A3F hoặc 2A3F,2A40): "))
+  (setq ss (ssadd))
+  (cg:show ss (cg:addhandles (cg:split (strcase txt)) ss))
+)
+
+;; Đọc tệp yêu cầu do giao diện cad-guard ghi (dòng "F <bản vẽ>", "H <handle>", "L <layer>") rồi phóng tới.
+;; Giao diện (M3) gọi thẳng hàm này qua COM; người dùng gõ CGDEN khi không có COM (M2, AutoCAD LT).
+(defun cg:den (path / fd line want hs ls ss missing)
+  (cond
+    ((not (findfile path))
+     (princ "\n[cad-guard] Chưa có yêu cầu. Bấm \"Tới trong AutoCAD\" trên giao diện cad-guard trước."))
+    (T
+     (setq fd (open path "r" "utf8") hs '() ls '())
+     (while (setq line (read-line fd))
+       (if (> (strlen line) 2)
+         (cond
+           ((= (substr line 1 2) "F ") (setq want (substr line 3)))
+           ((= (substr line 1 2) "H ") (setq hs (cons (strcase (substr line 3)) hs)))
+           ((= (substr line 1 2) "L ") (setq ls (cons (substr line 3) ls))))))
+     (close fd)
+     (if (and want (/= (strcase want) (strcase (cg:base))))
+       (princ (strcat "\n[cad-guard] Yêu cầu dành cho bản vẽ \"" want "\", không phải bản đang mở."
+                      " Chuyển sang tab bản vẽ đó rồi chạy lại CGDEN."))
+       (progn
+         (setq ss (ssadd) missing (cg:addhandles (reverse hs) ss))
+         (foreach l (reverse ls)
+           (if (not (cg:addlayer l ss)) (setq missing (append missing (list (strcat "layer:" l))))))
+         (cg:show ss missing)))))
+  (princ)
+)
+
+(defun c:CGDEN ( / dir)
+  (if (null (setq dir (cg:folder)))
+    (princ "\n[cad-guard] Chưa đặt thư mục làm việc. Chạy CGTHUMUC trước.")
+    (cg:den (cg:join dir ".cadguard\\goto.txt")))
   (princ)
 )
 
@@ -112,5 +181,5 @@
   (princ)
 )
 
-(princ "\n[cad-guard] Đã nạp: CGTHUMUC, CGXUAT, CGTOI, CGBAOCAO.")
+(princ "\n[cad-guard] Đã nạp: CGTHUMUC, CGXUAT, CGTOI, CGDEN, CGBAOCAO.")
 (princ)
