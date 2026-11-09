@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Plugin AutoCAD cho cad-guard (hướng D, CEO mở cổng 09/11/2026): bảng neo CGBANG + ghim lỗi tạm thời CGGHIM.
+    Không sửa, không lưu bản vẽ. Build: python scripts/build_acad_plugin.py (tự tìm thư mục AutoCAD qua registry),
+    hoặc: dotnet build -c Release -p:AcadDir="<thư mục cài AutoCAD>"
+    AutoCAD 2025+ chạy .NET 8; AutoCAD 2027 chạy .NET 10 (acdbmgd.runtimeconfig.json). AutoCAD LT không nạp được .NET.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <AssemblyName>CadGuard.Acad</AssemblyName>
+    <RootNamespace>CadGuard.Acad</RootNamespace>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <PlatformTarget>x64</PlatformTarget>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <NoWarn>$(NoWarn);MSB3277</NoWarn>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <Version>0.1.0</Version>
+    <AcadDir Condition="'$(AcadDir)' == ''">C:\Program Files\Autodesk\AutoCAD 2027</AcadDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Tham chiếu DLL của AutoCAD đã cài (không chép, không phân phối lại) -->
+    <Reference Include="accoremgd"><HintPath>$(AcadDir)\accoremgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acdbmgd"><HintPath>$(AcadDir)\acdbmgd.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="acmgd"><HintPath>$(AcadDir)\acmgd.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+</Project>

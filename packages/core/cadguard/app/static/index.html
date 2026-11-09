@@ -108,6 +108,7 @@
           <button type="button" id="zoomFit" title="Vừa khung">Vừa khung</button>
         </div>
       </div>
+      <div class="sheet-bar" id="sheetBar" role="toolbar" aria-label="Chọn tờ (trang in)" hidden></div>
       <div class="cv-wrap"><div class="sheet" id="sheet"></div></div>
       <div class="cv-status">
         <span class="lock"><span data-icon="lock" class="i14"></span>Tệp gốc chỉ đọc</span>
@@ -122,6 +123,7 @@
         <button role="tab" type="button" data-p="chat" aria-selected="true"><span data-icon="chat"></span>Trợ lý</button>
         <button role="tab" type="button" data-p="finds" aria-selected="false" tabindex="-1"><span data-icon="alert"></span>Lỗi <span class="cnt" id="cntF">–</span></button>
         <button role="tab" type="button" data-p="chg" aria-selected="false" tabindex="-1"><span data-icon="branch"></span>Thay đổi <span class="cnt" id="cntC">0</span></button>
+        <button role="tab" type="button" data-p="help" aria-selected="false" tabindex="-1"><span data-icon="info"></span>Hướng dẫn</button>
       </div>
 
       <div class="pane on" id="p-chat" role="tabpanel">
@@ -141,6 +143,28 @@
       </div>
 
       <div class="pane" id="p-finds" role="tabpanel"><div class="list" id="finds"></div></div>
+
+      <div class="pane" id="p-help" role="tabpanel"><div class="list help-list">
+        <h3>Lệnh cad-guard trong AutoCAD</h3>
+        <p class="muted">Gõ <b>CGHELP</b> trong AutoCAD để xem lại danh sách này ở dòng lệnh. Quy trình thường dùng: CGTHUMUC (một lần) → CGXUAT → xem lỗi (bảng này hoặc CGBAOCAO) → bấm “Tới trong AutoCAD” hoặc CGTOI.</p>
+        <dl class="help-cmds">
+          <dt>CGTHUMUC</dt><dd>Chọn thư mục làm việc của cad-guard. Phải trùng thư mục mà <code>cadguard watch</code> / <code>cadguard app</code> đang mở. Chỉ cần làm một lần.</dd>
+          <dt>CGXUAT</dt><dd>Lưu bản vẽ (Ctrl+S) rồi gõ CGXUAT: xuất bản đang mở ra DXF vào thư mục làm việc để cad-guard kiểm. DWG giữ nguyên.</dd>
+          <dt>CGBAOCAO</dt><dd>Mở báo cáo lỗi HTML của bản vẽ đang mở (cần <code>cadguard watch</code> đang chạy).</dd>
+          <dt>CGTOI</dt><dd>Dán một hoặc nhiều handle (mã đối tượng) để AutoCAD phóng tới và chọn. Xem xong nhấn Esc; đừng nhấn Delete khi đang chọn.</dd>
+          <dt>CGDEN</dt><dd>Tới đối tượng vừa bấm “Tới trong AutoCAD”. Thường AutoCAD tự nhảy; chỉ gõ khi AutoCAD đang bận lệnh khác.</dd>
+          <dt>CGBANG</dt><dd>Mở/ẩn bảng cad-guard này cạnh màn hình (plugin CadGuard.Acad).</dd>
+          <dt>CGGHIM</dt><dd>Hiện/ẩn ghim số lỗi trên bản vẽ. Ghim chỉ vẽ trên màn hình, không lưu vào DWG; số luôn cùng cỡ khi phóng.</dd>
+          <dt>CGHELP</dt><dd>Danh sách lệnh và hướng dẫn chi tiết từng lệnh ngay ở dòng lệnh.</dd>
+        </dl>
+        <h3>Bậc lỗi khi chốt tờ</h3>
+        <dl class="help-cmds">
+          <dt>Chặn</dt><dd>Lỗi ảnh hưởng sản xuất (kích thước ghi đè, sai đơn vị, trùng thẻ chi tiết). Phải sửa mới chốt được tờ.</dd>
+          <dt>Cảnh báo</dt><dd>Bấm “Đã xem”, hoặc “Bỏ qua” kèm lý do, rồi chốt tờ được.</dd>
+          <dt>Gợi ý</dt><dd>Ẩn mặc định, không ảnh hưởng chốt tờ.</dd>
+        </dl>
+        <p class="muted">Trưởng phòng kỹ thuật đổi bậc từng luật trong hồ sơ công ty (khoá <code>gate:</code>).</p>
+      </div></div>
 
       <div class="pane" id="p-chg" role="tabpanel">
         <div class="list" id="chgList"></div>

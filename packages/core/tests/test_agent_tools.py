@@ -18,8 +18,8 @@ def ctx(tmp_path):
 
 
 def test_list(ctx):
-    # make_all sinh thêm bộ dựng 3D (scene/studio) trong scene/ và bộ xem trước trong preview/; list_drawings quét đệ quy.
-    assert list_drawings(ctx)["total"] == len(fixtures.ALL) + len(fixtures.SCENE_FIXTURES) + len(fixtures.PREVIEW_FIXTURES)
+    # make_all sinh thêm bộ dựng 3D (scene/studio) trong scene/, bộ xem trước trong preview/, bộ tờ trong sheets/; list_drawings quét đệ quy.
+    assert list_drawings(ctx)["total"] == len(fixtures.ALL) + len(fixtures.SCENE_FIXTURES) + len(fixtures.PREVIEW_FIXTURES) + len(fixtures.SHEET_FIXTURES)
 
 
 def test_audit(ctx):

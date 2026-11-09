@@ -52,7 +52,7 @@ class EntityRec(BaseModel):
     yscale: float | None = None  # INSERT
     # Nội dung để LLM đọc (thêm cho studio): chữ, số đo, đường tròn
     text: str | None = None  # TEXT/MTEXT (cắt tối đa 300 ký tự)
-    pos: tuple[float, float] | None = None  # TEXT/MTEXT: điểm chèn
+    pos: tuple[float, float] | None = None  # TEXT/MTEXT: điểm chèn; DIMENSION: điểm giữa chữ (thiếu: điểm định nghĩa)
     dim_value: float | None = None  # DIMENSION: số đo thật
     radius: float | None = None  # CIRCLE/ARC (tâm ở `pts[0]`)
     # Cho hình xem trước đơn giản hoá của `cadguard app` (thêm sau; mô hình cũ không có vẫn hợp lệ)
@@ -80,6 +80,10 @@ class BlockRec(BaseModel):
     layers: dict[str, int] = Field(default_factory=dict)
     child_blocks: dict[str, int] = Field(default_factory=dict)
     depth: int = 0
+    # Khung bao hình học trực tiếp trong khối (LINE, LWPOLYLINE, CIRCLE, ARC, điểm chèn TEXT/MTEXT; không bung khối con),
+    # tính TƯƠNG ĐỐI điểm gốc khối (x0, y0, x1, y1). Dùng nhận diện khung tên/khung tờ trong không gian mô hình
+    # (`sheets.py`). Mới thêm (09/11/2026), mặc định None (tương thích ngược).
+    extents: tuple[float, float, float, float] | None = None
 
 
 class SpaceStats(BaseModel):
@@ -120,6 +124,14 @@ class ViewportRec(BaseModel):
     layout: str
     id: int
     scale: float | None = None  # tờ giấy / mô hình (1:20 -> 0.05)
+    # Vùng nhìn (mới thêm 09/11/2026, mặc định None): khung trên giấy (tâm, rộng, cao; đơn vị giấy) và vùng
+    # không gian mô hình nó nhìn (tâm, chiều cao; góc xoay độ). Vùng mô hình = tâm ± (cao*rộng/cao_giấy)/2, ± cao/2.
+    center: tuple[float, float] | None = None
+    width: float | None = None
+    height: float | None = None
+    view_center: tuple[float, float] | None = None
+    view_height: float | None = None
+    twist: float | None = None
 
 
 class LayoutRec(BaseModel):

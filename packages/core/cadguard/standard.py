@@ -38,6 +38,10 @@ class Standard(BaseModel):
     globals: dict[str, Any] = Field(default_factory=dict)
     rules: list[RuleSpec]
     profile: dict[str, str] | None = None  # hồ sơ công ty đã áp (tên, phiên bản); None = mặc định của chuẩn
+    # Bậc chốt tờ do hồ sơ công ty đặt {mã luật: "block" | "warn" | "hint"}; luật không có ở đây dùng bậc mặc định
+    # của `gate.py`. Không đổi kết quả luật, chỉ đổi luật nào CHẶN chốt tờ.
+    gate: dict[str, str] = Field(default_factory=dict)
+    gate_require_ack: bool = True
 
     def rule(self, rule_id: str) -> RuleSpec | None:
         return next((r for r in self.rules if r.id == rule_id), None)
@@ -88,6 +92,15 @@ class LayerPatterns(BaseModel):
     protected: list[str] | None = None
 
 
+class GateSpec(BaseModel):
+    """Phân bậc chốt tờ (`gate.py`): Chặn / Cảnh báo / Gợi ý. Luật không liệt kê giữ bậc mặc định."""
+    model_config = ConfigDict(extra="forbid")
+    block: list[str] = Field(default_factory=list)  # còn lỗi thì KHÔNG chốt được tờ
+    warn: list[str] = Field(default_factory=list)  # chốt được sau khi bấm "Đã xem" hoặc "Bỏ qua" có lý do
+    hint: list[str] = Field(default_factory=list)  # gợi ý, ẩn mặc định, không ảnh hưởng chốt
+    require_ack: bool = True  # False: cảnh báo không cần xác nhận trước khi chốt
+
+
 class CompanyProfile(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
     schema_id: str = Field(alias="schema")
@@ -99,6 +112,7 @@ class CompanyProfile(BaseModel):
     layer_patterns: LayerPatterns = Field(default_factory=LayerPatterns)
     overrides: dict[str, dict[str, Any]] = Field(default_factory=dict)
     disabled: list[str] = Field(default_factory=list)
+    gate: GateSpec | None = None
 
 
 def _pydantic_msg(exc: Exception) -> str:
@@ -227,5 +241,16 @@ def apply_profile(std: Standard, prof: CompanyProfile) -> Standard:
         if spec is None:
             raise ProfileError(f"disabled: chuẩn '{std.name}' không có luật '{rule_id}'.")
         spec.enabled = False
+    if prof.gate is not None:
+        seen: dict[str, str] = {}
+        for tier in ("block", "warn", "hint"):
+            for rule_id in getattr(prof.gate, tier):
+                if out.rule(rule_id) is None:
+                    raise ProfileError(f"gate.{tier}: chuẩn '{std.name}' không có luật '{rule_id}'.")
+                if rule_id in seen and seen[rule_id] != tier:
+                    raise ProfileError(f"gate: luật '{rule_id}' nằm ở cả '{seen[rule_id]}' và '{tier}'.")
+                seen[rule_id] = tier
+        out.gate = seen
+        out.gate_require_ack = prof.gate.require_ack
     out.profile = {"name": prof.name, "version": prof.version}
     return out

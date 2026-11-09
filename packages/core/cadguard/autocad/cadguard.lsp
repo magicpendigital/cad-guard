@@ -7,6 +7,7 @@
 ;;;   CGTOI     nhập một hoặc nhiều handle (cách nhau dấu phẩy/khoảng trắng) mà cad-guard hoặc trợ lý AI báo -> phóng tới và chọn
 ;;;   CGDEN     tới đối tượng/layer mà người dùng vừa bấm "Tới trong AutoCAD" trên giao diện cad-guard (đọc .cadguard\goto.txt)
 ;;;   CGBAOCAO  mở báo cáo HTML do `cadguard watch` ghi cho bản vẽ đang mở
+;;;   CGHELP    danh sách lệnh cad-guard và hướng dẫn chi tiết từng lệnh (gõ tên lệnh để xem)
 ;;; Nạp: APPLOAD -> chọn tệp này (hoặc thêm vào Startup Suite). Thư mục chứa tệp nên nằm trong Trusted Locations.
 ;;; Tệp lưu UTF-8; AutoCAD 2021+ (LISPSYS = 1, mặc định) đọc đúng tiếng Việt.
 ;;; Cần kiểm trên máy thử (docs/autocad.md mục 4): handle giữ nguyên qua DXFOUT; DXFOUT không đổi tên bản vẽ đang mở.
@@ -181,5 +182,61 @@
   (princ)
 )
 
-(princ "\n[cad-guard] Đã nạp: CGTHUMUC, CGXUAT, CGTOI, CGDEN, CGBAOCAO.")
+;; ---------- CGHELP: tra cứu lệnh ----------
+;; Mỗi mục: (tên  mô-tả-ngắn  (dòng hướng dẫn chi tiết ...)). Giữ khớp docs/autocad.md.
+(setq cg:*help*
+  (list
+    (list "CGTHUMUC" "Chọn thư mục làm việc của cad-guard"
+      (list "Dùng khi: lần đầu, hoặc khi đổi sang thư mục dự án khác."
+            "Cách dùng: gõ CGTHUMUC, dán đường dẫn thư mục (vd. D:\\CadGuardPhien\\phien-01), Enter."
+            "Thư mục này phải TRÙNG thư mục `cadguard watch` / `cadguard app --workspace` đang mở."
+            "Enter không nhập gì: giữ thư mục cũ. Thiết lập được nhớ cho lần mở AutoCAD sau."))
+    (list "CGXUAT" "Xuất bản vẽ đang mở ra DXF vào thư mục làm việc"
+      (list "Dùng khi: muốn cad-guard kiểm bản vẽ đang vẽ."
+            "Cách dùng: lưu bản vẽ (Ctrl+S) rồi gõ CGXUAT. Tệp <tên bản vẽ>.dxf được ghi vào thư mục làm việc."
+            "DWG đang mở giữ nguyên, không đổi tên. `cadguard watch` tự kiểm tệp DXF mới trong vài giây."
+            "Từ chối nếu bản đang mở chính là tệp DXF trong thư mục làm việc (tránh ghi đè tệp gốc)."))
+    (list "CGBAOCAO" "Mở báo cáo lỗi HTML của bản vẽ đang mở"
+      (list "Dùng khi: đã CGXUAT và `cadguard watch` đang chạy."
+            "Cách dùng: gõ CGBAOCAO; báo cáo mở trong trình duyệt."
+            "Lỗi theo đối tượng có mã handle ở cột Vị trí: dùng CGTOI để tới."
+            "Lỗi theo layer/kiểu chữ (vd. LY-01) không có handle: dùng nút 'Tới trong AutoCAD' trên cadguard app."))
+    (list "CGTOI" "Tới và chọn đối tượng theo handle"
+      (list "Cách dùng: gõ CGTOI, dán một hoặc nhiều handle (cách nhau dấu phẩy hoặc khoảng trắng), Enter."
+            "AutoCAD phóng tới và chọn các đối tượng; handle không có trong bản vẽ được liệt kê."
+            "Xem xong nhấn Esc để bỏ chọn. ĐỪNG nhấn Delete khi đang chọn."))
+    (list "CGDEN" "Tới đối tượng vừa bấm 'Tới trong AutoCAD' trên giao diện"
+      (list "Thường không cần gõ: bấm nút trên cadguard app thì AutoCAD tự nhảy tới (M3)."
+            "Gõ CGDEN khi AutoCAD không tự nhảy (đang bận lệnh khác, hoặc app chạy với --no-autocad-com)."
+            "Cần CGTHUMUC trỏ đúng thư mục app đang mở. Lỗi theo layer: chọn mọi đối tượng của layer trong tờ đang xem."))
+    (list "CGHELP" "Danh sách lệnh và hướng dẫn"
+      (list "Gõ CGHELP, rồi gõ tên lệnh (vd. CGTOI) để xem chi tiết; Enter trống để thoát."
+            "Nhấn F2 để mở cửa sổ chữ nếu dòng lệnh quá ngắn."))
+    (list "CGBANG" "Mở bảng cad-guard cạnh màn hình (cần plugin CadGuard.Acad.dll)"
+      (list "Có khi đã nạp plugin .NET (NETLOAD CadGuard.Acad.dll, xem docs/autocad.md mục 7)."
+            "Bảng hiện danh sách lỗi, trò chuyện với trợ lý và hướng dẫn; cần `cadguard app` đang chạy."))
+    (list "CGGHIM" "Hiện/ẩn ghim số lỗi tạm thời trên bản vẽ (cần plugin CadGuard.Acad.dll)"
+      (list "Ghim chỉ vẽ trên màn hình, KHÔNG lưu vào DWG; số luôn cùng cỡ khi phóng."
+            "Lấy lỗi từ báo cáo `cadguard watch` của bản vẽ đang mở. Gõ lại CGGHIM để ẩn."))
+  )
+)
+
+(defun cg:helpline (it)
+  (princ (strcat "\n  " (car it) (substr "            " 1 (max 1 (- 10 (strlen (car it))))) (cadr it)))
+)
+
+(defun c:CGHELP ( / name it)
+  (princ "\n[cad-guard] Các lệnh:")
+  (foreach it cg:*help* (cg:helpline it))
+  (princ "\n  Quy trình thường dùng: CGTHUMUC (một lần) -> CGXUAT -> CGBAOCAO hoặc cadguard app -> CGTOI/CGDEN.")
+  (while (/= "" (setq name (strcase (getstring "\n[cad-guard] Gõ tên lệnh để xem chi tiết (Enter để thoát): "))))
+    (if (setq it (assoc name cg:*help*))
+      (progn
+        (princ (strcat "\n" (car it) " — " (cadr it)))
+        (foreach ln (caddr it) (princ (strcat "\n  - " ln))))
+      (princ (strcat "\n[cad-guard] Không có lệnh \"" name "\". Gõ một trong: CGTHUMUC CGXUAT CGBAOCAO CGTOI CGDEN CGHELP CGBANG CGGHIM."))))
+  (princ)
+)
+
+(princ "\n[cad-guard] Đã nạp: CGTHUMUC, CGXUAT, CGTOI, CGDEN, CGBAOCAO, CGHELP. Gõ CGHELP để xem hướng dẫn.")
 (princ)

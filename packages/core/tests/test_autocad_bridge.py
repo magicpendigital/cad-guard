@@ -139,6 +139,21 @@ def test_lisp_defines_commands_and_never_modifies_drawing():
     assert '(open path "r" "utf8")' in den and "(cg:base)" in den and "(close fd)" in den
 
 
+def test_lisp_help_covers_every_command():
+    """CGHELP liệt kê mọi lệnh c:CG… của tệp LSP (và lệnh của plugin .NET), mỗi lệnh có hướng dẫn chi tiết."""
+    src = LSP.read_text(encoding="utf-8")
+    code = "\n".join(line for line in src.splitlines() if not line.lstrip().startswith(";"))
+    defined = set(re.findall(r"\(defun c:(CG[A-Z]+)\b", code))
+    assert "CGHELP" in defined
+    helped = set(re.findall(r'\(list "(CG[A-Z]+)" "', code))
+    assert defined <= helped, defined - helped
+    plugin_cs = CORE.parent / "acad-plugin" / "CadGuardPlugin.cs"
+    if plugin_cs.exists():
+        net_cmds = set(re.findall(r'\[CommandMethod\("(CG[A-Z]+)"', plugin_cs.read_text(encoding="utf-8")))
+        assert net_cmds and net_cmds <= helped, net_cmds - helped
+    assert "Gõ CGHELP" in code
+
+
 def test_autocad_command_copies_lisp(tmp_path):
     env = dict(os.environ, PYTHONPATH=str(CORE), PYTHONUTF8="1")
     r = subprocess.run([sys.executable, "-m", "cadguard", "autocad", "--copy-to", str(tmp_path)], env=env,

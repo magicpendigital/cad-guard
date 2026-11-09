@@ -118,6 +118,10 @@
   // ---------- mã phiên + gọi API ----------
   const qs = new URLSearchParams(location.search);
   let TOKEN = qs.get("t") || sessionStorage.getItem("cg-token") || "";
+  // Bảng neo trong AutoCAD (plugin CadGuard.Acad, lệnh CGBANG): ?panel=1&dwg=<tên bản vẽ đang mở>
+  if (qs.get("panel") === "1") sessionStorage.setItem("cg-panel", "1");
+  if (qs.get("dwg")) sessionStorage.setItem("cg-dwg", qs.get("dwg").slice(0, 255));
+  const PANEL = sessionStorage.getItem("cg-panel") === "1";
   if (qs.get("t")) {
     sessionStorage.setItem("cg-token", TOKEN);
     history.replaceState(null, "", "/");
@@ -149,6 +153,7 @@
     engines: [], groups: [], engine: null, history: [], run: null, busy: false, ai: null,
     sessionUsage: {input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, cost_usd: null},
     home: null, rules: null, ruleFilter: {dept: "", q: "", kind: "", sev: ""},
+    sheets: null, sheetSel: null, showHints: false,
   };
   const hasProject = () => !!(S.session && S.session.project);
   const deptById = (id) => (S.session ? S.session.departments.find((d) => d.id === id) : null);
@@ -647,7 +652,9 @@
     if (clearFile) S.file = null;
     S.geo = null; S.geoOut = null; S.geoPending = false; S.audits = {}; S.findings = []; S.sel = null;
     S.suggest = null; S.preview = null; S.applied = null; S.cmp = "after"; S.recheck = null;
+    S.sheets = null; S.sheetSel = null;
     if (S.v3d) { S.v3d.stop(); S.v3d = null; }
+    renderSheetBar();
     $("cmp").hidden = true; $("cmpLabel").hidden = true;
     renderFinds(); renderChg();
   }
@@ -665,6 +672,7 @@
     renderSuggestions();
     if (S.dept.view === "scene") { load3d(path); return; }
     loadGeometry(path);
+    loadSheets(path);
     if (o.scan && deptStd().length) await doScan(true);
     if (isOut) toast("Đây là tệp mới do cad-guard tạo; tệp gốc giữ nguyên.");
   }
@@ -737,7 +745,7 @@
     const node = document.createElementNS(SVGNS, "g");
     node.setAttribute("class", "dxf");
     copySafe(root, node, 0);
-    return {mode: "svg", node, layout:r.layout, layouts:r.layouts, limitations:r.limitations, viewbox: r.viewbox, boxes: new Map(Object.entries(r.boxes || {})), model_entities: r.model_entities,
+    return {mode: "svg", node, layout:r.layout, layouts:r.layouts, limitations:r.limitations, viewbox: r.viewbox, transform: r.transform, boxes: new Map(Object.entries(r.boxes || {})), model_entities: r.model_entities,
       insunits: r.insunits, dxf_version: r.dxf_version, paths: r.paths, render_seconds: r.render_seconds, cached: r.cached};
   }
 
@@ -774,7 +782,7 @@
         : "Không nhóm nào sửa tự động được; cần sửa trong phần mềm CAD.", total - fixable ? ` ${total - fixable} nhóm cần người sửa.` : "") : null,
       el("div", {class: "src", text: `Căn cứ: bộ luật ${all.map((r) => r.standard + " " + r.version).join(", ")}. Việc đúng/sai do luật quyết, không phải do mô hình.`}),
     ]);
-    renderFiles(); renderWorkSide(); renderFinds(); renderSheet(); renderChg(); renderSuggestions();
+    renderFiles(); renderWorkSide(); renderFinds(); renderSheet(); renderChg(); renderSuggestions(); renderSheetBar();
     if (total) rightTab("finds");
   }
 
@@ -788,7 +796,8 @@
         for (const rule of g.rules) {
           const handles = [...new Set(rule.items.flatMap((it) => it.handles || []))];
           out.push({no: out.length + 1, std, rule_id: rule.rule_id, severity: sev, title: rule.title, count: rule.count,
-            items: rule.items, handles, fixable: r.fixable_rules.includes(rule.rule_id), box: null, st: "open"});
+            items: rule.items, handles, fixable: r.fixable_rules.includes(rule.rule_id), box: null, st: "open",
+            tier: rule.tier || (sev === "I" ? "hint" : "warn"), tier_label: rule.tier_label || ""});
         }
       }
     }
@@ -833,8 +842,36 @@
   }
 
   function viewOf(g) {
-    if (!S.view) S.view = g.viewbox.slice();
+    if (!S.view) S.view = tightView(g);
     return S.view;
+  }
+
+  // Khung nhìn gọn: bỏ đối tượng lạc xa vùng vẽ chính (phân vị 1–99 % tâm khung bao theo handle) để bản vẽ lấp khung.
+  // Hình đơn giản hoá đã cắt phân vị ở máy chủ (geometry.py); ở đây áp cho hình dựng đầy đủ (g.boxes).
+  function tightView(g) {
+    const full = g.viewbox.slice();
+    if (g._tight) return g._tight.slice();
+    const boxes = !g.boxes ? [] : g.boxes instanceof Map ? [...g.boxes.values()] : Object.values(g.boxes);
+    if (g.mode !== "svg" || boxes.length < 40) { g._tight = full; return full.slice(); }
+    const xs = boxes.map((b) => (b[0] + b[2]) / 2).sort((a, b) => a - b);
+    const ys = boxes.map((b) => (b[1] + b[3]) / 2).sort((a, b) => a - b);
+    const q = (arr, p) => arr[Math.min(arr.length - 1, Math.max(0, Math.round(p * (arr.length - 1))))];
+    let x0 = q(xs, 0.01), x1 = q(xs, 0.99), y0 = q(ys, 0.01), y1 = q(ys, 0.99);
+    // mở rộng theo khung bao thật của các đối tượng nằm trong vùng lõi để không cắt mép hình
+    for (const b of boxes) {
+      const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2;
+      if (cx < x0 || cx > x1 || cy < y0 || cy > y1) continue;
+      x0 = Math.min(x0, b[0]); y0 = Math.min(y0, b[1]); x1 = Math.max(x1, b[2]); y1 = Math.max(y1, b[3]);
+    }
+    let w = Math.max(x1 - x0, 1), h = Math.max(y1 - y0, 1);
+    if (w * h > full[2] * full[3] * 0.8) { g._tight = full; return full.slice(); }  // không có đối tượng lạc đáng kể
+    const pad = 0.04 * Math.max(w, h);
+    x0 -= pad; y0 -= pad; w += 2 * pad; h += 2 * pad;
+    const r = full[3] / full[2];  // giữ tỉ lệ khung gốc để phóng/kéo nhất quán
+    if (h / w > r) { const nw = h / r; x0 -= (nw - w) / 2; w = nw; } else { const nh = w * r; y0 -= (nh - h) / 2; h = nh; }
+    g._tight = [x0, y0, w, h];
+    g.stray = boxes.length - boxes.filter((b) => { const cx = (b[0] + b[2]) / 2, cy = (b[1] + b[3]) / 2; return cx >= x0 && cx <= x0 + w && cy >= y0 && cy <= y0 + h; }).length;
+    return g._tight.slice();
   }
 
   function renderSheet() {
@@ -862,13 +899,9 @@
     const svg = svgEl("svg", {viewBox: vb.join(" "), role: "img", "aria-label": "Xem trước bản vẽ " + (S.cmp === "after" && S.geoOut ? S.applied.output : S.file),
       "data-scanned": Object.keys(S.audits).length ? "1" : "0", "data-mode": g.mode === "svg" ? "full" : "simple",
       class: g.mode === "svg" ? "dxf-view" : "simple-view", preserveAspectRatio: "xMidYMid meet"});
-    const scale = Math.max(g.viewbox[2], g.viewbox[3]) / 820;
     if (g.mode === "svg") svg.appendChild(g.node);
     else svg.appendChild(simpleDrawing(g));
     locateFindings();
-    const marks = svgEl("g", {});
-    for (const f of S.findings) if (f.box) marks.appendChild(markerSvg(f, scale));
-    svg.appendChild(marks);
     const note = [];
     if (g.limitations) note.push(g.limitations);
     if (g.simplified) note.push("Hình đơn giản hoá" + (/lớn hơn/.test(g.fallback_reason || "") ? " (tệp lớn)" : "") + ": không vẽ nội dung khối, kích thước, hatch." + (g.fallback_reason ? " " + g.fallback_reason : ""));
@@ -876,9 +909,11 @@
     if (g.records_capped) note.push("Tệp rất lớn: danh sách đối tượng đã bị cắt ở trần bộ nhớ.");
     const unlocated = S.findings.filter((f) => !f.box).length;
     if (Object.keys(S.audits).length && unlocated) note.push(`${unlocated} nhóm phát hiện không có vị trí trên hình (bảng layer, kiểu chữ, khung tên…).`);
+    if (g.stray) note.push(`Khung nhìn bỏ qua ${fmt(g.stray)} đối tượng nằm xa vùng vẽ chính (thu nhỏ để xem).`);
     fill(sheet, svg, note.length ? el("div", {class: "sheet-note", text: note.join(" ")}) : null);
     attachPanZoom(svg, g);
     applyLod(svg, g);
+    drawMarks(svg);
   }
 
   // Hình đơn giản hoá: chữ xếp theo nhóm cỡ để ẩn/hiện theo mức phóng (level-of-detail); INSERT là chấm nhỏ.
@@ -936,20 +971,76 @@
     if (ins) ins.style.display = ins.childElementCount > 300 && S.view[2] > g.viewbox[2] * 0.5 ? "none" : "";
   }
 
-  function markerSvg(f, k) {
-    const [x0, y0, x1, y1] = f.box;
-    const pad = 6 * k;
-    const x = x0 - pad, y = y0 - pad, w = x1 - x0 + 2 * pad, h = y1 - y0 + 2 * pad;
-    const dx = x + w + 14 * k, dy = y - 14 * k;
-    const cls = f.st === "fixed" ? "mk fixed" : "mk sev-" + (f.severity === "E" ? "error" : "warn");
-    const g = svgEl("g", {class: cls + (S.sel === f.no ? " sel" : ""), "data-f": f.no, tabindex: "0", role: "button",
+  // Ghim phát hiện: vòng khoanh nằm trong toạ độ bản vẽ (phóng theo hình), còn số + đường dẫn tính theo ĐIỂM ẢNH màn
+  // hình và vẽ lại mỗi lần phóng/kéo (số luôn cùng cỡ). Ghim gần nhau trên màn hình gộp thành bong bóng "n lỗi"; bấm để
+  // phóng tới. Số đặt ở vị trí trống quanh vòng (thử 8 hướng) để không đè lên nhau.
+  const MK = {r: 11, gap: 16, merge: 30, minRing: 14};
+  function unitsPerPx(svg) {
+    const r = svg.getBoundingClientRect(), v = S.view;
+    if (!r.width || !r.height || !v) return 0;
+    return Math.max(v[2] / r.width, v[3] / r.height);
+  }
+
+  function drawMarks(svg) {
+    const old = svg.querySelector("g.marks");
+    if (old) old.remove();
+    const k = unitsPerPx(svg);
+    if (!k) return;
+    const layer = svgEl("g", {class: "marks"});
+    const sevCls = (f) => f.st === "fixed" ? "fixed" : "sev-" + (f.severity === "E" ? "error" : "warn");
+    drawSheetFrames(layer, k);
+    const placed = S.findings.filter((f) => f.box && visibleFinding(f)).map((f) => {
+      const [x0, y0, x1, y1] = f.box, pad = 6 * k, min = MK.minRing * k;
+      let x = x0 - pad, y = y0 - pad, w = x1 - x0 + 2 * pad, h = y1 - y0 + 2 * pad;
+      if (w < min) { x -= (min - w) / 2; w = min; }
+      if (h < min) { y -= (min - h) / 2; h = min; }
+      return {f, ring: [x, y, w, h], ax: x + w, ay: y};
+    });
+    // 1) vòng khoanh (dưới cùng)
+    for (const p of placed) {
+      const [x, y, w, h] = p.ring;
+      const ring = svgEl("g", {class: "mk mk-ring " + sevCls(p.f) + (S.sel === p.f.no ? " sel" : ""), "data-f": p.f.no});
+      ring.appendChild(svgEl("circle", {class: "pulse", cx: x + w / 2, cy: y + h / 2, r: 14 * k}));
+      ring.appendChild(svgEl("rect", {class: "ring", x, y, width: w, height: h, rx: Math.min(6 * k, w / 2, h / 2)}));
+      layer.appendChild(ring);
+    }
+    // 2) gộp nhóm theo khoảng cách trên màn hình (ghim đang chọn luôn tách riêng)
+    const groups = [];
+    for (const p of placed.sort((a, b) => a.f.no - b.f.no)) {
+      const near = S.sel === p.f.no ? null
+        : groups.find((g) => !g.sel && Math.hypot(g.ax - p.ax, g.ay - p.ay) < MK.merge * k);
+      if (near) { near.items.push(p); continue; }
+      groups.push({ax: p.ax, ay: p.ay, items: [p], sel: S.sel === p.f.no});
+    }
+    // 3) đặt nhãn: thử 8 hướng, 2 vòng khoảng cách; chọn chỗ không đè nhãn đã đặt
+    const dirs = [[1, -1], [-1, -1], [1, 1], [-1, 1], [1.4, 0], [-1.4, 0], [0, -1.4], [0, 1.4]];
+    const labels = [];
+    for (const g of groups) {
+      const big = g.items.length > 1;
+      const rr = (big ? MK.r + 3 : MK.r) * k;
+      let best = null;
+      for (const dist of [MK.gap, MK.gap * 2.2]) {
+        for (const [dx, dy] of dirs) {
+          const lx = g.ax + dx * dist * k, ly = g.ay + dy * dist * k;
+          if (labels.every((o) => Math.hypot(o.x - lx, o.y - ly) > o.r + rr + 2 * k)) { best = [lx, ly]; break; }
+        }
+        if (best) break;
+      }
+      if (!best) best = [g.ax + MK.gap * k, g.ay - MK.gap * k];
+      labels.push({x: best[0], y: best[1], r: rr});
+      layer.appendChild(big ? clusterLabel(g, best, rr, k) : findingLabel(g.items[0], best, rr, k, sevCls(g.items[0].f)));
+    }
+    svg.appendChild(layer);
+  }
+
+  function findingLabel(p, [lx, ly], rr, k, cls) {
+    const f = p.f;
+    const g = svgEl("g", {class: "mk mk-lbl " + cls + (S.sel === f.no ? " sel" : ""), "data-f": f.no, tabindex: "0", role: "button",
       "aria-label": `${SEV[f.severity][1]} ${f.no}: ${f.title}`});
-    g.appendChild(svgEl("circle", {class: "pulse", cx: x + w / 2, cy: y + h / 2, r: 14 * k}));
-    g.appendChild(svgEl("rect", {class: "ring", x, y, width: w, height: h, rx: 6 * k}));
-    g.appendChild(svgEl("line", {x1: x + w, y1: y, x2: dx, y2: dy, stroke: "currentColor", "stroke-width": 1.5 * k}));
-    g.appendChild(svgEl("circle", {class: "dot", cx: dx, cy: dy, r: 11 * k}));
-    const t = svgEl("text", {class: "num", x: dx, y: dy + 5 * k});
-    t.style.fontSize = (13 * k) + "px";
+    g.appendChild(svgEl("line", {class: "lead", x1: p.ax, y1: p.ay, x2: lx, y2: ly}));
+    g.appendChild(svgEl("circle", {class: "dot", cx: lx, cy: ly, r: rr}));
+    const t = svgEl("text", {class: "num", x: lx, y: ly + 4.5 * k});
+    t.style.fontSize = (String(f.no).length > 2 ? 10 : 12.5) * k + "px";
     t.textContent = String(f.no);
     g.appendChild(t);
     const pick = () => selectFinding(f.no, true);
@@ -958,8 +1049,53 @@
     return g;
   }
 
+  function clusterLabel(grp, [lx, ly], rr, k) {
+    const nos = grp.items.map((p) => p.f.no);
+    const worst = grp.items.some((p) => p.f.st !== "fixed" && p.f.severity === "E") ? "sev-error"
+      : grp.items.some((p) => p.f.st !== "fixed") ? "sev-warn" : "fixed";
+    const g = svgEl("g", {class: "mk mk-cl " + worst, tabindex: "0", role: "button",
+      "aria-label": `Nhóm ${nos.length} phát hiện: ${nos.join(", ")}. Bấm để phóng tới.`});
+    const tip = svgEl("title"); tip.textContent = `Phát hiện ${nos.join(", ")} — bấm để phóng tới`; g.appendChild(tip);
+    g.appendChild(svgEl("line", {class: "lead", x1: grp.ax, y1: grp.ay, x2: lx, y2: ly}));
+    g.appendChild(svgEl("circle", {class: "halo", cx: lx, cy: ly, r: rr + 3 * k}));
+    g.appendChild(svgEl("circle", {class: "dot", cx: lx, cy: ly, r: rr}));
+    const t = svgEl("text", {class: "num", x: lx, y: ly + 4.5 * k});
+    t.style.fontSize = 12 * k + "px";
+    t.textContent = "×" + nos.length;
+    g.appendChild(t);
+    const zoomIn = () => {
+      let bb = null;
+      for (const p of grp.items) { const b = p.f.box; bb = bb ? [Math.min(bb[0], b[0]), Math.min(bb[1], b[1]), Math.max(bb[2], b[2]), Math.max(bb[3], b[3])] : b.slice(); }
+      focusCluster(bb, grp.items.length);
+    };
+    g.addEventListener("click", zoomIn);
+    g.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); zoomIn(); } });
+    return g;
+  }
+
+  // Phóng tới nhóm ghim: khung đủ rộng để các ghim tách nhau (mỗi ghim cách nhau > MK.merge px).
+  function focusCluster(bb, n) {
+    const svg = $("sheet").querySelector("svg");
+    if (!svg || !S.view) return;
+    const g0 = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
+    const w0 = Math.max(bb[2] - bb[0], bb[3] - bb[1], 0);
+    const minW = g0 ? g0.viewbox[2] / (g0.mode === "svg" ? 5000 : 400) : 0;
+    if (S.view[2] * 0.6 < minW) {  // đã phóng hết mức mà ghim vẫn trùng chỗ: chọn ghim đầu, danh sách bên phải có đủ
+      const first = S.findings.find((f) => f.box && f.box[0] >= bb[0] && f.box[2] <= bb[2] && f.box[1] >= bb[1] && f.box[3] <= bb[3]);
+      if (first) selectFinding(first.no, true);
+      return;
+    }
+    const w = Math.max(minW, Math.min(S.view[2] * 0.6, Math.max(w0 * 2.5, S.view[2] * 0.25))), h = w * S.view[3] / S.view[2];
+    const cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2;
+    S.view = [cx - w / 2, cy - h / 2, w, h];
+    svg.setAttribute("viewBox", S.view.join(" "));
+    const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
+    if (g) applyLod(svg, g);
+    drawMarks(svg);
+  }
+
   function attachPanZoom(svg, g) {
-    const setVB = () => { svg.setAttribute("viewBox", S.view.join(" ")); applyLod(svg, g); };
+    const setVB = () => { svg.setAttribute("viewBox", S.view.join(" ")); applyLod(svg, g); drawMarks(svg); };
     const toUser = (cx, cy) => {
       const r = svg.getBoundingClientRect();
       const v = S.view;
@@ -975,7 +1111,7 @@
     }, {passive: false});
     let drag = null; const pointers = new Map(); let pinch = null;
     svg.addEventListener("pointerdown", (e) => {
-      if (e.target.closest && e.target.closest(".mk")) return;
+      if (e.target.closest && e.target.closest(".mk, .sh-frame")) return;
       pointers.set(e.pointerId,[e.clientX,e.clientY]);
       if(pointers.size===2){const pts=[...pointers.values()]; pinch=Math.hypot(pts[0][0]-pts[1][0],pts[0][1]-pts[1][1]);drag=null;}
       else drag = {x: e.clientX, y: e.clientY, v: S.view.slice()};
@@ -1008,16 +1144,18 @@
   function zoomButton(f) {
     const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
     if (!g || !g.viewbox || g.empty_reason || g.error || !S.view) return;
-    if (f === 0) S.view = g.viewbox.slice(); else zoomAt(f, undefined, undefined, g);
+    if (f === 0) S.view = tightView(g); else zoomAt(f, undefined, undefined, g);
     const svg = $("sheet").querySelector("svg");
-    if (svg) { svg.setAttribute("viewBox", S.view.join(" ")); applyLod(svg, g); }
+    if (svg) { svg.setAttribute("viewBox", S.view.join(" ")); applyLod(svg, g); drawMarks(svg); }
   }
 
   function focusBox(bb) {
     const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
     if (!g || !bb) return;
-    const full = g.viewbox;
-    const w = Math.max(full[2] * 0.3, (bb[2] - bb[0]) * 3), h = w * full[3] / full[2];
+    const full = tightView(g);
+    // đủ rộng để thấy ngữ cảnh, nhưng không thu nhỏ quá khung nhìn gọn (lỗi rất rộng: vừa khít lỗi)
+    const bw = Math.max(bb[2] - bb[0], (bb[3] - bb[1]) * full[2] / full[3]);
+    const w = Math.max(full[2] * 0.3, Math.min(bw * 3, Math.max(full[2], bw * 1.15))), h = w * full[3] / full[2];
     const cx = (bb[0] + bb[2]) / 2, cy = (bb[1] + bb[3]) / 2;
     S.view = [cx - w / 2, cy - h / 2, w, h];
   }
@@ -1121,7 +1259,7 @@
       t.setAttribute("aria-selected", on ? "true" : "false");
       t.tabIndex = on ? 0 : -1;
     }
-    for (const x of ["chat", "finds", "chg"]) $("p-" + x).classList.toggle("on", x === p);
+    for (const x of ["chat", "finds", "chg", "help"]) $("p-" + x).classList.toggle("on", x === p);
     if (p === "chg") { loadChangesets(); if (S.file && !S.suggest && !S.preview && !S.applied && S.findings.some((f) => f.fixable)) loadSuggest(); }
   }
 
@@ -1141,15 +1279,20 @@
         el("button", {class: "btn-p", type: "button", disabled: !deptStd().length, onclick: () => doScan(false)}, icon("search"), "Quét bản vẽ này")));
       return;
     }
-    const open = S.findings.filter((f) => f.st === "open");
+    const shown = S.findings.filter(visibleFinding);
+    const open = shown.filter((f) => f.st === "open");
     cnt.textContent = String(open.length);
-    cnt.className = "cnt" + (open.some((f) => f.severity === "E") ? " hot" : "");
+    cnt.className = "cnt" + (open.some((f) => f.tier === "block") ? " hot" : "");
     const out = [];
+    const head = sheetPanel();
+    if (head) out.push(head);
     if (!S.findings.length) out.push(emptyBox("Không có phát hiện nào", `Bản vẽ đạt các luật đang chạy của ${deptStd().join(" + ")}.`));
-    for (const f of S.findings) {
+    else if (!shown.length) out.push(emptyBox("Tờ này không có phát hiện", S.showHints ? "" : "Gợi ý đang ẩn."));
+    for (const f of shown) {
       const fixed = f.st === "fixed";
       const sevPill = fixed ? pill("ok", "Đã sửa", "check") : pill(SEV[f.severity][0], SEV[f.severity][1], SEV[f.severity][2]);
-      const first = f.items[0] || {};
+      const inSheet = S.sheetSel ? itemsInSheet(f, S.sheetSel) : f.items;
+      const first = inSheet[0] || f.items[0] || {};
       const where = [first.layer ? "layer " + first.layer : null, first.layout && first.layout !== "Model" ? "tờ " + first.layout : null].filter(Boolean).join(" · ");
       out.push(el("div", {class: "f-card" + (S.sel === f.no ? " sel" : ""), "data-no": f.no, tabindex: "0", role: "button",
         "aria-label": `${SEV[f.severity][1]} ${f.no}: ${f.title}`,
@@ -1157,10 +1300,13 @@
         onkeydown: (e) => { if ((e.key === "Enter" || e.key === " ") && e.target === e.currentTarget) { e.preventDefault(); selectFinding(f.no, false); } }},
       el("div", {class: "f-top"}, el("span", {class: "f-no", text: String(f.no)}), sevPill,
         el("button", {class: "f-rule link", type: "button", title: "Xem luật này", onclick: (e) => { e.stopPropagation(); showExplain(f.rule_id, f.std); }}, f.rule_id),
-        f.count > 1 ? pill("neu sm", `${fmt(f.count)} chỗ`) : null, el("span", {class: "std"}, pill("neu sm", f.std))),
+        tierPill(f), f.count > 1 ? pill("neu sm", S.sheetSel && !findingWide(f) ? `${fmt(countItems(inSheet))} chỗ trong tờ` : `${fmt(f.count)} chỗ`) : null,
+        S.sheets && S.sheets.sheets.length && findingWide(f) ? pill("neu sm", "cả bản vẽ") : null,
+        el("span", {class: "std"}, pill("neu sm", f.std))),
       el("div", {class: "f-title", text: f.title}),
-      el("div", {class: "f-d"}, el("ul", {}, f.items.slice(0, 3).map((it) => el("li", {text: it.message}))),
-        f.items.length > 3 ? el("span", {class: "muted", text: `+${f.items.length - 3} mục khác`}) : null),
+      el("div", {class: "f-d"}, el("ul", {}, inSheet.slice(0, 3).map((it) => el("li", {text: it.message}))),
+        inSheet.length > 3 ? el("span", {class: "muted", text: `+${inSheet.length - 3} mục khác`}) : null),
+      fixed ? null : ackRow(f),
       fixed ? el("div", {class: "f-meta"}, icon("check"), "Không còn trong tệp mới " + (S.applied ? S.applied.output : ""))
         : f.fixable ? el("div", {class: "f-meta"}, icon("gear"), "Có thể tự sửa bằng thao tác an toàn: xem tab Thay đổi")
           : el("div", {class: "f-meta"}, icon("hand"), "Cần người sửa trong phần mềm CAD. Trợ lý không tự sửa."),
@@ -1178,10 +1324,254 @@
         el("span",{text:`Vị trí ${f.position+1}/${f.positions.length}`}),
         el("button",{type:"button",class:"btn-s",text:"Tiếp",onclick:(e)=>{e.stopPropagation();f.position=(f.position+1)%f.positions.length;selectFinding(f.no,false);}})));
     }
+    const hints = S.findings.filter((f) => f.tier === "hint" && (!S.sheetSel || itemsInSheet(f, S.sheetSel).length));
+    if (hints.length) out.push(el("div", {class: "hint-toggle"},
+      el("button", {class: "btn-s btn-sm", type: "button", "aria-pressed": S.showHints ? "true" : "false",
+        onclick: () => { S.showHints = !S.showHints; renderFinds(); redrawMarks(); }},
+        S.showHints ? `Ẩn ${hints.length} gợi ý` : `Hiện ${hints.length} gợi ý`),
+      el("span", {class: "muted", text: " Gợi ý không ảnh hưởng chốt tờ."})));
     const sk = Object.values(S.audits).flatMap((r) => r.skipped.map((s) => ({...s, std: r.standard})));
     if (sk.length) out.push(el("details", {class: "skipped"}, el("summary", {text: `${sk.length} luật bỏ qua (thiếu dữ liệu trong bản vẽ)`}),
       el("ul", {}, sk.map((s) => el("li", {}, b(s.rule_id + ": "), s.reason)))));
     fill(box, ...out);
+  }
+
+  // ---------- tờ (trang in): chọn tờ, lọc phát hiện, bậc Chặn/Cảnh báo/Gợi ý, chốt tờ ----------
+  async function loadSheets(path) {
+    if (S.dept && S.dept.view === "scene") return;
+    try {
+      const r = await api("/api/sheets", {file: path});
+      if (S.file !== path) return;
+      S.sheets = r;
+    } catch (e) {
+      if (S.file !== path) return;
+      S.sheets = {sheets: [], error: e.message};
+    }
+    renderSheetBar(); renderFinds(); redrawMarks();
+  }
+
+  const curSheet = () => (S.sheets && S.sheetSel ? S.sheets.sheets.find((s) => s.id === S.sheetSel) || null : null);
+  const itemsInSheet = (f, sid) => (sid ? f.items.filter((it) => !(it.sheets || []).length || it.sheets.includes(sid)) : f.items);
+  const findingWide = (f) => f.items.every((it) => !(it.sheets || []).length);
+  const countItems = (items) => items.reduce((n, it) => n + Math.max(1, Number(it.count) || 1), 0);
+  function visibleFinding(f) {
+    if (f.tier === "hint" && !S.showHints) return false;
+    return !S.sheetSel || itemsInSheet(f, S.sheetSel).length > 0;
+  }
+  function ackOf(f, sid) {
+    const a = (S.audits[f.std] || {}).acks || {};
+    return a[`${f.std}|${f.rule_id}|${sid || "*"}`] || (sid ? a[`${f.std}|${f.rule_id}|*`] : null) || null;
+  }
+  // Đếm theo bậc cho một tờ (null = cả bản vẽ). Máy chủ kiểm lại khi chốt (gate.evaluate), đây chỉ để hiển thị.
+  function sheetGate(sid) {
+    const g = {block: 0, warn: 0, warnOpen: 0, hint: 0};
+    for (const f of S.findings) {
+      if (f.st !== "open") continue;
+      const n = countItems(itemsInSheet(f, sid));
+      if (!n || (sid && !itemsInSheet(f, sid).length)) continue;
+      g[f.tier] = (g[f.tier] || 0) + n;
+      if (f.tier === "warn" && !ackOf(f, sid)) g.warnOpen += n;
+    }
+    const req = Object.values(S.audits).some((r) => r.gate_require_ack !== false);
+    g.canLock = g.block === 0 && (!req || g.warnOpen === 0);
+    return g;
+  }
+
+  function tierPill(f) {
+    if (f.st === "fixed") return null;
+    if (f.tier === "block") return pill("err sm", "Chặn chốt tờ", "lock");
+    if (f.tier === "hint") return pill("neu sm", "Gợi ý");
+    return null;
+  }
+
+  function ackRow(f) {
+    if (f.tier !== "warn" || f.st !== "open") return null;
+    const sid = S.sheetSel;
+    const a = ackOf(f, sid);
+    const scope = sid ? "tờ này" : "cả bản vẽ";
+    if (a) return el("div", {class: "f-ack"}, pill("ok sm", a.kind === "skip" ? "Đã bỏ qua" : "Đã xem", "check"),
+      a.reason ? el("span", {class: "muted", text: "Lý do: " + a.reason}) : null,
+      el("button", {class: "link", type: "button", onclick: (e) => { e.stopPropagation(); doAck(f, null); }}, "Hoàn tác"));
+    return el("div", {class: "f-ack"},
+      el("button", {class: "btn-s btn-sm", type: "button", title: `Đánh dấu đã xem cảnh báo này cho ${scope}`,
+        onclick: (e) => { e.stopPropagation(); doAck(f, "seen"); }}, icon("check"), "Đã xem"),
+      el("button", {class: "btn-s btn-sm", type: "button", title: `Bỏ qua cảnh báo này cho ${scope} (cần lý do)`,
+        onclick: (e) => { e.stopPropagation(); doAck(f, "skip"); }}, "Bỏ qua…"));
+  }
+
+  async function doAck(f, kind) {
+    const sid = S.sheetSel || "*";
+    let reason = "";
+    if (kind === "skip") {
+      const ta = el("textarea", {class: "ack-reason", rows: "3", maxlength: "300", "aria-label": "Lý do bỏ qua",
+        placeholder: "Ví dụ: layer này theo quy ước riêng của khách, đã thống nhất."});
+      setTimeout(() => ta.focus(), 30);
+      const ok = await confirmDialog({title: `Bỏ qua ${f.rule_id} cho ${sid === "*" ? "cả bản vẽ" : "tờ này"}?`,
+        body: ["Lý do được lưu trên máy này để trưởng phòng xem lại và để đo tỉ lệ báo sai của luật.", ta], yes: "Bỏ qua"});
+      if (!ok) return;
+      reason = ta.value.trim();
+    }
+    try {
+      const r = await api("/api/findings/ack", {file: S.file, standard: f.std, rule_id: f.rule_id, sheet: sid,
+        kind: kind || "seen", reason, undo: kind === null});
+      const acks = (S.audits[f.std] || {}).acks;
+      if (acks) { if (r.acked) acks[r.key] = {kind: r.kind, reason}; else delete acks[r.key]; }
+      renderFinds(); renderSheetBar();
+    } catch (e) { toast(e.message); }
+  }
+
+  function renderSheetBar() {
+    const bar = $("sheetBar");
+    if (!bar) return;
+    const sh = S.sheets;
+    if (!S.file || !sh || !sh.sheets || !sh.sheets.length || (S.dept && S.dept.view === "scene")) { bar.hidden = true; bar.replaceChildren(); return; }
+    bar.hidden = false;
+    const scanned = Object.keys(S.audits).length > 0;
+    const chip = (id, name, sub, st, title) => el("button", {type: "button", class: "sh-chip" + (S.sheetSel === id ? " on" : "") + (st ? " st-" + st : ""),
+      "aria-pressed": S.sheetSel === id ? "true" : "false", title: title || name, onclick: () => selectSheet(id)},
+      el("span", {class: "sh-n", text: name}), sub ? el("span", {class: "sh-sub", text: sub}) : null);
+    const kids = [chip(null, "Cả bản vẽ", `${sh.sheets.length} tờ · ${sh.locked || 0} đã chốt`, "")];
+    for (const s of sh.sheets) {
+      const g = scanned ? sheetGate(s.id) : null;
+      let st = "", sub = s.stale ? "đổi sau khi chốt" : (scanned ? "" : "chưa quét");
+      if (s.status === "locked") { st = "locked"; sub = "Đã chốt"; }
+      else if (g) { st = g.block ? "block" : g.warnOpen ? "warn" : "ready"; sub = g.block ? `${g.block} lỗi chặn` : g.warnOpen ? `${g.warnOpen} cần xem` : "sẵn sàng chốt"; }
+      const label = s.name + (s.title ? " · " + s.title : "");
+      const extra = [s.paper, s.scale ? "1:" + s.scale : null, s.kind === "layout" ? "layout" : "khung trong Model"].filter(Boolean).join(" · ");
+      kids.push(chip(s.id, label, sub, st, label + (extra ? " (" + extra + ")" : "")));
+    }
+    const j = sh.junk || {};
+    const nj = (j.outside ? j.outside.count : 0) + (j.stray ? j.stray.count : 0);
+    if (nj || (j.empty_layers || []).length || (j.unused_blocks || []).length)
+      kids.push(el("button", {type: "button", class: "sh-chip junk", onclick: showJunk, title: "Ứng viên rác: chỉ là gợi ý để xem, cad-guard không tự xoá"},
+        el("span", {class: "sh-n", text: "Ứng viên rác"}), el("span", {class: "sh-sub", text: `${fmt(nj)} đối tượng · ${(j.empty_layers || []).length} layer · ${(j.unused_blocks || []).length} khối`})));
+    fill(bar, el("span", {class: "sh-lbl", text: "Tờ"}), ...kids);
+  }
+
+  function selectSheet(id) {
+    S.sheetSel = id;
+    S.sel = null;
+    const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
+    const s = curSheet();
+    if (g && g.viewbox && !g.empty_reason) S.view = s ? (sheetView(g, s) || tightView(g)) : tightView(g);
+    renderSheetBar(); renderFinds(); renderSheet();
+  }
+
+  function modelToView(g, x, y) {
+    const t = g && g.transform;
+    if (!t || (S.layout || "Model") !== "Model") return null;
+    return [t[0] * x + t[2], t[1] * y + t[3]];
+  }
+  function sheetRect(g, w) {
+    const a = modelToView(g, w[0], w[1]), b2 = modelToView(g, w[2], w[3]);
+    if (!a || !b2) return null;
+    return [Math.min(a[0], b2[0]), Math.min(a[1], b2[1]), Math.abs(b2[0] - a[0]), Math.abs(b2[1] - a[1])];
+  }
+  function sheetView(g, s) {
+    if (!s.window) return null;
+    const r = sheetRect(g, s.window);
+    if (!r || !(r[2] > 0) || !(r[3] > 0)) return null;
+    const pad = 0.04 * Math.max(r[2], r[3]);
+    let [x, y, w, h] = [r[0] - pad, r[1] - pad, r[2] + 2 * pad, r[3] + 2 * pad];
+    const ratio = g.viewbox[3] / g.viewbox[2];
+    if (h / w > ratio) { const nw = h / ratio; x -= (nw - w) / 2; w = nw; } else { const nh = w * ratio; y -= (nh - h) / 2; h = nh; }
+    return [x, y, w, h];
+  }
+
+  // Viền tờ trên hình (toạ độ bản vẽ) + nhãn cỡ cố định trên màn; bấm nhãn để chọn tờ.
+  function drawSheetFrames(layer, k) {
+    const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
+    if (!S.sheets || !S.sheets.sheets || !g) return;
+    for (const s of S.sheets.sheets) {
+      for (const w of s.windows || []) {
+        const r = sheetRect(g, w);
+        if (!r) continue;
+        const on = S.sheetSel === s.id;
+        const grp = svgEl("g", {class: "sh-frame" + (on ? " on" : "") + (s.status === "locked" ? " locked" : ""), role: "button", tabindex: "0",
+          "aria-label": `Chọn ${s.name}${s.title ? ": " + s.title : ""}`});
+        grp.appendChild(svgEl("rect", {x: r[0], y: r[1], width: r[2], height: r[3]}));
+        const t = svgEl("text", {x: r[0] + 6 * k, y: r[1] - 6 * k});
+        t.style.fontSize = 12 * k + "px";
+        t.textContent = s.name + (s.status === "locked" ? " · đã chốt" : "");
+        grp.appendChild(t);
+        grp.addEventListener("click", (e) => { e.stopPropagation(); selectSheet(on ? null : s.id); });
+        grp.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectSheet(on ? null : s.id); } });
+        layer.appendChild(grp);
+      }
+    }
+  }
+
+  function redrawMarks() {
+    const svg = $("sheet").querySelector("svg");
+    if (svg) drawMarks(svg);
+  }
+
+  // Ô chọn tờ trong danh sách lỗi (dùng được cả khi không thấy thanh Tờ, vd. bảng neo trong AutoCAD)
+  function sheetPick() {
+    const sel = el("select", {class: "sel sh-pick", "aria-label": "Chọn tờ"},
+      el("option", {value: "", text: `Cả bản vẽ (${S.sheets.sheets.length} tờ)`, selected: !S.sheetSel}),
+      S.sheets.sheets.map((s) => el("option", {value: s.id, selected: S.sheetSel === s.id,
+        text: s.name + (s.title ? " · " + s.title : "") + (s.status === "locked" ? " · đã chốt" : "")})));
+    sel.addEventListener("change", () => selectSheet(sel.value || null));
+    return sel;
+  }
+
+  function sheetPanel() {
+    if (!S.sheets || !S.sheets.sheets || !S.sheets.sheets.length) return null;
+    const s = curSheet();
+    if (!s) return el("div", {class: "sh-panel"}, el("div", {class: "sh-ph"}, b(`Bản vẽ có ${S.sheets.sheets.length} tờ`)), sheetPick(),
+      el("div", {class: "muted", text: "Chọn một tờ để xem lỗi của riêng tờ đó và chốt tờ. Lỗi bậc Chặn phải sửa; cảnh báo cần bấm Đã xem hoặc Bỏ qua."}));
+    const g = sheetGate(s.id);
+    const locked = s.status === "locked";
+    const meta = [s.paper, s.scale ? "1:" + s.scale : null, `${fmt(s.entity_count)} đối tượng`, s.title_source === "text-decoded" ? "tiêu đề giải mã từ chữ TCVN3/VNI" : null].filter(Boolean).join(" · ");
+    const status = locked ? pill("ok", "Đã chốt", "lock")
+      : g.block ? pill("err", `${g.block} lỗi chặn`, "x") : g.warnOpen ? pill("warn", `${g.warnOpen} cảnh báo cần xem`, "alert") : pill("ok", "Sẵn sàng chốt", "check");
+    const scanned = Object.keys(S.audits).length > 0;
+    const btn = locked
+      ? el("button", {class: "btn-s btn-sm", type: "button", onclick: () => unlockSheet(s)}, "Mở lại tờ")
+      : el("button", {class: "btn-p btn-sm", type: "button", disabled: !scanned || !g.canLock,
+          title: !scanned ? "Quét bản vẽ trước" : g.canLock ? "Chốt tờ này" : "Còn lỗi chặn hoặc cảnh báo chưa xác nhận", onclick: () => lockSheet(s)}, icon("lock"), "Chốt tờ");
+    return el("div", {class: "sh-panel"}, sheetPick(),
+      el("div", {class: "sh-ph"}, b(s.name + (s.title ? ": " + s.title : "")), status),
+      el("div", {class: "muted", text: meta}),
+      s.stale ? el("div", {class: "muted", text: "Tờ đã chốt trước đây nhưng nội dung đã đổi: cần chốt lại."}) : null,
+      el("div", {class: "sh-actions"}, btn, el("button", {class: "link", type: "button", onclick: () => selectSheet(null)}, "Xem cả bản vẽ")));
+  }
+
+  async function lockSheet(s) {
+    const ok = await confirmDialog({title: `Chốt ${s.name}?`, body: [
+      "Tờ chốt nghĩa là tờ này đã qua kiểm theo " + deptStd().join(" + ") + ": không còn lỗi bậc Chặn, cảnh báo đã được xem.",
+      "Nếu bản vẽ đổi nội dung trong tờ sau khi chốt, tờ tự mở lại."], yes: "Chốt tờ"});
+    if (!ok) return;
+    try {
+      await api("/api/sheets/lock", {file: S.file, sheet: s.id, standards: deptStd(), confirm: true});
+      toast(`Đã chốt ${s.name}.`);
+      await loadSheets(S.file);
+    } catch (e) { toast(e.message); }
+  }
+
+  async function unlockSheet(s) {
+    try {
+      await api("/api/sheets/unlock", {file: S.file, sheet: s.id});
+      toast(`Đã mở lại ${s.name}.`);
+      await loadSheets(S.file);
+    } catch (e) { toast(e.message); }
+  }
+
+  function showJunk() {
+    const j = (S.sheets || {}).junk || {};
+    const li = (t) => el("li", {text: t});
+    const rows = [];
+    if (j.outside && j.outside.count) rows.push(li(`${fmt(j.outside.count)} đối tượng nằm ngoài mọi tờ (không được in).`));
+    if (j.stray && j.stray.count) rows.push(li(`${fmt(j.stray.count)} đối tượng lạc rất xa vùng vẽ chính (làm lệch "Vừa khung" trong CAD).`));
+    if ((j.empty_layers || []).length) rows.push(li(`${j.empty_layers.length} layer rỗng: ${j.empty_layers.slice(0, 12).join(", ")}${j.empty_layers.length > 12 ? "…" : ""}`));
+    if ((j.unused_blocks || []).length) rows.push(li(`${j.unused_blocks.length} khối không dùng: ${j.unused_blocks.slice(0, 12).join(", ")}${j.unused_blocks.length > 12 ? "…" : ""}`));
+    const handles = [...((j.outside || {}).handles || []), ...((j.stray || {}).handles || [])].slice(0, 200);
+    confirmDialog({title: "Ứng viên rác", body: [el("ul", {}, rows),
+      "Đây chỉ là gợi ý để xem lại; cad-guard không tự xoá. Dọn rác (xoá layer rỗng, khối thừa) đi qua tab Thay đổi: xem trước, xác nhận, ghi ra tệp mới."],
+      yes: handles.length ? "Tới trong AutoCAD" : "Đóng", no: "Đóng"}).then((go) => {
+      if (go && handles.length) showInAutocad({handles, items: []});
+    });
   }
 
   // ---------- tới đối tượng trong AutoCAD (ghi .cadguard/goto.txt; M3 đưa thẳng AutoCAD tới qua COM) ----------
@@ -2161,8 +2551,23 @@
     if (hasProject()) {
       await loadFiles();
       loadChangesets();
-      go("home");
+      if (PANEL) await openPanel(); else go("home");
     } else go("project");
+  }
+
+  // Chế độ bảng neo trong AutoCAD: chỉ cột phải (Lỗi, Trợ lý, Hướng dẫn), tự mở DXF trùng tên bản vẽ đang mở.
+  async function openPanel() {
+    document.body.classList.add("acad-panel");
+    go("work");
+    const dwg = (sessionStorage.getItem("cg-dwg") || "").toLowerCase();
+    const stem = (p) => p.split("/").pop().replace(/\.dxf$/i, "").toLowerCase();
+    const hit = dwg ? S.files.find((f) => stem(f.path) === dwg && !f.is_output) : null;
+    if (hit) { await openFile(hit.path, {scan: true, intro: false}); rightTab("finds"); }
+    else {
+      rightTab("help");
+      toast(dwg ? "Chưa có DXF của bản vẽ này trong thư mục làm việc: gõ CGXUAT trong AutoCAD rồi mở lại bảng (CGBANG)."
+        : "Mở một bản vẽ trong AutoCAD rồi gõ CGBANG.");
+    }
   }
 
   document.addEventListener("DOMContentLoaded", boot);

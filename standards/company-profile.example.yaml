@@ -22,3 +22,9 @@ overrides:
   VS-04:
     max_color_override_ratio: 0.2
 disabled: []                         # mã luật tắt hẳn cho công ty này, ví dụ [VS-05]
+# Bậc chốt tờ (tuỳ chọn; cad-guard app, gate.py). Luật không liệt kê giữ bậc mặc định (đề xuất v0).
+# block: còn lỗi thì không chốt được tờ; warn: chốt được sau khi bấm Đã xem/Bỏ qua có lý do; hint: ẩn, không ảnh hưởng.
+gate:
+  block: [VS-06]
+  hint: [VS-02, VS-04]
+  require_ack: true

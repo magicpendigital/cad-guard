@@ -20,6 +20,9 @@ from ..changeset.apply import ID_RE, STORE_DIR, ChangesetError, apply, load_chan
 from ..changeset.ops import OP_HELP, OpError, parse_ops
 from ..reader_select import DEFAULT_STREAM_THRESHOLD_MB
 from ..contracts import FIXABLE_RULES, NO_FIX_NOTE, audit_report
+from .. import gate as gatemod
+from ..sheet_state import SheetState
+from ..sheets import Structure, build_structure
 from ..runner import audit_model
 from ..standard import CompanyProfile, ProfileError, Standard, find_standards_dir, load_profile, load_standard
 from .geometry import drawing_geometry
@@ -70,6 +73,17 @@ class AppData:
     history: History = field(init=False)
     previews: PreviewManager = field(init=False)
     _reviews: Any = field(init=False, default=None)
+    _structs: dict = field(init=False, default_factory=dict)
+
+    def structure(self, model) -> Structure:
+        """Chỉ mục tờ (sheets.py) theo băm nội dung tệp; giữ tối đa 8 bản vẽ gần nhất."""
+        st = self._structs.get(model.file_hash)
+        if st is None:
+            st = build_structure(model)
+            if len(self._structs) >= 8:
+                self._structs.pop(next(iter(self._structs)))
+            self._structs[model.file_hash] = st
+        return st
 
     def reviews(self):
         if self._reviews is None:
@@ -190,17 +204,27 @@ def list_drawings(app: AppData) -> dict:
             "limit": MAX_DRAWINGS}
 
 
-def audit_file(app: AppData, rel: Any, standard: Any, dept: Any = None) -> dict:
+def _item_sheets(struct: Structure, f) -> list[str]:
+    """Tờ của một phát hiện: theo handle; không có handle mà gắn một layout có tờ thì là tờ layout đó."""
+    out = struct.sheets_for(f.handles)
+    if not out and f.layout and f.layout != "Model" and any(s.id == "L:" + f.layout for s in struct.sheets):
+        out = ["L:" + f.layout]
+    return out
+
+
+def audit_file(app: AppData, rel: Any, standard: Any, dept: Any = None, record: bool = True) -> dict:
     path = app.resolve(rel)
     std = app.load_std(standard)
     dep = check_dept(app, dept)
     model = app.model(path)
     rep = audit_report(model, std)  # hợp đồng cg.audit/1 dùng chung với CLI/trợ lý; ở đây chỉ nhóm để hiển thị
+    struct = app.structure(model)
     per_rule: Counter = Counter()
     for f in rep.findings:
         per_rule[f.rule_id] += max(1, int(f.count or 1))
-    app.history.record("audit", **audit_entry(app.history.file_id(app.rel(path)), model.file_hash,
-                                               dep["id"] if dep else None, std.name, std.version, rep.counts, per_rule))
+    if record:
+        app.history.record("audit", **audit_entry(app.history.file_id(app.rel(path)), model.file_hash,
+                                                   dep["id"] if dep else None, std.name, std.version, rep.counts, per_rule))
     groups: dict[str, list[dict]] = {s: [] for s in SEVERITIES}
     by_rule: dict[tuple[str, str], dict] = {}
     for f in rep.findings[:MAX_FINDINGS]:
@@ -208,14 +232,18 @@ def audit_file(app: AppData, rel: Any, standard: Any, dept: Any = None) -> dict:
         key = (f.severity, f.rule_id)
         g = by_rule.get(key)
         if g is None:
+            tier = gatemod.tier_of(std, f.rule_id, f.severity)
             g = {"rule_id": f.rule_id, "severity": f.severity, "title": spec.title if spec else f.rule_id,
-                 "items": [], "count": 0}
+                 "items": [], "count": 0, "tier": tier, "tier_label": gatemod.TIER_VI[tier]}
             by_rule[key] = g
             groups.setdefault(f.severity, []).append(g)
         g["items"].append({"message": f.message, "layer": f.layer, "layout": f.layout, "count": f.count,
-                           "handles": list(f.handles)[:20], "bbox": f.bbox})
+                           "handles": list(f.handles)[:20], "bbox": f.bbox, "sheets": _item_sheets(struct, f)})
         g["count"] += max(1, int(f.count or 1))
     fixable = sorted({g["rule_id"] for gs in groups.values() for g in gs} & set(FIXABLE_RULES))
+    state = SheetState(app.ws.root, app.rel(path))
+    all_groups = [g for gs in groups.values() for g in gs]
+    acks = {k: v for k, v in state.acks.items() if k.startswith(std.name + "|")}
     skipped = [{"rule_id": s.rule_id, "reason": s.reason} for s in rep.skipped]
     counts = rep.counts
     return {
@@ -226,6 +254,7 @@ def audit_file(app: AppData, rel: Any, standard: Any, dept: Any = None) -> dict:
         "records_capped": rep.records_capped,
         "rules_total": len(std.rules), "rules_enabled": sum(1 for r in std.rules if r.enabled and r.implemented),
         "entity_count": len(model.entities), "dxf_version": model.dxf_version, "insunits": model.insunits,
+        "gate": gatemod.evaluate(all_groups, None, acks, std), "acks": acks, "gate_require_ack": std.gate_require_ack,
     }
 
 
@@ -239,6 +268,94 @@ def show_in_autocad(app: AppData, rel: Any, handles: Any = None, layers: Any = N
         return show(app.ws.root, app.rel(path), handles, layers, com=app.config.autocad_com)
     except BridgeError as exc:
         raise ApiError(str(exc)) from None
+
+
+# ---------- tờ (trang in): chỉ mục, chốt, xác nhận cảnh báo ----------
+
+def sheets_info(app: AppData, rel: Any) -> dict:
+    """Chỉ mục tờ của bản vẽ + trạng thái chốt từng tờ (dữ liệu cục bộ của người dùng, có tên thật)."""
+    path = app.resolve(rel)
+    model = app.model(path)
+    st = app.structure(model)
+    state = SheetState(app.ws.root, app.rel(path))
+    out = st.to_dict()
+    for s, d in zip(st.sheets, out["sheets"]):
+        d.update(state.status(s.id, s.content_hash))
+    out["file"] = app.rel(path)
+    out["locked"] = sum(1 for d in out["sheets"] if d["status"] == "locked")
+    return out
+
+
+def _sheet(app: AppData, path: Path, sheet: Any):
+    st = app.structure(app.model(path))
+    for s in st.sheets:
+        if s.id == sheet:
+            return s
+    raise ApiError("Không có tờ này trong bản vẽ (bản vẽ đã đổi? mở lại danh sách tờ).", 404)
+
+
+def lock_sheet(app: AppData, rel: Any, sheet: Any, standards: Any, confirm: Any = False) -> dict:
+    """Chốt tờ: chỉ khi không còn lỗi bậc Chặn và (nếu hồ sơ yêu cầu) mọi cảnh báo đã được xác nhận."""
+    path = app.resolve(rel)
+    s = _sheet(app, path, sheet)
+    if not isinstance(standards, list) or not standards or len(standards) > 10:
+        raise ApiError("Thiếu danh sách chuẩn dùng để chốt tờ.")
+    if confirm is not True:
+        raise ApiError("Cần xác nhận chốt tờ (confirm = true).")
+    state = SheetState(app.ws.root, app.rel(path))
+    per_std = []
+    for name in standards:
+        r = audit_file(app, rel, name, record=False)
+        std = app.load_std(name)
+        all_groups = [g for grp in r["groups"] for g in grp["rules"]]
+        ev = gatemod.evaluate(all_groups, s.id, state.acks, std)
+        per_std.append({"standard": name, **ev})
+    blocked = [x for x in per_std if not x["can_lock"]]
+    if blocked:
+        b = sum(x["block"] for x in blocked)
+        w = sum(x["warn_open"] for x in blocked)
+        parts = []
+        if b:
+            parts.append(f"{b} lỗi bậc Chặn")
+        if w:
+            parts.append(f"{w} cảnh báo chưa xác nhận")
+        raise ApiError("Chưa chốt được tờ: còn " + " và ".join(parts) + ".", 409)
+    state.lock(s.id, s.content_hash, list(standards))
+    return {"sheet": s.id, **state.status(s.id, s.content_hash), "checks": per_std}
+
+
+def unlock_sheet(app: AppData, rel: Any, sheet: Any) -> dict:
+    path = app.resolve(rel)
+    s = _sheet(app, path, sheet)
+    state = SheetState(app.ws.root, app.rel(path))
+    state.unlock(s.id)
+    return {"sheet": s.id, **state.status(s.id, s.content_hash)}
+
+
+def ack_finding(app: AppData, rel: Any, standard: Any, rule_id: Any, sheet: Any, kind: Any, reason: Any = "",
+                undo: bool = False) -> dict:
+    """Xác nhận một cảnh báo cho một tờ ("*" = cả bản vẽ): "seen" (Đã xem) hoặc "skip" (Bỏ qua, cần lý do)."""
+    path = app.resolve(rel)
+    std = app.load_std(standard)
+    if not isinstance(rule_id, str) or std.rule(rule_id) is None:
+        raise ApiError("Không có luật này trong chuẩn.")
+    if sheet != "*":
+        sheet = _sheet(app, path, sheet).id
+    state = SheetState(app.ws.root, app.rel(path))
+    key = gatemod.ack_key(std.name, rule_id, sheet)
+    if undo:
+        state.unack(key)
+        return {"key": key, "acked": False}
+    if kind not in ("seen", "skip"):
+        raise ApiError("Kiểu xác nhận phải là 'seen' (Đã xem) hoặc 'skip' (Bỏ qua).")
+    reason = reason.strip() if isinstance(reason, str) else ""
+    if kind == "skip" and len(reason) < 3:
+        raise ApiError("Bỏ qua cảnh báo cần ghi lý do (ít nhất 3 ký tự).")
+    if gatemod.tier_of(std, rule_id, std.rule(rule_id).severity) == "block":
+        raise ApiError("Lỗi bậc Chặn không bỏ qua được: phải sửa bản vẽ (hoặc trưởng phòng đổi bậc trong hồ sơ công ty).",
+                       409)
+    state.ack(key, kind, reason)
+    return {"key": key, "acked": True, "kind": kind}
 
 
 def audit_all(app: AppData, standard: Any, dept: Any = None) -> dict:

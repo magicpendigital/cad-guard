@@ -463,6 +463,68 @@ PREVIEW_FIXTURES = {
 }
 
 
+# ---- Bộ tờ (sheets.py): khung tên trong không gian mô hình như nhiều công ty VN vẽ, chữ TCVN3, rác, một layout.
+SHEET_W, SHEET_H = 420 * 20, 297 * 20  # khổ A3 tỉ lệ 1:20
+
+
+def _sheet_content(msp, x0: float, y0: float, n: int = 15) -> None:
+    for i in range(n):
+        msp.add_line((x0 + 600 + i * 300, y0 + 1500), (x0 + 600 + i * 300, y0 + 4500), dxfattribs={"layer": "SYN-NOI-THAT"})
+    msp.add_circle((x0 + 4000, y0 + 3000), 400, dxfattribs={"layer": "SYN-NOI-THAT"})
+
+
+def make_sheet_set(path: Path) -> None:
+    """Ba tờ A3 1:20 trong Model (hai khối khung tên KHUNG_A3, một khung vẽ bằng polyline), một layout có khung nhìn,
+    chữ tiêu đề mã TCVN3 (theo phông .VnTime và theo đoán), một đối tượng ngoài tờ, một đối tượng lạc rất xa, một
+    layer rỗng, một khối không dùng."""
+    doc = ezdxf.new("R2018", setup=True)
+    doc.header["$INSUNITS"] = 4
+    for name in HYG_LAYERS + ["SYN-KHUNG", "RAC-RONG"]:
+        doc.layers.add(name)
+    doc.styles.add("STD", font="arial.ttf")
+    doc.styles.add("VN3", font=".VnTime")
+    frame = doc.blocks.new("KHUNG_A3")
+    frame.add_lwpolyline([(0, 0), (420, 0), (420, 297), (0, 297)], close=True, dxfattribs={"layer": "SYN-KHUNG"})
+    frame.add_lwpolyline([(20, 10), (410, 10), (410, 287), (20, 287)], close=True, dxfattribs={"layer": "SYN-KHUNG"})
+    frame.add_attdef("TENBANVE", (300, 20), dxfattribs={"height": 4, "layer": "SYN-KHUNG", "style": "STD"})
+    unused = doc.blocks.new("KHOI_THUA")
+    unused.add_circle((0, 0), 50, dxfattribs={"layer": "SYN-NOI-THAT"})
+    msp = doc.modelspace()
+    row1 = 10000
+    # tờ 1: khối khung tên, tiêu đề từ thuộc tính; nhãn tỉ lệ
+    ref = msp.add_blockref("KHUNG_A3", (0, row1), dxfattribs={"layer": "SYN-KHUNG", "xscale": 20, "yscale": 20})
+    ref.add_auto_attribs({"TENBANVE": "MAT BANG BO TRI"})
+    _sheet_content(msp, 0, row1)
+    msp.add_text("1/20", height=150, dxfattribs={"layer": "SYN-CHU", "style": "STD", "insert": (6000, row1 + 400)})
+    # tờ 2: khối khung tên không ghi thuộc tính; tiêu đề là TEXT mã TCVN3 (phông .VnTime) ở dải khung tên
+    msp.add_blockref("KHUNG_A3", (10000, row1), dxfattribs={"layer": "SYN-KHUNG", "xscale": 20, "yscale": 20})
+    _sheet_content(msp, 10000, row1)
+    msp.add_text("mÆt ®øng tñ bÕp", height=250,
+                 dxfattribs={"layer": "SYN-CHU", "style": "VN3", "insert": (10000 + 5500, row1 + 600)})
+    # tờ 3: khung vẽ bằng polyline (không khối), tiêu đề TCVN3 nhưng kiểu chữ Arial (phải đoán)
+    msp.add_lwpolyline([(0, 0), (SHEET_W, 0), (SHEET_W, SHEET_H), (0, SHEET_H)], close=True, dxfattribs={"layer": "SYN-KHUNG"})
+    _sheet_content(msp, 0, 0)
+    msp.add_text("chi tiÕt tñ ¸o", height=250, dxfattribs={"layer": "SYN-CHU", "style": "STD", "insert": (5500, 600)})
+    # kích thước ghi đè chữ trong tờ 3 (VS-06/TX-08, bậc Chặn mặc định): tờ 3 không chốt được
+    msp.add_linear_dim(base=(1000, 5200), p1=(1000, 4600), p2=(2000, 4600), text="1200",
+                       dxfattribs={"layer": "SYN-KICH-THUOC"}).render()
+    # ngoài tờ: nằm giữa hai hàng tờ; lạc xa: rất xa vùng vẽ
+    msp.add_line((3000, 8000), (5000, 8000), dxfattribs={"layer": "SYN-NOI-THAT"})
+    msp.add_circle((5_000_000, 5_000_000), 10, dxfattribs={"layer": "SYN-NOI-THAT"})
+    # chi tiết in qua layout (khung nhìn nhìn vùng x = 30000)
+    for i in range(6):
+        msp.add_line((28500 + i * 400, 2000), (28500 + i * 400, 4000), dxfattribs={"layer": "SYN-NOI-THAT"})
+    lo = doc.layouts.new("IN-CHI-TIET")
+    lo.page_setup(size=(420, 297), margins=(10, 10, 10, 20), units="mm")
+    lo.add_viewport(center=(210, 148), size=(380, 250), view_center_point=(29500, 3000), view_height=3000)
+    _finish(doc, path)
+
+
+SHEET_FIXTURES = {
+    "sheet_set.dxf": make_sheet_set,
+}
+
+
 ALL = {
     "ok_sheet.dxf": make_ok_sheet,
     "model_features.dxf": make_model_features,
@@ -492,6 +554,12 @@ def make_all(out_dir: Path) -> list[Path]:
     preview_dir.mkdir(exist_ok=True)
     for name, fn in PREVIEW_FIXTURES.items():
         p = preview_dir / name
+        fn(p)
+        paths.append(p)
+    sheet_dir = out_dir / "sheets"
+    sheet_dir.mkdir(exist_ok=True)
+    for name, fn in SHEET_FIXTURES.items():
+        p = sheet_dir / name
         fn(p)
         paths.append(p)
     return paths

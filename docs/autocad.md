@@ -1,4 +1,4 @@
-# Chạy thử cad-guard với AutoCAD (M1 + M2 duyệt 07/11/2026; M3 điều hướng duyệt 09/11/2026)
+# Chạy thử cad-guard với AutoCAD (M1 + M2 duyệt 07/11/2026; M3 + hướng D mở cổng 09/11/2026)
 
 Phạm vi đã duyệt (xem `PLAN.md` mục 3): **theo tệp**; ngoài ra M3 chỉ để **điều hướng** (đưa AutoCAD tới đối tượng lỗi qua COM, mục 6), không sửa bản vẽ.
 
@@ -14,7 +14,7 @@ Thư mục làm việc ──► cadguard watch: tự kiểm, ghi .cadguard\repo
 AutoCAD: CGTOI <handle>  → phóng tới và chọn đúng đối tượng
 ```
 
-Không có: plugin .NET, sửa DWG từ trợ lý hay qua COM. COM chỉ dùng để phóng tới và chọn đối tượng (mục 6). Sửa bản vẽ vẫn đi đường `cadguard propose/apply` ra tệp DXF **mới** (`docs/changeset.md`).
+Không có: sửa DWG từ trợ lý, qua COM hay qua plugin. COM chỉ dùng để phóng tới và chọn đối tượng (mục 6); plugin .NET (mục 7) chỉ hiện bảng cad-guard và ghim lỗi tạm thời trên màn hình. Sửa bản vẽ vẫn đi đường `cadguard propose/apply` ra tệp DXF **mới** (`docs/changeset.md`).
 
 ## 1. Cài trên máy thử
 
@@ -86,6 +86,7 @@ Dùng bản vẽ tổng hợp (`fixtures/synthetic/*.dxf` mở rồi lưu thành
 | Ngày | Bản AutoCAD | Mục 1–7 | Ghi chú |
 | --- | --- | --- | --- |
 | 09/11/2026 | AutoCAD 2027 bản dùng thử (đầy đủ, Windows 11) | 1 đạt; 2 đạt; 3 đạt; 4 chưa kiểm; 5 đạt; 6 đạt; 7 không có LT | Bản vẽ tổng hợp `bad_layers.dxf` → SAVEAS DWG 2018 → `CGXUAT`. Mục 1: `[cad-guard] Đã nạp…` đúng dấu, có hộp thoại bảo mật "Unsigned Executable File" (chọn Load Once; muốn tắt thì thêm thư mục vào Trusted Locations). Mục 2: thanh tiêu đề vẫn `.dwg`. Mục 3: `watch` báo sau ~4 s. Mục 5: handle A2–B7 giống hệt qua DXF → DWG → DXFOUT; `CGTOI B6` chọn đúng LINE (0,0)→(10,10) trên layer 0 (kiểm bằng `LIST`). Mục 6: `CHPROP` B6 sang `FN-PART-OUTL`, `CGXUAT` lại → cảnh báo 1 → 0. `CGBAOCAO` lỗi khi thư mục gõ dạng `D:/…` (Explorer mở Documents); đã sửa (`cg:winpath`), kiểm lại mở đúng báo cáo. |
+| 09/11/2026 | AutoCAD 2027 bản dùng thử (đầy đủ, Windows 11) | Plugin (mục 7) + CGHELP: đạt | Bản vẽ tổng hợp `sheet_set.dxf` mở chỉ đọc, `CGXUAT` → `watch` ghi báo cáo. `NETLOAD` → `[cad-guard] Đã nạp plugin…` đúng dấu. `CGGHIM`: vòng khoanh + số 3 (TX-01), 4 (TX-08, kích thước ghi đè ở Tờ 3), dòng lệnh in chú thích; phóng to cửa sổ 0,3000–6000,6500: số giữ cỡ cố định (lỗi đầu tiên: ghim to theo bản vẽ do so `Document` theo tham chiếu, đã sửa so theo con trỏ gốc). `CGBANG`: bảng neo phải, tự chạy `cadguard app`, tự mở `sheet_set`, quét, 7 phát hiện, ô chọn tờ, thẻ Hướng dẫn; bảng hẹp bị cắt mép (đã sửa CSS chế độ bảng). Nút **Tới trong AutoCAD** trong bảng: `Đã phóng tới và chọn 1 đối tượng`. Chưa kiểm: AutoCAD khởi động lại rồi nạp bản build chính thức (kiểm bằng bản build đổi tên do .NET không gỡ được DLL đã nạp). |
 | 09/11/2026 | AutoCAD 2027 bản dùng thử (đầy đủ, Windows 11) | M3 + CGDEN (mục 6): đạt | Bản vẽ tổng hợp `thu_bad_layers.dwg` mở chỉ đọc. `bridge.show` qua COM: cửa sổ AutoCAD lên trước, chọn đúng B6; theo layer `0` chọn 1 đối tượng, layer không có báo `layer:…`. Yêu cầu dành cho bản vẽ khác: báo "không phải bản đang mở", không chọn gì. `CGDEN` khi thư mục làm việc khác: báo "Chưa có yêu cầu". Nút **Tới trong AutoCAD** trên `cadguard app` (LY-01, 3 layer): toast "Đã chuyển sang AutoCAD…", AutoCAD chọn đúng. cadguard.lsp tự nạp qua COM khi chưa có `cg:den`, không thấy hộp thoại bảo mật. |
 
 ## 6. Tới đối tượng lỗi từ giao diện (CGDEN + M3)
@@ -99,3 +100,26 @@ Trong `cadguard app`, mỗi thẻ lỗi có handle hoặc layer có nút **Tới
 `CGDEN`/`cg:den` kiểm tên bản vẽ trong yêu cầu khớp bản đang mở; lỗi theo layer (vd. LY-01) chọn mọi đối tượng trên layer trong tờ đang xem.
 
 Trợ lý AI: `cadguard mcp --allow-autocad` (hoặc `mcp-config … --allow-autocad`) thêm công cụ `show_in_autocad` (mặc định TẮT). Trợ lý gửi handle/mã layer (L_…); máy chủ giải mã về tên thật chỉ để ghi tệp yêu cầu, kết quả trả trợ lý không có tên thật.
+
+## 7. Plugin .NET: bảng cad-guard (CGBANG) và ghim lỗi (CGGHIM)
+
+Hướng D (CEO mở cổng 09/11/2026). Chỉ AutoCAD bản đầy đủ (LT không nạp .NET). Không sửa, không lưu bản vẽ.
+
+Build (một lần, cần .NET SDK cùng đời AutoCAD; AutoCAD 2027 = .NET 10):
+
+```powershell
+python scripts/build_acad_plugin.py            # tự tìm AutoCAD qua registry; thêm --acad-dir "<thư mục>" nếu cần
+```
+
+Kết quả: `packages/acad-plugin/bin/plugin/CadGuard.Acad.dll` + `cadguard-acad.json` (đường dẫn Python và PYTHONPATH để
+chạy `python -m cadguard app`; KHÔNG có mã phiên hay khoá). Chép cả hai tệp vào một thư mục trong Trusted Locations,
+rồi trong AutoCAD: `NETLOAD` → chọn `CadGuard.Acad.dll` (muốn tự nạp mỗi lần mở AutoCAD: dùng bộ cài .bundle, chưa làm).
+
+| Lệnh | Việc |
+| --- | --- |
+| `CGBANG` | Mở/ẩn bảng cad-guard neo cạnh màn hình cho bản vẽ đang mở: Lỗi (lọc theo tờ, chốt tờ, Đã xem/Bỏ qua), Trợ lý, Hướng dẫn. Plugin tự chạy `cadguard app` cho thư mục `CGTHUMUC` (chỉ 127.0.0.1) và đọc địa chỉ có mã phiên từ đầu ra tiến trình, không ghi mã phiên ra tệp. Bảng tự mở DXF trùng tên bản vẽ (chạy `CGXUAT` trước). Đổi bản vẽ: gõ `CGBANG` lại. |
+| `CGGHIM` | Hiện/ẩn ghim số lỗi từ báo cáo `watch` (`.cadguard/reports/<tên>.json`). Ghim là đồ hoạ tạm thời (TransientManager): không thêm đối tượng, không lưu vào DWG, biến mất khi tắt. Vòng khoanh + số tính theo điểm ảnh nên giữ cùng cỡ khi phóng/kéo; ghim gần nhau gộp thành "×n"; số đánh theo mức (Lỗi, Cảnh báo, Gợi ý) như giao diện. Dòng lệnh in bảng số → mã luật. |
+| `CGHELP` | (trong `cadguard.lsp`) danh sách mọi lệnh CG… và hướng dẫn chi tiết; thẻ **Hướng dẫn** trong bảng có cùng nội dung. |
+
+Giới hạn: plugin đọc biến `CadGuardFolder` của `CGTHUMUC`; tiến trình `cadguard app` của plugin dừng khi đóng AutoCAD.
+Ghim dùng khung bao đối tượng trong WCS (UCS xoay/khung nhìn xoắn chưa xét). Mã nguồn: `packages/acad-plugin/`.

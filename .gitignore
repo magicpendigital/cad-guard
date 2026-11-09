@@ -30,3 +30,7 @@ Data[ ]sample/
 
 # Cache, hồ sơ duyệt và metadata tiến trình chỉ nằm tại máy người dùng
 .cadguard/
+
+# plugin AutoCAD (.NET): sản phẩm build
+packages/acad-plugin/bin/
+packages/acad-plugin/obj/

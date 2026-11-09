@@ -4,7 +4,7 @@ Cập nhật: 07/11/2026. Đây là **điểm vào duy nhất** để biết d�
 
 ## 1. Hướng đã duyệt (không đổi)
 
-- **Hướng C (CEO duyệt 03/11/2026):** làm theo TỆP, DXF là định dạng chung, không phụ thuộc phần mềm CAD. Plugin AutoCAD (hướng D) chỉ là dự phòng có cổng.
+- **Hướng C (CEO duyệt 03/11/2026):** làm theo TỆP, DXF là định dạng chung, không phụ thuộc phần mềm CAD. Plugin AutoCAD (hướng D) là lớp bổ sung; CEO đã mở cổng 09/11/2026 (mục 3).
 - Phát hiện lỗi bằng luật tất định; LLM chỉ giải thích và đề xuất.
 - Sửa bản vẽ: đề xuất → xem trước → người xác nhận → tệp **mới** → kiểm → hoàn tác.
 - Trợ lý mặc định ẩn danh Bậc 1. Studio gửi nội dung bản vẽ cho LLM chỉ khi người dùng đồng ý trong phiên.
@@ -20,7 +20,8 @@ Cập nhật: 07/11/2026. Đây là **điểm vào duy nhất** để biết d�
 | Trợ lý | MCP stdio chỉ đọc (6 công cụ, `propose_changeset` khi bật cờ); engine CLI/API; kho khoá hệ điều hành | Chưa thử với người dùng thật (A3) |
 | Giao diện | `cadguard app` (cục bộ, mã phiên), `cadguard studio`, `cadguard review` (cổng Tailscale) | Ba server riêng; xem Đợt 4 |
 | 3D | `cg.scene/1` tất định, báo phần thiếu, xuất GLB | Diễn hoạ là nhánh phụ |
-| AutoCAD | `cadguard.lsp` (CGXUAT/CGTOI/CGDEN/CGBAOCAO), `watch`, `mcp-config`; M3 điều hướng qua COM (`autocad/bridge.py`) | Kiểm tay AutoCAD 2027 bản đầy đủ; chưa có LT |
+| AutoCAD | `cadguard.lsp` (CGXUAT/CGTOI/CGDEN/CGBAOCAO/CGHELP), `watch`, `mcp-config`; M3 điều hướng qua COM (`autocad/bridge.py`); plugin .NET `packages/acad-plugin` (CGBANG bảng neo, CGGHIM ghim tạm thời) | Kiểm tay AutoCAD 2027 bản đầy đủ; chưa có LT; plugin chưa có bộ cài tự nạp (.bundle) |
+| Tờ + bậc chốt (09/11/2026) | `sheets.py` `cg.structure/1` (layout + khung tờ trong Model, ứng viên rác), `textcodec.py` (TCVN3/VNI), `gate.py` (Chặn/Cảnh báo/Gợi ý, hồ sơ `gate:`), `sheet_state.py` (chốt tờ, xác nhận cảnh báo); app: thanh Tờ, ghim cỡ cố định, chốt tờ | Chỉ thử trên DXF tổng hợp; bậc mặc định là đề xuất v0 chờ trưởng phòng kỹ thuật duyệt; nhận diện khung tờ chưa đo trên bộ mẫu thật P0 |
 
 ## 3. Lộ trình chạy thử (duyệt 07/11/2026: phạm vi AutoCAD M1 + M2)
 
@@ -28,7 +29,7 @@ Phạm vi kết nối AutoCAD đã duyệt:
 
 - **M1:** trợ lý AI (Claude Desktop/Code, Codex…) ↔ `cadguard mcp` ↔ DXF xuất từ AutoCAD.
 - **M2:** adapter mỏng đúng P1b đã duyệt ("adapter xuất DXF + thư mục theo dõi"): tệp AutoLISP `cadguard.lsp` (`CGXUAT` xuất bản đang mở ra DXF, không đổi DWG; `CGTOI` nhảy tới đối tượng theo handle) và lệnh `cadguard watch`.
-- **M3 thu hẹp (người dùng duyệt 09/11/2026): chỉ điều hướng.** Nút "Tới trong AutoCAD" trên `cadguard app` và công cụ MCP `show_in_autocad` (cờ `--allow-autocad`, mặc định tắt) đưa AutoCAD tới đối tượng qua COM. Không sửa/lưu bản vẽ qua COM; mọi chỉnh sửa vẫn đi đường changeset. Điều khiển AutoCAD rộng hơn (sửa qua COM, plugin .NET) vẫn cần CEO mở cổng hướng D.
+- **M3 thu hẹp (người dùng duyệt 09/11/2026): chỉ điều hướng.** Nút "Tới trong AutoCAD" trên `cadguard app` và công cụ MCP `show_in_autocad` (cờ `--allow-autocad`, mặc định tắt) đưa AutoCAD tới đối tượng qua COM. Không sửa/lưu bản vẽ qua COM; mọi chỉnh sửa vẫn đi đường changeset. **CEO mở cổng hướng D (09/11/2026).** Hướng C (theo tệp, DXF) vẫn là đường chính; hướng D bổ sung lớp tương tác trong AutoCAD. Quy tắc giữ nguyên: không sửa/lưu bản vẽ qua COM hay plugin khi chưa có xem trước + xác nhận + hoàn tác và ghi ra tệp mới.
 
 | Đợt | Nội dung | Tiêu chí nghiệm thu |
 | --- | --- | --- |
@@ -48,7 +49,7 @@ Phạm vi kết nối AutoCAD đã duyệt:
 2. Handle giữ nguyên qua DXFOUT: đạt trên AutoCAD 2027 với bản vẽ tổng hợp. Còn phải kiểm trên bản vẽ thật có khối/xref (P0) trước khi hứa `CGTOI` với khách.
 3. P0: bộ mẫu thật ngoài repo, đồng ý dữ liệu (`docs/samples-intake.md`).
 4. P1c: đo độ chính xác cùng kỹ sư rà soát trước khi bật bất kỳ cảnh báo thời gian thực nào.
-5. M3: người dùng duyệt 09/11/2026 phần **điều hướng**; cần CEO xác nhận lại nếu quy định cổng hướng D áp cả cho phần này.
+5. ~~M3~~ Đã chốt 09/11/2026: CEO đồng ý triển khai M3 và mở cổng hướng D (xem mục 3). Còn mở: phạm vi hướng D ngoài điều hướng (bảng lệnh/hướng dẫn trong AutoCAD, khung chat trong AutoCAD) làm theo đề xuất riêng, từng bước có duyệt.
 
 ## 5. Tệp tham chiếu trong `plans/`
 

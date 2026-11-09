@@ -34,7 +34,7 @@ REL_TOL = 1e-9
 # Mọi fixture do `fixtures.make_all` sinh: bộ chính ở thư mục gốc, bộ dựng 3D (scene/studio) ở thư mục con scene/,
 # bộ xem trước của app ở preview/.
 ALL_FIXTURES = sorted(fixtures.ALL) + [f"scene/{n}" for n in sorted(fixtures.SCENE_FIXTURES)] + [
-    f"preview/{n}" for n in sorted(fixtures.PREVIEW_FIXTURES)]
+    f"preview/{n}" for n in sorted(fixtures.PREVIEW_FIXTURES)] + [f"sheets/{n}" for n in sorted(fixtures.SHEET_FIXTURES)]
 
 
 def _diff(a, b, path: str = "") -> list[str]:

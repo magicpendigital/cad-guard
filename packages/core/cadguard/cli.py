@@ -425,6 +425,34 @@ def cmd_mcp_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_sheets(args: argparse.Namespace) -> int:
+    """Chỉ mục tờ (trang in) của một bản vẽ: tờ, tiêu đề, khổ/tỉ lệ, số đối tượng, ứng viên rác. Không sửa bản vẽ."""
+    import json
+
+    from .reader_select import choose_reader, read_with
+    from .sheets import build_structure
+
+    path = Path(args.path)
+    model = read_with(path, choose_reader(path).reader)
+    d = build_structure(model).to_dict(include_map=args.map)
+    if args.json:
+        print(json.dumps(d, ensure_ascii=False, indent=1))
+        return 0
+    if not d["sheets"]:
+        print("Không nhận ra tờ nào (không có layout có khung nhìn, không có khung tên/khung tờ khổ ISO trong Model).")
+    for s in d["sheets"]:
+        extra = ", ".join(x for x in (s["paper"], f"1:{s['scale']:g}" if s["scale"] else None,
+                                      "layout" if s["kind"] == "layout" else "khung trong Model") if x)
+        title = f": {s['title']}" + (" (giải mã TCVN3/VNI)" if s["title_source"] == "text-decoded" else "") if s["title"] else ""
+        print(f"{s['name']}{title}  [{extra}]  {s['entity_count']} đối tượng")
+    j = d["junk"]
+    print(f"Ứng viên rác (chỉ gợi ý, không tự xoá): {j['outside']['count']} đối tượng ngoài tờ, "
+          f"{j['stray']['count']} đối tượng lạc xa, {len(j['empty_layers'])} layer rỗng, {len(j['unused_blocks'])} khối không dùng.")
+    if d["no_position"]:
+        print(f"{d['no_position']} đối tượng không có toạ độ trong mô hình (HATCH…): không gán được vào tờ.")
+    return 0
+
+
 def cmd_autocad(args: argparse.Namespace) -> int:
     import shutil
 
@@ -445,6 +473,8 @@ def cmd_autocad(args: argparse.Namespace) -> int:
           "  CGTOI     nhập handle do cad-guard/trợ lý báo để phóng tới đối tượng\n"
           "  CGDEN     tới đối tượng vừa bấm 'Tới trong AutoCAD' trên giao diện `cadguard app`\n"
           "  CGBAOCAO  mở báo cáo HTML của bản vẽ đang mở\n"
+          "  CGHELP    danh sách lệnh và hướng dẫn chi tiết từng lệnh\n"
+          "Plugin .NET (bảng CGBANG, ghim lỗi CGGHIM; AutoCAD bản đầy đủ): python scripts/build_acad_plugin.py rồi NETLOAD.\n"
           "Hướng dẫn và danh sách kiểm tay: docs/autocad.md")
     return 0
 
@@ -686,7 +716,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="bật công cụ show_in_autocad: trợ lý đưa AutoCAD tới đối tượng lỗi (mặc định TẮT)")
     mc.set_defaults(fn=cmd_mcp_config)
 
-    ac = sub.add_parser("autocad", help="đường dẫn và cách nạp cadguard.lsp (CGXUAT, CGTOI, CGDEN, CGBAOCAO) cho AutoCAD")
+    sh = sub.add_parser("sheets", help="chỉ mục tờ (trang in): tờ, tiêu đề, khổ/tỉ lệ, ứng viên rác (không sửa bản vẽ)")
+    sh.add_argument("path", help="tệp DXF")
+    sh.add_argument("--json", action="store_true", help="in JSON cg.structure/1")
+    sh.add_argument("--map", action="store_true", help="kèm bảng handle -> tờ trong JSON")
+    sh.set_defaults(fn=cmd_sheets)
+
+    ac = sub.add_parser("autocad", help="đường dẫn và cách nạp cadguard.lsp (CGXUAT, CGTOI, CGDEN, CGBAOCAO, CGHELP) cho AutoCAD")
     ac.add_argument("--copy-to", metavar="THƯ_MỤC", help="chép cadguard.lsp vào thư mục này")
     ac.set_defaults(fn=cmd_autocad)
 

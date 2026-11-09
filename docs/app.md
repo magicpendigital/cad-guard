@@ -46,12 +46,24 @@ rồi trong trình duyệt: dán `D:\Tam\ws-qc` vào ô đường dẫn (hoặc 
 | --- | --- |
 | Thanh trên | Dự án hiện tại (bấm để đổi), năm màn **Việc của tôi · Bản vẽ · Tổng quan · Luật áp dụng · Kết nối AI**, **Dữ liệu: Bậc 1** (đỏ khi `--no-anonymize`), chọn **Phòng**, chọn **Trợ lý** (engine dùng được/không kèm lý do), sáng/tối |
 | Việc của tôi | “Chào buổi …, phòng X”, hỏi nhanh trợ lý, chuỗi 4 phòng (Thiết kế → Kỹ thuật → Thiết kế 3D + Lập trình sản xuất → Render/Xưởng) với số bản đang xử lý/sẵn sàng 7 ngày; **Nhận từ phòng trước** (bản phòng trước đã đánh dấu sẵn sàng); **Bản vẽ của phòng** với danh sách kiểm (đã quét đủ chuẩn, hết lỗi E, đã đánh dấu bàn giao) và nút **Sẵn sàng giao cho …**; **Lỗi tôi hay gặp (30 ngày)**, **Đề xuất của trợ lý** (changeset trợ lý đề xuất đã áp dụng / tổng), **Gần đây** |
-| Bản vẽ | Cột trái: bản vẽ (tệp mới `.cg-….dxf` hiện dưới tệp gốc, nhãn “Bản mới”), chuẩn của phòng, luật chạy, hồ sơ, **Quét cả thư mục**. Giữa: **xem trước bản vẽ** (SVG từ hình học trong mô hình), thu phóng/kéo, **Trước/Sau** sau khi lưu tệp mới. Phải: tab **Trợ lý**, **Lỗi**, **Thay đổi** |
+| Bản vẽ | Cột trái: bản vẽ (tệp mới `.cg-….dxf` hiện dưới tệp gốc, nhãn “Bản mới”), chuẩn của phòng, luật chạy, hồ sơ, **Quét cả thư mục**. Giữa: **thanh Tờ** (mục 3b), **xem trước bản vẽ** (khung nhìn gọn: bỏ đối tượng lạc xa), viền tờ, ghim lỗi cỡ cố định trên màn (gộp “×n” khi gần nhau, bấm để phóng tới), thu phóng/kéo, **Trước/Sau** sau khi lưu tệp mới. Phải: tab **Trợ lý**, **Lỗi**, **Thay đổi**, **Hướng dẫn** (lệnh AutoCAD, bậc lỗi) |
 | Tổng quan | Số tổng hợp 7 ngày từ lịch sử trên máy: bản đã quét, lỗi E đang mở, tỉ lệ đề xuất được áp dụng, bản đánh dấu bàn giao; bàn giao giữa phòng; luật vi phạm nhiều nhất; độ tin cậy luật (“Chưa đo” cho tới khi có đo độ chính xác P1c) |
 | Luật áp dụng | Chỉ đọc. Luật của mọi chuẩn kèm phòng áp dụng (từ `departments.json`), tham số mặc định → đang áp (hồ sơ), tình trạng; thẻ theo phòng và “Chưa cài code” để lọc; ngăn chi tiết luật; phiên bản đang dùng. Sửa luật (mục 9b) chưa làm |
 | Kết nối AI | Mục 5 |
 
 Phòng (`departments.json`, dạng `cg.app-departments/2`): mỗi phòng có `standards` (nhiều chuẩn), `next` (nhiều phòng nhận), `role`, `priority`, `view`. Kỹ thuật = `design-hygiene-v0` + `furniture-v0` (mặc định, ưu tiên khảo sát); Thiết kế = `design-hygiene-v0`; Lập trình sản xuất = `furniture-v0`; Thiết kế 3D = xem 3D (`view: scene`).
+
+## 3b. Tờ (trang in), bậc lỗi, chốt tờ
+
+- **Tờ** do `sheets.py` nhận tất định (`cadguard sheets <dxf>`): layout có khung nhìn, hoặc khung tên/khung tờ khổ ISO
+  trong Model (khối tên KHUNG/FRAME/TITLE…, khổ A0–A4 × tỉ lệ chuẩn, hoặc nhiều khung cùng cỡ). Tiêu đề lấy từ thuộc
+  tính khung tên hoặc chữ lớn nhất ở dải khung tên; chữ mã TCVN3/VNI được giải mã để hiển thị (`textcodec.py`).
+- Chọn tờ (thanh Tờ hoặc ô chọn trong tab Lỗi): hình phóng tới tờ, danh sách lỗi chỉ còn lỗi của tờ đó và lỗi chung
+  của cả bản vẽ (nhãn “cả bản vẽ”). **Ứng viên rác** (ngoài tờ, lạc xa, layer rỗng, khối không dùng) chỉ là gợi ý.
+- **Bậc** (`gate.py`; hồ sơ công ty khoá `gate:` đổi được): **Chặn** (mặc định đề xuất v0: DH-09, TX-08, VS-06, PR-02)
+  phải sửa; **Cảnh báo** bấm Đã xem hoặc Bỏ qua (cần lý do); **Gợi ý** ẩn mặc định.
+- **Chốt tờ** khi không còn Chặn và cảnh báo đã xác nhận; máy chủ kiểm lại. Trạng thái và lý do lưu cục bộ
+  `.cadguard/sheets/<mã tệp>.json` (không tên người, không tên tệp). Nội dung tờ đổi sau khi chốt → tờ tự mở lại.
 
 ## 4. Luồng phòng Kỹ thuật (đã chạy thật trên DXF tổng hợp)
 
@@ -99,6 +111,9 @@ Mọi API trả JSON tiếng Việt (`{"error": "…"}` khi lỗi), cần header
 | GET | `/api/drawings` | DXF của dự án (tương đối, có trần) |
 | POST | `/api/audit` | `{file, standard, dept?}` → kết quả theo E/W/I (handle mẫu tối đa 20/mục); ghi lịch sử |
 | POST | `/api/audit_all` | `{standard, dept?}` |
+| POST | `/api/sheets` | `{file}` → chỉ mục tờ `cg.structure/1` + trạng thái chốt từng tờ |
+| POST | `/api/sheets/lock`, `/api/sheets/unlock` | `{file, sheet, standards, confirm}` chốt tờ (409 nếu còn Chặn/cảnh báo chưa xác nhận) / mở lại |
+| POST | `/api/findings/ack` | `{file, standard, rule_id, sheet|"*", kind: seen|skip, reason, undo?}` xác nhận cảnh báo |
 | POST | `/api/geometry` | `{file}` → hình xem trước (toạ độ khung SVG) |
 | POST | `/api/scene` | `{file}` → hộp 3D (chỉ xem) |
 | POST | `/api/handover` | `{file, dept}` → đánh dấu sẵn sàng bàn giao (409 nếu chưa quét/còn lỗi E) |

@@ -30,7 +30,8 @@ from ezdxf.entities.dimension import angle_between, linear_measurement
 from ezdxf.math import OCS, Vec3
 from ezdxf.tools.text import escape_dxf_line_endings, fast_plain_mtext
 
-from .dxf_reader import MAX_PTS, TEXT_MAX, TEXT_TYPES, _block_depth, _font_kind, is_non_ascii_text
+from .dxf_reader import (EXTENT_TYPES, MAX_PTS, TEXT_MAX, TEXT_TYPES, _block_depth, _font_kind, finish_extents,
+                         grow_extents, is_non_ascii_text)
 from .limits import DEFAULT_MAX_ENTITY_RECORDS  # một nguồn, module nhẹ
 from .model import BlockRec, DrawingModel, EntityRec, LayerRec, LayoutRec, ModelStats, SpaceStats, StyleRec, ViewportRec
 
@@ -53,7 +54,7 @@ Z_CODES: dict[str, tuple[int, ...]] = {
 }
 # Mã nhóm riêng của đối tượng mà mô hình cần (ngoài phần chung AcDbEntity).
 # 13..35 = điểm định nghĩa DIMENSION, 42 = INSERT.yscale, 210..230 = pháp tuyến (OCS của DIMENSION).
-SPEC_CODES = frozenset({1, 2, 7, 10, 11, 13, 14, 15, 20, 21, 23, 24, 25, 30, 31, 32, 33, 34, 35, 38, 40, 41, 42,
+SPEC_CODES = frozenset({1, 2, 7, 10, 11, 12, 13, 14, 15, 20, 21, 22, 23, 24, 25, 30, 31, 32, 33, 34, 35, 38, 40, 41, 42,
                         45, 50, 51, 66, 69, 70, 210, 220, 230})
 
 
@@ -191,10 +192,12 @@ class _Space:
 
 
 class _Block:
-    __slots__ = ("name", "flags", "count", "types", "layers", "children")
+    __slots__ = ("name", "flags", "count", "types", "layers", "children", "base", "ext")
 
     def __init__(self, name: str, flags: int) -> None:
         self.name, self.flags, self.count = name, flags, 0
+        self.base = (0.0, 0.0)
+        self.ext: list[float] | None = None
         self.types: dict[str, int] = {}
         self.layers: dict[str, int] = {}
         self.children: dict[str, int] = {}
@@ -369,6 +372,8 @@ def _entity_rec(t: str, handle: str, layer: str, color, lw, tc, spec: dict, xs: 
             f["pos"] = (_r(_float(spec, 10)), _r(_float(spec, 20)))
         elif t == "DIMENSION":
             f["dim_text"] = spec.get(1, "") or ""
+            f["pos"] = ((_r(_float(spec, 11)), _r(_float(spec, 21))) if 11 in spec
+                        else (_r(_float(spec, 10)), _r(_float(spec, 20))))
             try:
                 value = _dim_measurement(spec)
                 f["dim_value"] = None if value is None else _r(value)
@@ -554,6 +559,10 @@ class _Parser:
             self.cur_block = key
             if key not in self.block_defs:
                 self.block_defs[key] = _Block(name, _int(spec.get(70, "0")) or 0)
+                try:
+                    self.block_defs[key].base = (_float(spec, 10), _float(spec, 20))
+                except ValueError:
+                    pass
             self.linking, self.attribs = False, None
             return
         if in_blocks and t == "ENDBLK":
@@ -573,7 +582,7 @@ class _Parser:
             return
         container = self.cur_block if in_blocks else None
         layout_ctx = container is None or _is_layout_block(container)
-        geometry = layout_ctx and self.n_records < self.max_records
+        geometry = (layout_ctx and self.n_records < self.max_records) or (not layout_ctx and t == "LWPOLYLINE")
         handle, layer, color, lw, tc, owner, pspace, spec, xs, ys = _scan(tags, geometry)
         if container is None:  # mục ENTITIES: chọn không gian như ezdxf (mã chủ trước, mã 67 sau)
             if owner is not None and owner == self.msp_handle:
@@ -587,7 +596,7 @@ class _Parser:
             self.linking = True
         self.attribs = None
         if not layout_ctx:
-            self._block_entity(container, t, layer, color, lw, tc, spec)
+            self._block_entity(container, t, layer, color, lw, tc, spec, xs, ys)
             _add_text(self.block_text_na, t, spec, tags)
             return
         sp = self.spaces.get(container)
@@ -598,12 +607,16 @@ class _Parser:
         if t == "VIEWPORT":
             vid = _int(spec.get(69, "0")) or 0
             scale = None
+            win: dict = {}
             try:
                 vh, ph = _float(spec, 45, 1.0), _float(spec, 41, 1.0)
                 scale = ph / vh if vh > 0 and ph > 0 else None
+                win = {"center": (_r(_float(spec, 10)), _r(_float(spec, 20))), "width": _r(_float(spec, 40, 1.0)),
+                       "height": _r(ph), "view_center": (_r(_float(spec, 12)), _r(_float(spec, 22))),
+                       "view_height": _r(vh), "twist": _r(_float(spec, 51))}
             except ValueError:
                 pass
-            self.viewports.setdefault(container, []).append((vid, scale))
+            self.viewports.setdefault(container, []).append((vid, scale, win))
             return
         if self.n_records >= self.max_records:
             self.truncated = True
@@ -614,8 +627,21 @@ class _Parser:
         if attribs_follow:
             self.attribs = rec.attribs
 
-    def _block_entity(self, key: str, t: str, layer: str, color, lw, tc, spec: dict) -> None:
+    def _block_entity(self, key: str, t: str, layer: str, color, lw, tc, spec: dict, xs: list, ys: list) -> None:
         b = self.block_defs[key]
+        if t in EXTENT_TYPES:  # khung bao khối: cùng hàm với dxf_reader
+            try:
+                if t == "LINE":
+                    pts, rad = [(_float(spec, 10), _float(spec, 20)), (_float(spec, 11), _float(spec, 21))], None
+                elif t == "LWPOLYLINE":
+                    pts, rad = list(zip(xs, ys)), None
+                elif t in ("CIRCLE", "ARC"):
+                    pts, rad = [(_float(spec, 10), _float(spec, 20))], _float(spec, 40, 1.0)
+                else:
+                    pts, rad = [(_float(spec, 10), _float(spec, 20))], None
+                b.ext = grow_extents(b.ext, t, pts, rad, b.base)
+            except ValueError:
+                pass
         if not key.startswith("*"):
             self.block_layers.add(layer)
         if t in LINKED_TYPES:
@@ -741,6 +767,7 @@ class _Parser:
             if is_layout or b is None:
                 continue
             rec.entity_count, rec.types, rec.layers, rec.child_blocks = b.count, b.types, b.layers, b.children
+            rec.extents = finish_extents(b.ext)
         m.block_layers = sorted(self.block_layers)
         lookup = {b.name.casefold(): b for b in m.blocks if not b.is_layout}
         graph = {k: b.model_copy(update={"child_blocks": {n.casefold(): v for n, v in b.child_blocks.items()}}) for k, b in lookup.items()}
@@ -781,7 +808,8 @@ class _Parser:
                 w, h = w * 25.4, h * 25.4
             pw, ph = (round(w, 2), round(h, 2)) if w > 0 and h > 0 else (None, None)
             lrec = LayoutRec(name=name, paper_w_mm=pw, paper_h_mm=ph)
-            lrec.viewports = [ViewportRec(layout=name, id=vid, scale=sc) for vid, sc in self.viewports.get(key, []) if vid != 1]
+            lrec.viewports = [ViewportRec(layout=name, id=vid, scale=sc, **win)
+                              for vid, sc, win in self.viewports.get(key, []) if vid != 1]
             m.layouts.append(lrec)
             for rec in recs:
                 rec.space = name

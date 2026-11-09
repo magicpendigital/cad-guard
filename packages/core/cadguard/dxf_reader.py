@@ -102,6 +102,10 @@ def _entity_rec(e, space: str) -> EntityRec:
                 rec.dim_value = _r(e.get_measurement())
             except Exception:  # noqa: BLE001
                 pass
+            try:  # vị trí kích thước (để gán vào Tờ, khoanh vùng lỗi): điểm giữa chữ, thiếu thì điểm định nghĩa
+                rec.pos = _pt(e.dxf.text_midpoint if e.dxf.hasattr("text_midpoint") else e.dxf.defpoint)
+            except Exception:  # noqa: BLE001
+                pass
         elif t == "INSERT":
             rec.block = str(e.dxf.name)
             rec.attribs = {str(a.dxf.tag): str(a.dxf.get("text", "")) for a in e.attribs}
@@ -123,6 +127,59 @@ def _paper_mm(layout) -> tuple[float | None, float | None]:
         return (round(w, 2), round(h, 2)) if w > 0 and h > 0 else (None, None)
     except Exception:  # noqa: BLE001
         return (None, None)
+
+
+def _viewport_rec(layout: str, vid: int, vp) -> ViewportRec:
+    rec = ViewportRec(layout=layout, id=vid, scale=_viewport_scale(vp))
+    try:
+        c, vc = vp.dxf.center, vp.dxf.view_center_point
+        rec.center = (_r(c.x), _r(c.y))
+        rec.width, rec.height = _r(float(vp.dxf.width)), _r(float(vp.dxf.height))
+        rec.view_center = (_r(vc.x), _r(vc.y))
+        rec.view_height = _r(float(vp.dxf.view_height))
+        rec.twist = _r(float(vp.dxf.get("view_twist_angle", 0.0) or 0.0))
+    except Exception:  # noqa: BLE001 - khung nhìn thiếu mã: giữ phần đã đọc được
+        pass
+    return rec
+
+
+def grow_extents(ext: list[float] | None, t: str, pts: list[tuple[float, float]], radius: float | None,
+                 base: tuple[float, float]) -> list[float] | None:
+    """Nới khung bao khối theo một đối tượng (dùng chung cho dxf_reader và dxf_stream để khớp từng bit)."""
+    bx, by = base
+    if t in ("CIRCLE", "ARC"):
+        if not pts or radius is None:
+            return ext
+        cx, cy = pts[0]
+        pts = [(cx - radius, cy - radius), (cx + radius, cy + radius)]
+    for x, y in pts:
+        x, y = x - bx, y - by
+        if ext is None:
+            ext = [x, y, x, y]
+        else:
+            ext[0], ext[1] = min(ext[0], x), min(ext[1], y)
+            ext[2], ext[3] = max(ext[2], x), max(ext[3], y)
+    return ext
+
+
+def finish_extents(ext: list[float] | None) -> tuple[float, float, float, float] | None:
+    return None if ext is None else (_r(ext[0]), _r(ext[1]), _r(ext[2]), _r(ext[3]))
+
+
+EXTENT_TYPES = ("LINE", "LWPOLYLINE", "CIRCLE", "ARC", "TEXT", "MTEXT")
+
+
+def _block_extent_pts(e, t: str) -> tuple[list[tuple[float, float]], float | None]:
+    if t == "LINE":
+        a, b = e.dxf.start, e.dxf.end
+        return [(float(a.x), float(a.y)), (float(b.x), float(b.y))], None
+    if t == "LWPOLYLINE":
+        return [(float(x), float(y)) for x, y in e.get_points("xy")], None
+    if t in ("CIRCLE", "ARC"):
+        c = e.dxf.center
+        return [(float(c.x), float(c.y))], float(e.dxf.radius)
+    p = e.dxf.insert
+    return [(float(p.x), float(p.y))], None
 
 
 def _viewport_scale(vp) -> float | None:
@@ -242,9 +299,21 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
             m.blocks.append(rec)
             if is_layout:
                 continue
+            ext = None
+            try:
+                bp = block.block.dxf.base_point
+                base = (float(bp.x), float(bp.y))
+            except Exception:  # noqa: BLE001
+                base = (0.0, 0.0)
             for e in block:
                 try:
                     t = e.dxftype()
+                    if t in EXTENT_TYPES:
+                        try:
+                            pts, rad = _block_extent_pts(e, t)
+                            ext = grow_extents(ext, t, pts, rad, base)
+                        except Exception:  # noqa: BLE001
+                            pass
                     if not name.startswith("*"):
                         block_layers.add(str(e.dxf.get("layer", "0")))
                     if t in {"ATTRIB", "VERTEX", "SEQEND"}:
@@ -260,6 +329,7 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
                     _count_text(m.stats.text_non_ascii_by_style, e)
                 except Exception:  # noqa: BLE001
                     continue
+            rec.extents = finish_extents(ext)
         except Exception:  # noqa: BLE001
             continue
     m.block_layers = sorted(block_layers)
@@ -290,7 +360,7 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
             if e.dxftype() == "VIEWPORT":
                 vid = int(e.dxf.get("id", 0))
                 if lrec is not None and vid != 1:  # id 1 = khung tờ giấy, không phải khung nhìn
-                    lrec.viewports.append(ViewportRec(layout=layout.name, id=vid, scale=_viewport_scale(e)))
+                    lrec.viewports.append(_viewport_rec(layout.name, vid, e))
                 continue
             try:
                 m.entities.append(_entity_rec(e, space))

@@ -573,3 +573,54 @@ details.skipped ul{margin:6px 0 0 18px;padding:0}
 @media(max-width:900px){.topbar #dataChip{display:none}.topbar .nav{min-height:44px}.cv-tools>a{min-height:44px}.topbar #deptBtn{max-width:140px}.topbar #themeBtn{margin-left:auto}}
 /* Nút "Tới trong AutoCAD" trên thẻ phát hiện */
 .f-acad{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+/* Ghim phát hiện theo điểm ảnh màn hình (drawMarks): vòng khoanh, đường dẫn, số; nhóm ghim gộp */
+.mk-ring{pointer-events:none}
+.mk-ring .pulse,.mk .lead{vector-effect:non-scaling-stroke}
+.mk .lead{stroke:currentColor;stroke-width:1.5;fill:none}
+.mk-ring .pulse{transform-box:fill-box;transform-origin:center}
+.mk-ring.sel .pulse{animation:plk 1.4s ease-out infinite}
+@keyframes plk{0%{opacity:.7;transform:scale(1)}100%{opacity:0;transform:scale(2.4)}}
+.mk-lbl .dot,.mk-cl .dot{stroke:var(--cv-bg);stroke-width:1.5;vector-effect:non-scaling-stroke}
+.mk-lbl.sel .dot{stroke:var(--text);stroke-width:2.5}
+.mk-cl .halo{fill:none;stroke:currentColor;stroke-width:2;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
+.mk-cl.fixed .dot{fill:var(--ok)} .mk-cl.sev-error .dot{fill:var(--err)} .mk-cl.sev-warn .dot{fill:var(--warn)}
+.mk-lbl:focus-visible .dot,.mk-cl:focus-visible .dot{stroke:var(--primary);stroke-width:3}
+/* Thanh Tờ (trang in) trên bản vẽ; viền tờ trên hình; bảng tờ, bậc chốt, xác nhận cảnh báo */
+.sheet-bar{display:flex;gap:6px;align-items:stretch;padding:6px 14px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:thin}
+.sheet-bar[hidden]{display:none}
+.sh-lbl{align-self:center;font-size:12px;font-weight:600;color:var(--text3);margin-right:2px}
+.sh-chip{display:flex;flex-direction:column;align-items:flex-start;gap:1px;min-width:0;max-width:240px;flex:0 0 auto;padding:4px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;font-size:12px;cursor:pointer;text-align:left}
+.sh-chip:hover{border-color:var(--border-strong)}
+.sh-chip.on{border-color:var(--primary);background:var(--primary-soft);box-shadow:inset 0 0 0 1px var(--primary)}
+.sh-chip:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.sh-n{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.sh-sub{font-size:11px;color:var(--text3);white-space:nowrap}
+.sh-chip.st-block .sh-sub{color:var(--err-fg)} .sh-chip.st-warn .sh-sub{color:var(--warn-fg)}
+.sh-chip.st-ready .sh-sub,.sh-chip.st-locked .sh-sub{color:var(--ok-fg)}
+.sh-chip.st-locked{border-color:var(--ok)}
+.sh-chip.junk{border-style:dashed}
+.sh-frame rect{fill:none;stroke:var(--cv-dim);stroke-width:1.2;stroke-dasharray:6 4;vector-effect:non-scaling-stroke;pointer-events:none;opacity:.55}
+.sh-frame.on rect{stroke:var(--primary);stroke-width:2.4;stroke-dasharray:none;opacity:1}
+.sh-frame.locked rect{stroke:var(--ok);opacity:.8}
+.sh-frame text{fill:var(--cv-dim);font-family:var(--font);font-weight:600;cursor:pointer;paint-order:stroke;stroke:var(--cv-bg);stroke-width:3px;stroke-linejoin:round}
+.sh-frame.on text{fill:var(--primary)} .sh-frame.locked text{fill:var(--ok)}
+.sh-frame:focus-visible text{text-decoration:underline}
+.sh-panel{border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:var(--surface2);display:flex;flex-direction:column;gap:6px;font-size:13px}
+.sh-ph{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.sh-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.f-ack{margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+.hint-toggle{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0;font-size:12px}
+.ack-reason{width:100%;box-sizing:border-box;font:inherit;padding:8px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);color:var(--text);resize:vertical}
+@media(max-width:900px){.sheet-bar{padding:6px 8px}.sh-chip{max-width:180px}.sh-n{max-width:160px}}
+/* Hướng dẫn lệnh; chế độ bảng neo trong AutoCAD (CGBANG): chỉ cột phải, toàn chiều rộng */
+.help-list h3{font-size:15px;margin:4px 0 6px}
+.help-cmds{display:grid;grid-template-columns:96px 1fr;gap:6px 10px;font-size:13.5px;margin:0 0 12px}
+.help-cmds dt{font-weight:700;font-family:ui-monospace,Consolas,monospace}
+.help-cmds dd{margin:0}
+.acad-panel .topbar,.acad-panel #s-work>.col.left,.acad-panel #s-work>.center,.acad-panel .panel-close{display:none}
+.acad-panel #s-work{grid-template-columns:minmax(0,1fr)}
+body.acad-panel .app{min-width:0;grid-template-rows:1fr}
+body.acad-panel #s-work{grid-template-columns:minmax(0,1fr);min-width:0;overflow:hidden}
+body.acad-panel #s-work>.col.right{display:flex;position:static;width:auto;border-left:0;box-shadow:none;min-width:0}
+body.acad-panel .tabs{overflow-x:auto}
+.sh-pick{width:100%;margin-top:4px}

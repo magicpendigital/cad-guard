@@ -93,7 +93,9 @@ def drawing_geometry(model: DrawingModel, max_items: int = MAX_ITEMS) -> dict:
         else:
             items.append([handle, kind, tx(d[0]) + [d[1]]])
     base.update(items=items, viewbox=[0, 0, vw, vh], drawn=len(items), text_size=round(max(vw, vh) * 0.011, 2),
-                units_per_view=round(1 / k, 6))
+                units_per_view=round(1 / k, 6),
+                # ma trận mô hình -> khung nhìn (như meta "transform" của preview.py): x' = sx*x + tx, y' = sy*y + ty
+                transform=[k, -k, -k * x0, k * (y0 + h)])
     return base
 
 
