@@ -163,6 +163,27 @@ def test_mcp_config_outputs(ws, tmp_path):
         assert not re.search(r"(api[_-]?key|token|sk-)", text, re.IGNORECASE)
 
 
+def test_mcp_config_prefers_project_venv_over_system_python(tmp_path, monkeypatch):
+    """Bẫy đã gặp: chạy `python -m cadguard mcp-config` bằng Python hệ thống trong packages/core in ra Python không có
+    cadguard (thấy gói chỉ nhờ thư mục hiện tại) → máy khách MCP không kết nối được."""
+    from cadguard import mcp_config
+
+    core = tmp_path / "core"
+    venv_py = core / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    venv_py.parent.mkdir(parents=True)
+    venv_py.write_text("", encoding="utf-8")
+    monkeypatch.setattr(mcp_config, "CORE", core)
+    monkeypatch.setattr(mcp_config, "_in_venv", lambda: False)
+    entry = mcp_config.server_entry(tmp_path)
+    assert entry["command"] == venv_py.as_posix() and "env" not in entry
+    venv_py.unlink()  # không có .venv: dùng Python đang chạy + PYTHONPATH
+    entry = mcp_config.server_entry(tmp_path)
+    assert entry["command"] == Path(sys.executable).as_posix() and entry["env"] == {"PYTHONPATH": core.as_posix()}
+    monkeypatch.setattr(mcp_config, "_in_venv", lambda: True)  # đang chạy trong venv: giữ nguyên Python đó
+    assert mcp_config.server_entry(tmp_path)["command"] == Path(sys.executable).as_posix()
+    assert mcp_config.server_entry(tmp_path, python="C:/X/python.exe")["command"] == "C:/X/python.exe"
+
+
 # ---------- doctor + đo MCP ----------
 
 def test_doctor_reports_required_items():

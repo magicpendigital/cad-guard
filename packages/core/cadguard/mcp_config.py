@@ -4,7 +4,9 @@
 - `claude-code`: lệnh `claude mcp add` (tên máy chủ đứng TRƯỚC `-e`, xem docs/integrations/claude-code.md).
 - `codex`: khối `[mcp_servers.cad-guard]` có `enabled_tools` lấy từ sổ khai báo công cụ.
 
-Chạy từ mã nguồn chưa `pip install` thì thêm `PYTHONPATH` trỏ vào `packages/core` để máy khách tìm thấy gói.
+Python ghi vào cấu hình chọn bằng `choose_python`: chạy bằng Python hệ thống (không venv) mà có `packages/core/.venv`
+thì dùng Python của `.venv`, vì Python hệ thống thường không có cadguard và các thư viện. Không có venv nào thì thêm
+`PYTHONPATH` trỏ vào `packages/core` để máy khách tìm thấy gói.
 """
 from __future__ import annotations
 
@@ -28,6 +30,38 @@ def _installed() -> bool:
         return False
 
 
+CORE = Path(__file__).resolve().parents[1]  # packages/core
+
+
+def _in_venv() -> bool:
+    return sys.prefix != getattr(sys, "base_prefix", sys.prefix)
+
+
+def _venv_python() -> Path | None:
+    for rel in (("Scripts", "python.exe"), ("bin", "python")):
+        p = CORE.joinpath(".venv", *rel)
+        if p.is_file():
+            return p
+    return None
+
+
+def choose_python(python: str | None = None) -> tuple[str, bool]:
+    """Chọn Python cho máy chủ MCP. Trả (đường dẫn, có cần PYTHONPATH không).
+
+    Máy khách MCP khởi động máy chủ ở thư mục khác, nên không được dựa vào "đang đứng trong packages/core".
+    Thứ tự: `--python` → Python đang chạy nếu là venv → `packages/core/.venv` (bootstrap.ps1 tạo) → Python đang chạy
+    kèm PYTHONPATH (chạy từ mã nguồn).
+    """
+    if python:
+        return Path(python).as_posix(), False
+    if _in_venv():
+        return Path(sys.executable).as_posix(), not _installed()
+    venv = _venv_python()
+    if venv is not None:
+        return venv.as_posix(), False
+    return Path(sys.executable).as_posix(), True
+
+
 def server_entry(workspace: Path, *, profile: Path | None = None, allow_propose: bool = False,
                  python: str | None = None) -> dict:
     ws = Path(workspace).resolve()
@@ -41,9 +75,10 @@ def server_entry(workspace: Path, *, profile: Path | None = None, allow_propose:
         args += ["--profile", prof.as_posix()]
     if allow_propose:
         args.append("--allow-propose")
-    entry: dict = {"command": Path(python or sys.executable).as_posix(), "args": args}
-    if not _installed():
-        entry["env"] = {"PYTHONPATH": Path(__file__).resolve().parents[1].as_posix()}
+    command, needs_path = choose_python(python)
+    entry: dict = {"command": command, "args": args}
+    if needs_path:
+        entry["env"] = {"PYTHONPATH": CORE.as_posix()}
     return entry
 
 
@@ -82,4 +117,4 @@ def render(client: str, workspace: Path, *, profile: Path | None = None, allow_p
     return text, note
 
 
-__all__ = ["CLIENTS", "render", "server_entry"]
+__all__ = ["CLIENTS", "choose_python", "render", "server_entry"]
