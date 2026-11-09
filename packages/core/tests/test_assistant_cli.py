@@ -17,6 +17,9 @@ from cadguard.assistant.cli_engines import CLAUDE_DENY, AgyCliEngine, ClaudeCliE
 
 FAKE_CLI = r'''
 import json, os, sys, time
+# CLI thật (claude/codex/agy) luôn đọc/ghi UTF-8; Python trên Windows mặc định theo trang mã (cp1252…), nên ép cho giống.
+sys.stdin.reconfigure(encoding="utf-8")
+sys.stdout.reconfigure(encoding="utf-8")
 kind, mode = os.environ["FAKE_KIND"], os.environ.get("FAKE_MODE", "ok")
 stdin = sys.stdin.read()
 with open(os.environ["FAKE_DUMP"], "w", encoding="utf-8") as f:
