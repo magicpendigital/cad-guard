@@ -182,6 +182,51 @@
   (princ)
 )
 
+;; ---------- Đợt F: chạy cad-guard trên bản vẽ đang mở rồi áp vào chính bản đó (xem trước + xác nhận + undo) ----------
+;; Tệp chạy cadguard-run.cmd do `cadguard autocad --copy-to <thư mục>` ghi cạnh tệp này.
+(defun cg:runner ( / r)
+  (setq r (getenv "CadGuardRunner"))
+  (if (or (null r) (not (findfile r))) (setq r (findfile "cadguard-run.cmd")))
+  (if (null r)
+    (progn
+      (setq r (getfiled "Chọn cadguard-run.cmd (do `cadguard autocad --copy-to` tạo)" "" "cmd" 0))
+      (if r (setenv "CadGuardRunner" r))))
+  r
+)
+
+(defun cg:run (action extra / r dir)
+  (cond
+    ((= (getvar "DWGTITLED") 0)
+     (princ "
+[cad-guard] Bản vẽ chưa có tên. Hãy lưu bản vẽ (SAVE) trước."))
+    ((/= (getvar "DBMOD") 0)
+     (princ "
+[cad-guard] Bản vẽ có thay đổi chưa lưu. Hãy SAVE trước (cad-guard sao lưu bản đã lưu trước khi sửa)."))
+    ((null (setq dir (cg:folder)))
+     (princ "
+[cad-guard] Chưa đặt thư mục làm việc. Chạy CGTHUMUC trước."))
+    ((null (setq r (cg:runner)))
+     (princ "
+[cad-guard] Chưa có cadguard-run.cmd: chạy `cadguard autocad --copy-to <thư mục>`."))
+    (T
+     (c:CGXUAT)
+     (startapp "cmd.exe" (strcat "/c \"\"" r "\" autocad-run " action " --workspace \"" dir "\" --drawing \""
+                                 (cg:base) "\" --pause" extra "\""))
+     (princ "
+[cad-guard] Đã mở cửa sổ cad-guard: xem trước rồi xác nhận ở đó. Sau khi áp: gõ U để hoàn tác, SAVE khi ưng.")))
+  (princ)
+)
+
+(defun c:CGUNICODE () (cg:run "unicode" ""))
+(defun c:CGDICH ( / l)
+  (initget "en zh")
+  (setq l (getkword "
+[cad-guard] Dịch sang [en = Tiếng Anh / zh = Tiếng Trung] <en>: "))
+  (cg:run "translate" (strcat " --to " (if l l "en")))
+)
+(defun c:CGTRINHBAY () (cg:run "template" ""))
+(defun c:CGKIEM () (cg:run "check" ""))
+
 ;; ---------- CGHELP: tra cứu lệnh ----------
 ;; Mỗi mục: (tên  mô-tả-ngắn  (dòng hướng dẫn chi tiết ...)). Giữ khớp docs/autocad.md.
 (setq cg:*help*
@@ -209,6 +254,17 @@
       (list "Thường không cần gõ: bấm nút trên cadguard app thì AutoCAD tự nhảy tới (M3)."
             "Gõ CGDEN khi AutoCAD không tự nhảy (đang bận lệnh khác, hoặc app chạy với --no-autocad-com)."
             "Cần CGTHUMUC trỏ đúng thư mục app đang mở. Lỗi theo layer: chọn mọi đối tượng của layer trong tờ đang xem."))
+    (list "CGKIEM" "Kiểm bản vẽ đang mở (vệ sinh + trình bày theo template)"
+      (list "Cách dùng: SAVE rồi gõ CGKIEM; cửa sổ cad-guard hiện kết quả. Không sửa bản vẽ."))
+    (list "CGUNICODE" "Chuyển chữ TCVN3/VNI sang Unicode (phông Be Vietnam Pro) ngay trong bản vẽ đang mở"
+      (list "Cách dùng: SAVE rồi gõ CGUNICODE; xem trước trong cửa sổ cad-guard, gõ c để áp."
+            "Áp trong một nhóm undo (gõ U để trả lại), có bản sao lưu DWG trong .cadguard/backup. Cần cài phông Be Vietnam Pro."))
+    (list "CGDICH" "Dịch chữ bản vẽ đang mở sang Tiếng Anh hoặc Tiếng Trung"
+      (list "Cách dùng: SAVE, gõ CGDICH, chọn en hoặc zh; ngôn ngữ nguồn tự nhận theo nội dung."
+            "Số, đơn vị, mã vật liệu giữ nguyên; xem trước rồi xác nhận; gõ U để trả lại."))
+    (list "CGTRINHBAY" "Điền khung tên theo template công ty (thông tin cố định, tỉ lệ theo hệ số khung)"
+      (list "Cần template (cadguard template learn hoặc nút 'Học template từ tờ này' trên app)."
+            "Chỉ đổi giá trị thuộc tính khung tên; không đụng hình vẽ, kích thước, chú thích."))
     (list "CGHELP" "Danh sách lệnh và hướng dẫn"
       (list "Gõ CGHELP, rồi gõ tên lệnh (vd. CGTOI) để xem chi tiết; Enter trống để thoát."
             "Nhấn F2 để mở cửa sổ chữ nếu dòng lệnh quá ngắn."))
@@ -234,9 +290,9 @@
       (progn
         (princ (strcat "\n" (car it) " — " (cadr it)))
         (foreach ln (caddr it) (princ (strcat "\n  - " ln))))
-      (princ (strcat "\n[cad-guard] Không có lệnh \"" name "\". Gõ một trong: CGTHUMUC CGXUAT CGBAOCAO CGTOI CGDEN CGHELP CGBANG CGGHIM."))))
+      (princ (strcat "\n[cad-guard] Không có lệnh \"" name "\". Gõ một trong: CGTHUMUC CGXUAT CGBAOCAO CGTOI CGDEN CGKIEM CGUNICODE CGDICH CGTRINHBAY CGHELP CGBANG CGGHIM."))))
   (princ)
 )
 
-(princ "\n[cad-guard] Đã nạp: CGTHUMUC, CGXUAT, CGTOI, CGDEN, CGBAOCAO, CGHELP. Gõ CGHELP để xem hướng dẫn.")
+(princ "\n[cad-guard] Đã nạp: CGTHUMUC, CGXUAT, CGTOI, CGDEN, CGBAOCAO, CGKIEM, CGUNICODE, CGDICH, CGTRINHBAY, CGHELP. Gõ CGHELP để xem hướng dẫn.")
 (princ)

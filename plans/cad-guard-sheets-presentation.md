@@ -1,6 +1,6 @@
 # cad-guard — Kế hoạch đề xuất: chỉ mục tờ, trình bày theo template, dịch bản vẽ, đối chiếu PRD
 
-Trạng thái: **ĐỀ XUẤT bản 2, chờ duyệt** (10/11/2026). Chưa viết code, chưa đổi lộ trình đã duyệt trong `PLAN.md`.
+Trạng thái: **ĐÃ DUYỆT, đã triển khai Đợt A–F** (10/11/2026; câu trả lời mục 10 và tình trạng ở `PLAN.md` mục 1, 3b; hướng dẫn `docs/sheets-presentation.md`).
 Bản 2 ghi nhận định hướng mới của chủ dự án (10/11/2026): CAD Guard là công cụ **nội bộ công ty**, chạy cục bộ; mở các rào chặn; cho sửa/bật/tắt luật không cần tài khoản; thêm chức năng chuyển chữ TCVN3/VNI sang Unicode; đánh giá các MCP AutoCAD có sẵn. Mục 5–10 là phần mới; mục 1–4 giữ từ bản 1, những chỗ nói "cần quyết định" đã được mục 5 trả lời.
 Nguồn: (1) buổi chạy thử thực tế 10/11 trên một tệp DXF của phiên chạy thử (ngoài repo); (2) PRD "Agent-Assisted CAD Design Automation" bản nháp v0.1 ngày 09/11/2026; (3) ba yêu cầu mới của người dùng: sửa phân tích sai, dịch ngôn ngữ trình bày, trình bày theo template công ty.
 Quy tắc dữ liệu: tài liệu này chỉ có **con số cấu trúc** của tệp thật (đếm, kích thước, tỉ lệ). Không tên tệp, tên khách, tên layer/khối, nội dung chữ.

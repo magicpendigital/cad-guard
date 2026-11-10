@@ -123,3 +123,20 @@ rồi trong AutoCAD: `NETLOAD` → chọn `CadGuard.Acad.dll` (muốn tự nạp
 
 Giới hạn: plugin đọc biến `CadGuardFolder` của `CGTHUMUC`; tiến trình `cadguard app` của plugin dừng khi đóng AutoCAD.
 Ghim dùng khung bao đối tượng trong WCS (UCS xoay/khung nhìn xoắn chưa xét). Mã nguồn: `packages/acad-plugin/`.
+
+## 8. Sửa trong bản vẽ đang mở: CGKIEM, CGUNICODE, CGDICH, CGTRINHBAY (Đợt F, 10/11/2026)
+
+Cần AutoCAD bản đầy đủ (COM). `cadguard autocad --copy-to <thư mục tin cậy>` chép `cadguard.lsp` và ghi
+`cadguard-run.cmd` cạnh nó; APPLOAD tệp LSP. Lần đầu, nếu AutoCAD không tự thấy `cadguard-run.cmd`, lệnh sẽ hỏi chọn tệp.
+
+Mỗi lệnh: SAVE → gõ lệnh → CGXUAT tự chạy → cửa sổ cad-guard hiện xem trước → gõ `c` để áp. Áp trong một nhóm undo
+(gõ U để trả lại), bản DWG đã lưu được chép vào `<thư mục làm việc>/.cadguard/backup/` trước khi sửa, bản vẽ không tự
+lưu. Nếu chữ trong bản vẽ đã khác lúc xem trước, không đổi gì. Chi tiết: `docs/sheets-presentation.md` mục F.
+
+Danh sách kiểm tay (chưa chạy trên AutoCAD 2027):
+
+1. CGUNICODE trên một bản vẽ có chữ `.VnTime`: chữ hiện đúng tiếng Việt (sau khi cài phông Be Vietnam Pro); U trả lại.
+2. CGDICH → en: chữ đổi sang tiếng Anh, số/kích thước giữ nguyên; U trả lại.
+3. CGTRINHBAY: thuộc tính khung tên đổi theo template; hình vẽ không đổi.
+4. Sửa một chữ sau CGXUAT rồi xác nhận áp: phải bị từ chối ("đã khác lúc xem trước").
+5. Bản vẽ có thay đổi chưa lưu: lệnh báo SAVE trước.

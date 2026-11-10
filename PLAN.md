@@ -51,6 +51,17 @@ Phạm vi kết nối AutoCAD đã duyệt:
 
 Đợt 4 làm sau buổi chạy thử MCP. Tiếp nhận từ bản Draff chỉ theo `docs/reviews/2026-11-07-draff/report.md` (ở checkout chính), không lấy phần Node/TypeScript.
 
+## 3b. Đợt A–F (đề xuất sheets-presentation, triển khai 10/11/2026, `docs/sheets-presentation.md`)
+
+| Đợt | Đã làm | Còn lại |
+| --- | --- | --- |
+| A | Sửa/bật/tắt luật, mức độ, ngưỡng trên giao diện + CLI, không tài khoản, nhật ký; chế độ nội bộ mặc định, ẩn danh theo dự án; Studio bỏ hỏi đồng ý từng phiên; AGENTS/PLAN cập nhật | Bỏ phần vai trò khỏi `design/ui-mockup.html` |
+| B | Chỉ mục tờ có hệ số thật, độ tin cậy; tệp phiên thử ra 40 tờ; học quy ước layer (LY-01 45 → 0) | Đo trên bộ mẫu P0 |
+| C | `convert_unicode` (675 chuỗi tệp thử, 0 không chắc), SVG từng tờ (40 tờ ~15 s), DWG qua `accoreconsole` | Gộp Studio vào App |
+| D | `cg.template/1` học từ tờ mẫu (Grande A3 + logo), gói `sheet-layout-v0` TP-01..10, 12; điền khung tên, đánh số | `replace_title_block`, `set_sheet_scale`, `fit_sheet`, TP-11 |
+| E | `cadguard translate` en/zh, tự nhận ngôn ngữ, bảng thuật ngữ + bộ nhớ dịch, CSV duyệt, công cụ trợ lý `propose_translation` | Chế độ `layer`; chạy với LLM thật trên tệp thử |
+| F | `autocad/executor.py` (COM, một nhóm undo, sao lưu, kiểm chưa đổi), CGKIEM/CGUNICODE/CGDICH/CGTRINHBAY | Kiểm tay trên AutoCAD 2027; in PDF hàng loạt |
+
 ## 4. Quyết định còn mở
 
 1. Bản AutoCAD trên máy thử: đã kiểm AutoCAD 2027 bản đầy đủ dùng thử (09/11/2026, `docs/autocad.md` mục 5). Còn mở: AutoCAD LT nếu công ty định mua LT.
@@ -69,4 +80,4 @@ Phạm vi kết nối AutoCAD đã duyệt:
 | `plans/cad-guard-3d.md` | Dựng 3D tất định và Studio |
 | `plans/cad-guard-platform.md` | Tệp nặng, nhiều định dạng, giao diện hợp nhất (đánh giá) |
 | `plans/cad-guard-vision-assessment.md` | Đánh giá hướng mở rộng dài hạn (chưa thành kế hoạch) |
-| `plans/cad-guard-sheets-presentation.md` | **Đề xuất chờ duyệt (10/11/2026):** mở rào chặn cho dùng nội bộ, sửa luật không tài khoản, chỉ mục tờ, chuyển chữ Unicode, template trình bày, dịch bản vẽ, đánh giá MCP AutoCAD; Đợt A–F |
+| `plans/cad-guard-sheets-presentation.md` | **Đã duyệt và triển khai 10/11/2026 (mục 3b):** mở rào chặn cho dùng nội bộ, sửa luật không tài khoản, chỉ mục tờ, chuyển chữ Unicode, template trình bày, dịch bản vẽ, đánh giá MCP AutoCAD; Đợt A–F |

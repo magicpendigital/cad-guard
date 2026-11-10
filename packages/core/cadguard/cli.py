@@ -417,6 +417,91 @@ def cmd_translate(args: argparse.Namespace) -> int:
                     output_tag=args.to)
 
 
+def cmd_autocad_run(args: argparse.Namespace) -> int:
+    """Chạy từ AutoCAD (CGUNICODE/CGDICH/CGTRINHBAY/CGKIEM): DXF vừa CGXUAT -> đề xuất -> xem trước -> xác nhận ->
+    áp vào bản vẽ đang mở qua COM (một nhóm undo, có sao lưu). Không xác nhận thì không đổi gì."""
+    from .agent.workspace import Workspace
+    from .autocad.bridge import BridgeError
+    from .autocad.executor import apply_in_autocad
+    from .changeset import ChangesetError, OpError, propose
+
+    ws_root = Path(args.workspace)
+    dxf = ws_root / f"{args.drawing}.dxf"
+    if not dxf.is_file():
+        print(f"Không thấy {dxf.name} trong thư mục làm việc: chạy CGXUAT trong AutoCAD trước.", file=sys.stderr)
+        return _pause(args, 2)
+    if args.action == "check":
+        rc = main(["audit", str(dxf), "--standard", "design-hygiene-v0"])
+        main(["template", "check", str(dxf)])
+        return _pause(args, rc)
+    ops: list = []
+    tag = None
+    std = "design-hygiene-v0"
+    if args.action == "unicode":
+        ops = [{"op": "convert_unicode"}]
+    elif args.action == "translate":
+        from .translate import TranslateError, build
+
+        try:
+            res = build(dxf, args.to, workspace=ws_root, backend=translate_backend(args.engine))
+        except (TranslateError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return _pause(args, 2)
+        rep = res["report"]
+        print(f"Nguồn: {rep['source_language']['language_name']}; {rep['translated']}/{rep['strings']} chuỗi có bản dịch, "
+              f"{rep['untranslated']} chưa dịch, {rep['issue_count']} cần xem.")
+        ops, tag = res["ops"], args.to
+    elif args.action == "template":
+        from .reader_select import read_with
+        from .template import TemplateError, apply_ops, find_template, load_template
+
+        tp = find_template(ws_root)
+        if tp is None:
+            print("Chưa có template: chạy 'cadguard template learn' hoặc nút 'Học template từ tờ này'.", file=sys.stderr)
+            return _pause(args, 2)
+        try:
+            ops, notes = apply_ops(read_with(dxf, "ezdxf"), load_template(tp), renumber=args.renumber)
+        except TemplateError as exc:
+            print(str(exc), file=sys.stderr)
+            return _pause(args, 2)
+        for n in notes:
+            print("Không tự làm: " + n)
+        std = "sheet-layout-v0"
+    if not ops:
+        print("Không có gì để áp dụng.")
+        return _pause(args, 0)
+    ws = Workspace(ws_root)
+    try:
+        cs, pv = propose(ws, dxf.name, ops, standard=std, created_by="user", output_tag=tag)
+    except (OpError, ChangesetError) as exc:
+        print(str(exc), file=sys.stderr)
+        return _pause(args, 2)
+    _print_preview(pv)
+    if not pv["ok"]:
+        print("Kiểm KHÔNG ĐẠT: không áp dụng.", file=sys.stderr)
+        return _pause(args, 1)
+    if not args.yes and not (_interactive() and _confirm("Áp dụng vào bản vẽ đang mở trong AutoCAD? [c/k] ")):
+        print(f"Chưa áp dụng. Muốn ra tệp mới thay vì sửa bản đang mở: cadguard apply {cs.id} --workspace \"{ws_root}\" --yes")
+        return _pause(args, 0)
+    try:
+        rep = apply_in_autocad(ws, cs.id, args.drawing, confirm=True)
+    except (BridgeError, ChangesetError) as exc:
+        print(str(exc), file=sys.stderr)
+        return _pause(args, 1)
+    print(f"Đã áp {rep['entities']} đối tượng, {rep['styles']} kiểu chữ vào '{args.drawing}' (một nhóm undo). "
+          f"Sao lưu: .cadguard/backup/{rep['backup']}. Gõ U trong AutoCAD để hoàn tác; SAVE khi ưng.")
+    return _pause(args, 0)
+
+
+def _pause(args, rc: int) -> int:
+    if getattr(args, "pause", False) and _interactive():
+        try:
+            input("Nhấn Enter để đóng cửa sổ...")
+        except EOFError:
+            pass
+    return rc
+
+
 def cmd_profile(args: argparse.Namespace) -> int:
     """Hồ sơ số liệu cho bản vẽ thật: chỉ số tổng hợp, khoá là mã băm, không tên tệp/layer/nội dung."""
     from .profile import profile_dxf, profile_dxf_stream
@@ -774,6 +859,13 @@ def cmd_autocad(args: argparse.Namespace) -> int:
         shutil.copyfile(src, dest)
         src = dest
         print(f"Đã chép: {dest}")
+        runner = dest_dir / "cadguard-run.cmd"
+        pkg = Path(__file__).resolve().parents[1]
+        lines = ["@echo off", "chcp 65001 >nul", f'set "PYTHONPATH={pkg};%PYTHONPATH%"', "set PYTHONUTF8=1",
+                 f'"{sys.executable}" -m cadguard %*']
+        crlf = chr(13) + chr(10)
+        runner.write_bytes((crlf.join(lines) + crlf).encode("utf-8"))
+        print(f"Đã ghi tệp chạy cho lệnh AutoCAD (CGUNICODE, CGDICH, CGTRINHBAY, CGKIEM): {runner}")
     print(f"Tệp AutoLISP: {src}")
     print("Trong AutoCAD: APPLOAD -> chọn tệp trên (nên đặt thư mục chứa tệp vào Trusted Locations), rồi:\n"
           "  CGTHUMUC  đặt thư mục làm việc (trùng thư mục của `cadguard watch` / `cadguard mcp --workspace`)\n"
@@ -945,6 +1037,17 @@ def main(argv: list[str] | None = None) -> int:
     tr.add_argument("--yes", action="store_true", help="áp dụng ngay khi xem trước đạt")
     tr.add_argument("--dwg", action="store_true", help="ghi thêm DWG (cần accoreconsole)")
     tr.set_defaults(fn=cmd_translate)
+
+    ar = sub.add_parser("autocad-run", help="(gọi từ AutoCAD) đề xuất rồi áp vào bản vẽ đang mở: unicode|translate|template|check")
+    ar.add_argument("action", choices=["unicode", "translate", "template", "check"])
+    ar.add_argument("--workspace", required=True, help="thư mục làm việc (nơi CGXUAT xuất DXF)")
+    ar.add_argument("--drawing", required=True, help="tên bản vẽ đang mở (không đuôi)")
+    ar.add_argument("--to", choices=["en", "zh"], default="en")
+    ar.add_argument("--engine", choices=["auto", "anthropic", "claude-cli", "none"], default="auto")
+    ar.add_argument("--renumber", action="store_true")
+    ar.add_argument("--yes", action="store_true")
+    ar.add_argument("--pause", action="store_true", help="giữ cửa sổ sau khi xong (khi chạy từ AutoCAD)")
+    ar.set_defaults(fn=cmd_autocad_run)
 
     ll = sub.add_parser("learn-layers", help="học quy ước tên layer của công ty từ một bản vẽ (giảm nhiễu LY-01)")
     ll.add_argument("path")
