@@ -856,6 +856,39 @@ def scene3d(app: AppData, rel: Any, item: Any = None) -> dict:
             "gaps": [g.message for g in sc.gaps[:20]], "notes": list(sc.notes)[:10]}
 
 
+GRAPH_DIR = ".cadguard/graph"
+
+
+def drawing_graph(app: AppData, rel: Any, refresh: Any = False) -> dict:
+    """Đồ thị tri thức bản vẽ + cổng sẵn sàng. Lưu `.cadguard/graph/<băm>.json` theo nội dung tệp (dùng lại khi tệp
+    và phần bổ sung 3D chưa đổi). Bản vẽ không bị sửa."""
+    import hashlib
+
+    from ..graph import SCHEMA as GRAPH_SCHEMA
+    from ..graph import build_graph
+    from . import scene_api
+
+    path = app.resolve(rel)
+    model = app.model(path)
+    supp = scene_api.read_supplement(app.ws.root, model.file_hash)
+    key = model.file_hash[:16] + "-" + hashlib.sha256(json.dumps(supp, sort_keys=True).encode("utf-8")).hexdigest()[:8]
+    cache = app.ws.root / GRAPH_DIR / f"{key}.json"
+    if refresh is not True and cache.is_file():
+        try:
+            g = json.loads(cache.read_text(encoding="utf-8"))
+            if g.get("schema") == GRAPH_SCHEMA:
+                return {"file": app.rel(path), "cached": True, **g}
+        except (OSError, ValueError):
+            pass
+    g = build_graph(model, supplement=supp)
+    try:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(g, ensure_ascii=False), encoding="utf-8")
+    except OSError:
+        pass
+    return {"file": app.rel(path), "cached": False, **g}
+
+
 def scene_action(app: AppData, rel: Any, action: str, body: dict) -> dict:
     """Nhập phần thiếu / xác nhận đề xuất (`set`), lưu đề xuất cần xác nhận (`propose`), dữ liệu gửi LLM (`prompt`),
     tải GLB (`glb`). Chỉ ghi tệp bổ sung trong `.cadguard/scene/`; bản vẽ không bị sửa."""

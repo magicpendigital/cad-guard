@@ -70,7 +70,8 @@ Phạm vi kết nối AutoCAD đã duyệt:
 ## 3d. Lỗi có lối ra, đồ thị tri thức, 3D sản xuất (11/11/2026, `plans/cad-guard-kg-3d-production.md`)
 
 - **P0 xong:** kiểm tệp ra đúng trên bản vẽ thật (Unicode/Dịch trước đây không bao giờ ra tệp), xem trước ở phòng 3D, thông báo lỗi không tự tắt kèm "vì sao / làm gì" (`app/guidance.py`), phần thiếu 3D nói rõ tờ nào và cách sửa, **Sửa hàng loạt** bắt buộc sao lưu (`app/bulkfix.py`).
-- **Tiếp theo:** P1 đồ thị tri thức bản vẽ `cg.drawing-graph/1` + cổng sẵn sàng; P2 agent làm giàu đồ thị có harness; P3–P5 mô hình tấm, cut list, exploded/X-ray, cánh/bản lề/ray, bóc tách vật tư. Nghiên cứu ngành: `docs/research/3d-san-xuat-noi-that.md`.
+- **P1 xong (11/11):** đồ thị tri thức bản vẽ `cg.drawing-graph/1` (`cadguard graph`, nút Bản đồ) + cổng sẵn sàng có việc cần làm; Sửa hàng loạt tự chia nhỏ và chạy cả thư mục.
+- **Tiếp theo:** P2 agent làm giàu đồ thị có harness; P3–P5 mô hình tấm, cut list, exploded/X-ray, cánh/bản lề/ray, bóc tách vật tư. Nghiên cứu ngành: `docs/research/3d-san-xuat-noi-that.md`.
 
 ## 4. Quyết định còn mở
 

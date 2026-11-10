@@ -86,3 +86,39 @@ def test_bulk_fix_renames_xref_residue_layer_when_no_base():
     assert m["op"] == {"op": "merge_layers", "sources": ["X1$0$A-FUR"], "target": "A-FUR"}
     n = {**o, "op": {**o["op"], "sources": ["XR A3$0$KT$0$Khung"]}}
     assert _auto_target(n, set())["op"]["to"] == "Khung"  # xref lồng: lấy tên cuối
+
+
+def test_bulk_fix_folder_job_backs_up_each_file(ws):  # noqa: F811
+    import time
+
+    app, srv, c = _served(ws)
+    try:
+        status, _h, body = c.post("/api/fix/bulk/folder", {"dept": "ky-thuat", "confirm": True, "backup": False})
+        assert status == 409
+        status, _h, job = c.post("/api/fix/bulk/folder", {"dept": "ky-thuat", "confirm": True, "backup": True})
+        assert status == 200 and job["total"] >= 1
+        t0 = time.time()
+        while job["state"] == "running" and time.time() - t0 < 240:
+            time.sleep(0.3)
+            _s, _h, job = c.post("/api/fix/bulk/folder/status", {"job": job["id"]})
+        assert job["state"] == "done" and len(job["results"]) == job["total"]
+        fixed = [r for r in job["results"] if r["status"] == "đã sửa"]
+        assert fixed, job["results"]
+        for r in fixed:
+            assert (ws / r["output"]).is_file() and (ws / r["backup"]).is_file()
+        assert not [r for r in job["results"] if r["status"] == "lỗi"], job["results"]
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
+def test_split_keeps_good_ops_and_reports_bad(monkeypatch):
+    from cadguard.app import bulkfix
+
+    ops = [{"op": {"op": f"o{i}"}} for i in range(6)]
+    bad = {"o4"}
+    monkeypatch.setattr(bulkfix, "_propose", lambda app, rel, std, part: {"ok": not any(o["op"]["op"] in bad for o in part)})
+    good, wrong = bulkfix._split(None, "x", "s", ops, budget=[20])
+    assert [o["op"]["op"] for o in wrong] == ["o4"] and len(good) == 5
+    good, wrong = bulkfix._split(None, "x", "s", ops, budget=[1])  # hết ngân sách: phần chưa thử coi là không đạt
+    assert len(good) + len(wrong) == 6 and wrong

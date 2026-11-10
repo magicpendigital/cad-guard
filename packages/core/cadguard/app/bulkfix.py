@@ -93,8 +93,54 @@ def plan(app, rel: Any, standards: list[str], *, unicode: bool = True) -> dict:
     if not picked:
         return {"file": rel, "picked": [], "skipped": skipped, "manual": manual, "preview": None}
     std = PRIMARY_STD if PRIMARY_STD in standards else standards[0]
-    pv = propose_changeset(app, rel, std, [o["op"] for o in picked])
+    pv = _propose(app, rel, std, picked)
+    if pv is None or not pv.get("ok"):
+        # Gộp không đạt: chia đôi tìm nhóm gây lỗi, giữ phần đạt (ngân sách lượt chạy khô có hạn)
+        good, bad = _split(app, rel, std, picked, budget=[SPLIT_BUDGET])
+        for o in bad:
+            skipped.append({**o, "why_skipped": "Chạy thử riêng không đạt bước tự kiểm: làm tay ở tab Thay đổi."})
+        picked = good
+        pv = _propose(app, rel, std, picked) if picked else None
     return {"file": rel, "standard": std, "picked": picked, "skipped": skipped, "manual": manual, "preview": pv}
+
+
+SPLIT_BUDGET = 8  # số lần chạy khô tối đa khi tìm nhóm gây lỗi (bản vẽ lớn ~15 s/lần)
+
+
+def _propose(app, rel, std, ops: list[dict]) -> dict | None:
+    from .api import ApiError, propose_changeset
+
+    try:
+        return propose_changeset(app, rel, std, [o["op"] for o in ops])
+    except ApiError:
+        return None
+
+
+def _split(app, rel, std, ops: list[dict], budget: list[int]) -> tuple[list[dict], list[dict]]:
+    """Chia đôi đệ quy: trả (thao tác đạt, thao tác không đạt). Hết ngân sách thì coi phần chưa thử là không đạt."""
+    if not ops:
+        return [], []
+    if len(ops) == 1:
+        if budget[0] <= 0:
+            return [], ops
+        budget[0] -= 1
+        pv = _propose(app, rel, std, ops)
+        return (ops, []) if pv and pv.get("ok") else ([], ops)
+    half = len(ops) // 2
+    out_good, out_bad = [], []
+    for part in (ops[:half], ops[half:]):
+        if budget[0] <= 0:
+            out_bad += part
+            continue
+        budget[0] -= 1
+        pv = _propose(app, rel, std, part)
+        if pv and pv.get("ok"):
+            out_good += part
+        else:
+            g, b = _split(app, rel, std, part, budget)
+            out_good += g
+            out_bad += b
+    return out_good, out_bad
 
 
 def backup_source(app, rel: str) -> dict:
@@ -136,4 +182,66 @@ def apply(app, cid: Any, confirm: Any, backup: Any) -> dict:
     return {**res, "backup": bk}
 
 
-__all__ = ["BACKUP_DIR", "apply", "backup_source", "plan"]
+# ---------- Sửa hàng loạt cả thư mục (chạy nền, báo tiến độ) ----------
+
+_JOBS: dict[str, dict] = {}
+
+
+def folder_start(app, standards: list[str], confirm: Any, backup: Any, unicode: bool = True) -> dict:
+    """Mỗi bản vẽ gốc trong dự án: gom thao tác an toàn, chạy khô; ĐẠT thì sao lưu + ghi tệp mới. Chạy nền."""
+    import secrets
+    import threading
+
+    from .api import ApiError, list_drawings
+
+    if confirm is not True:
+        raise ApiError("Cần bạn bấm xác nhận trước khi sửa hàng loạt cả thư mục.", 409)
+    if backup is not True:
+        raise ApiError("Sửa hàng loạt bắt buộc tạo bản sao lưu bản vẽ gốc trước.", 409)
+    if any(j["state"] == "running" for j in _JOBS.values()):
+        raise ApiError("Đang có một lượt sửa cả thư mục chạy; chờ xong rồi chạy tiếp.", 409)
+    files = [x["path"] for x in list_drawings(app)["drawings"] if not x["is_output"]]
+    jid = "bulk-" + secrets.token_hex(4)
+    job = _JOBS[jid] = {"id": jid, "state": "running", "total": len(files), "done": 0, "current": None,
+                        "results": [], "started": time.time()}
+
+    def run() -> None:
+        for rel in files:
+            job["current"] = rel
+            r: dict = {"file": rel}
+            try:
+                p = plan(app, rel, standards, unicode=unicode)
+                pv = p["preview"]
+                r.update(picked=len(p["picked"]), skipped=len(p["skipped"]), manual=len(p["manual"]))
+                if not pv:
+                    r["status"] = "không có gì để sửa tự động"
+                elif not pv.get("ok"):
+                    r["status"] = "xem trước không đạt, bỏ qua"
+                else:
+                    out = apply(app, pv["changeset_id"], True, True)
+                    r.update(status="đã sửa", output=out["output"]["path"], backup=out["backup"]["path"],
+                             changeset=out["changeset_id"], resolved=pv["rules"]["resolved"],
+                             before=sum(pv["rules"]["before"].values()), after=sum(pv["rules"]["after"].values()))
+            except Exception as exc:  # noqa: BLE001 - một tệp lỗi không dừng cả thư mục
+                r["status"] = "lỗi"
+                r["error"] = str(exc)[:300]
+            job["results"].append(r)
+            job["done"] += 1
+        job["state"] = "done"
+        job["current"] = None
+        job["finished"] = time.time()
+
+    threading.Thread(target=run, name=jid, daemon=True).start()
+    return {k: v for k, v in job.items()}
+
+
+def folder_status(jid: Any) -> dict:
+    from .api import ApiError
+
+    job = _JOBS.get(jid) if isinstance(jid, str) else None
+    if job is None:
+        raise ApiError("Không có lượt sửa cả thư mục này (ứng dụng đã khởi động lại?).", 404)
+    return {k: (list(v) if isinstance(v, list) else v) for k, v in job.items()}
+
+
+__all__ = ["BACKUP_DIR", "apply", "backup_source", "folder_start", "folder_status", "plan"]

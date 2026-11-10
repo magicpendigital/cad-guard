@@ -120,11 +120,22 @@ Không làm trong v1: render ảnh thực (vật liệu PBR, ánh sáng), G-code
 | Đợt | Nội dung | Tiêu chí xong (đo được) |
 | --- | --- | --- |
 | P0 ✅ 11/11 | Kiểm tệp ra trên bản vẽ thật, xem trước ở phòng 3D, thông báo bền có hướng dẫn, phần thiếu 3D nói rõ cách sửa, Sửa hàng loạt có sao lưu | Unicode/Dịch/Sửa hàng loạt ra tệp mới ĐẠT trên bản sao tệp phiên 01; test chặn hồi quy |
-| P1 | Đồ thị khung tất định `cg.drawing-graph/1` + màn "Bản đồ bản vẽ" + cổng sẵn sàng; Sửa hàng loạt cả thư mục, tự chia nhỏ khi không đạt | Đồ thị phiên 01: 40 tờ, 11 hạng mục, ≥ 90 % hình có loại; mỗi cổng có danh sách việc cần làm |
+| P1 ✅ 11/11 | Đồ thị khung tất định `cg.drawing-graph/1` + màn "Bản đồ bản vẽ" + cổng sẵn sàng; Sửa hàng loạt cả thư mục, tự chia nhỏ khi không đạt | Đồ thị phiên 01: 40 tờ, 11 hạng mục, ≥ 90 % hình có loại; mỗi cổng có danh sách việc cần làm |
 | P2 | Agent làm giàu đồ thị: 4 sub-agent, công cụ đồ thị trong `agent/registry.py`, đầu ra `cg.graph-proposals/1`, harness, màn xác nhận | Trên phiên 01: ghép được ≥ 2/3 mặt đứng đang thiếu ghép; 0 đề xuất không có bằng chứng lọt qua harness |
 | P3 | Hồ sơ kết cấu công ty + mô hình tấm + exploded/X-ray/mặt cắt + danh sách cắt/dán cạnh | Mọi khối có tấm; cut list CSV khớp tổng diện tích ván ± 1 % |
 | P4 | Cánh/bản lề/ngăn kéo theo bảng hãng có phiên bản, hoạt cảnh mở, va chạm, công thái học `info` | Số bản lề/ray khớp bảng hãng trên bộ ca tổng hợp |
 | P5 | Bóc tách vật tư theo vật liệu từ đồ thị; xuất dữ liệu sản xuất tham khảo; tái cấu trúc theo đồ thị qua Sửa hàng loạt | Bảng vật tư theo hạng mục; changeset chuẩn hoá ĐẠT |
+
+## 5b. Kết quả P1 (11/11/2026)
+
+- `cadguard/graph.py` (`cg.drawing-graph/1`), `cadguard graph <dxf>`, nút **Bản đồ** trong ứng dụng, lưu `.cadguard/graph/<băm tệp>-<băm phần bổ sung>.json`.
+- Bản vẽ phiên 01 (bản sao ngoài repo): 40 tờ, 123 hình (98 % có loại; 40 cụm 1–2 đối tượng tách riêng là mảnh lẻ), 11 hạng mục, 13 khối,
+  10 loại vật liệu được ghi chú, 197 nút / 344 quan hệ, dựng trong 0,3 s.
+- Cổng sẵn sàng: Cấu trúc hồ sơ 121/123 (4 việc), Dựng 3D 3/11 (15 việc), Bóc tách 6/11 (6 việc), Sản xuất chưa mở (chờ hồ sơ kết cấu, P3).
+  Mỗi việc có nút làm ngay: Chuyển Unicode, Mở 3D hạng mục, Xem tờ (tự chuyển sang phòng có màn tờ).
+- Sửa hàng loạt: gộp không đạt thì tự chia đôi tìm nhóm gây lỗi (tối đa 8 lần chạy khô), giữ phần đạt; **Sửa cả thư mục** chạy nền có
+  tiến độ, mỗi tệp một bản sao lưu + một tệp mới, tệp lỗi không dừng cả lượt.
+- Chưa làm (chuyển P2): công cụ đồ thị cho trợ lý (phải lọc ẩn danh), đề xuất AI + màn xác nhận, gắn phát hiện của luật vào đồ thị trong ứng dụng.
 
 ## 6. Cần khách trả lời trước P3
 

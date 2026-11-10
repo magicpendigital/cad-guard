@@ -838,6 +838,29 @@ def cmd_mcp_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_graph(args: argparse.Namespace) -> int:
+    """Đồ thị tri thức bản vẽ cg.drawing-graph/1 + cổng sẵn sàng (dựng 3D, bóc tách, sản xuất). Không sửa bản vẽ."""
+    import json
+
+    from .dwg import ensure_dxf
+    from .graph import build_graph, summary_vi
+    from .reader_select import read_with
+
+    path = ensure_dxf(Path(args.path))
+    g = build_graph(read_with(path, "ezdxf"))
+    if args.out:
+        Path(args.out).write_text(json.dumps(g, ensure_ascii=False, indent=1), encoding="utf-8")
+    if args.json:
+        print(json.dumps(g, ensure_ascii=False, indent=1))
+        return 0
+    print(summary_vi(g))
+    for gt in g["gates"]:
+        for task in gt["tasks"][: args.tasks]:
+            print(f"  [{gt['title']}] {task['title']} · {task['where']}")
+            print(f"      Sửa: {task['fix_here']}")
+    return 0
+
+
 def cmd_sheets(args: argparse.Namespace) -> int:
     """Chỉ mục tờ (trang in) của một bản vẽ: tờ, tiêu đề, khổ/tỉ lệ, số đối tượng, ứng viên rác. Không sửa bản vẽ."""
     import json
@@ -1335,6 +1358,13 @@ def main(argv: list[str] | None = None) -> int:
                     help="in PDF từng tờ qua AutoCAD (accoreconsole), tên tệp theo số bản vẽ của template")
     sh.add_argument("--ctb", default="monochrome.ctb", help="--pdf: bảng nét in (mặc định monochrome.ctb)")
     sh.set_defaults(fn=cmd_sheets)
+
+    gr = sub.add_parser("graph", help="đồ thị tri thức bản vẽ + cổng sẵn sàng cho dựng 3D, bóc tách, sản xuất (không sửa bản vẽ)")
+    gr.add_argument("path", help="tệp DXF/DWG")
+    gr.add_argument("--json", action="store_true", help="in JSON cg.drawing-graph/1")
+    gr.add_argument("--out", default=None, help="ghi JSON ra tệp này")
+    gr.add_argument("--tasks", type=int, default=3, help="số việc cần làm in ra mỗi cổng (mặc định 3)")
+    gr.set_defaults(fn=cmd_graph)
 
     ac = sub.add_parser("autocad", help="đường dẫn và cách nạp cadguard.lsp (CGXUAT, CGTOI, CGDEN, CGBAOCAO, CGHELP) cho AutoCAD")
     ac.add_argument("--copy-to", metavar="THƯ_MỤC", help="chép cadguard.lsp vào thư mục này")

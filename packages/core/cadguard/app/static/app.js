@@ -698,7 +698,7 @@
     if (clearFile) S.file = null;
     S.geo = null; S.geoOut = null; S.geoPending = false; S.audits = {}; S.findings = []; S.sel = null;
     S.suggest = null; S.preview = null; S.applied = null; S.cmp = "after"; S.recheck = null;
-    S.sheets = null; S.sheetSel = null;
+    S.sheets = null; S.sheetSel = null; S.mapOn = false;
     if (S.v3d) { S.v3d.stop(); S.v3d = null; }
     renderSheetBar();
     $("cmp").hidden = true; $("cmpLabel").hidden = true;
@@ -735,6 +735,7 @@
       S.geo = g; S.geoPending = false;
       S.view = null;
       renderSheet();
+      selectPendingSheet();
     } catch (e) {
       if (S.file !== path) return;
       S.geo = {error: e.message}; S.geoPending = false;
@@ -922,6 +923,7 @@
 
   function renderSheet() {
     const sheet = $("sheet");
+    if (S.mapOn) return;  // đang xem Bản đồ bản vẽ: không vẽ đè
     if (S.dept && S.dept.view === "scene") return;
     const g = S.cmp === "after" && S.geoOut ? S.geoOut : S.geo;
     $("viewTag").hidden = true;
@@ -1220,6 +1222,7 @@
   // ---------- 3D (phòng Thiết kế 3D, chỉ xem) ----------
   async function load3d(path, item) {
     const sheet = $("sheet");
+    S.mapOn = false;
     $("viewTag").textContent = "3D · chỉ xem";
     $("viewTag").hidden = false;
     fill(sheet, emptyBox("Đang dựng 3D…", "Dựng tất định từ bản vẽ (hộp đúng kích thước), không dùng AI."));
@@ -1459,6 +1462,13 @@
       S.sheets = {sheets: [], error: e.message};
     }
     renderSheetBar(); renderFinds(); redrawMarks();
+    selectPendingSheet();
+  }
+  function selectPendingSheet() {  // "Xem tờ" từ Bản đồ: chọn tờ khi cả hình vẽ và danh sách tờ đã có
+    if (!S.pendingSheet || !S.geo || S.geo.error || !S.sheets || !S.sheets.sheets) return;
+    const sid = S.pendingSheet;
+    S.pendingSheet = null;
+    if (S.sheets.sheets.some((s) => s.id === sid)) selectSheet(sid);
   }
 
   const curSheet = () => (S.sheets && S.sheetSel ? S.sheets.sheets.find((s) => s.id === S.sheetSel) || null : null);
@@ -2758,8 +2768,35 @@
     fill(foot, el("label", {for: "bulkBackup", class: "safe"}, cb, el("span", {}, " Tạo bản sao lưu bản vẽ gốc vào thư mục ", b(".cadguard/backups"), " của dự án (bắt buộc).")),
       el("div", {class: "bar-act"},
         el("button", {class: "btn-p", type: "button", id: "bulkGo", disabled: !(pv && pv.ok), onclick: doBulk}, icon("check"), `Sao lưu & sửa ${p.picked.length} mục`),
-        el("button", {class: "btn-s", type: "button", onclick: () => { S.bulk = null; foot.hidden = true; renderChg(); }}, "Bỏ")));
+        el("button", {class: "btn-s", type: "button", onclick: () => { S.bulk = null; foot.hidden = true; renderChg(); }}, "Bỏ"),
+        el("button", {class: "btn-s", type: "button", title: "Làm như trên cho mọi bản vẽ gốc trong dự án, mỗi tệp một bản sao lưu và một tệp mới", onclick: doBulkFolder}, "Sửa cả thư mục…")));
     foot.hidden = false;
+  }
+  async function doBulkFolder() {
+    const n = S.files.filter((f) => !f.is_output).length;
+    const ok = await confirmDialog({title: `Sửa hàng loạt ${n} bản vẽ trong dự án?`,
+      body: ["Với từng bản vẽ gốc: gom lỗi tự sửa được, chạy thử; ĐẠT thì sao lưu bản gốc vào .cadguard/backups rồi ghi TỆP MỚI. Không đạt thì bỏ qua tệp đó.",
+        "Tệp gốc không bị ghi. Mỗi tệp mới hoàn tác được ở tab Thay đổi. Bản vẽ lớn mất khoảng 1 phút mỗi tệp; bạn vẫn dùng ứng dụng bình thường trong lúc chạy."],
+      yes: "Sao lưu và sửa cả thư mục", no: "Chưa"});
+    if (!ok) return;
+    let job;
+    try { job = await api("/api/fix/bulk/folder", {dept: S.dept && S.dept.id, confirm: true, backup: true}); }
+    catch (e) { fail(e, "Sửa cả thư mục"); return; }
+    const n0 = notice({kind: "busy", title: "Đang sửa cả thư mục…", msg: `0/${job.total} tệp`});
+    const msg = n0.querySelector(".n-msg");
+    while (job.state === "running") {
+      await new Promise((r) => setTimeout(r, 2000));
+      try { job = await api("/api/fix/bulk/folder/status", {job: job.id}); } catch (e) { n0.remove(); fail(e, "Sửa cả thư mục"); return; }
+      if (msg) msg.textContent = `${job.done}/${job.total} tệp` + (job.current ? ` · đang làm ${job.current}` : "");
+    }
+    n0.remove();
+    const fixed = job.results.filter((r) => r.status === "đã sửa").length;
+    const errs = job.results.filter((r) => r.status === "lỗi").length;
+    notice({kind: errs ? "err" : "ok", title: `Đã sửa ${fixed}/${job.total} bản vẽ`,
+      msg: job.results.map((r) => `${r.file}: ${r.status}${r.output ? " → " + r.output : ""}${r.error ? " (" + r.error + ")" : ""}`).join(" · "),
+      hint: errs ? {why: "Một số tệp gặp lỗi; tệp gốc của chúng không bị đổi.", steps: ["Mở từng tệp lỗi, bấm Sửa hàng loạt để xem chi tiết."], actions: []} : null});
+    await loadFiles();
+    loadChangesets();
   }
   async function doBulk() {
     const pv = S.bulk && S.bulk.preview;
@@ -2782,6 +2819,86 @@
     await recheckApplied();
     renderAll();
     loadChangesets();
+  }
+
+  // ---------- BẢN ĐỒ BẢN VẼ (đồ thị tri thức cg.drawing-graph/1 + cổng sẵn sàng) ----------
+  function leaveMap() {
+    S.mapOn = false;
+    if (S.dept && S.dept.view === "scene") { load3d(S.file); return; }
+    renderSheet();
+  }
+  const MAP_ACTIONS = {
+    unicode: () => toolUnicode(),
+    bulk: () => toolBulk(),
+    open3d: (a) => load3d(S.file, a.item),
+    sheet: (a) => {
+      if (S.dept && S.dept.view === "scene") {  // phòng 3D không có màn tờ: chuyển sang phòng có xem tờ rồi mở đúng tờ
+        const to = deptById("ky-thuat") || (S.session ? S.session.departments.find((x) => x.view !== "scene") : null);
+        if (!to) { toast("Không có phòng xem tờ."); return; }
+        S.mapOn = false; S.pendingSheet = a.sheet || null;
+        setDept(to.id);
+        toast("Đã chuyển sang phòng Kỹ thuật để xem tờ.");
+        return;
+      }
+      leaveMap();
+      if (a.sheet) selectSheet(a.sheet);
+    },
+  };
+  async function loadMap(refresh) {
+    if (!S.file) { toast("Mở một bản vẽ trước."); return; }
+    const path = S.file;
+    S.mapOn = true;
+    if (S.v3d) { S.v3d.stop(); S.v3d = null; }
+    $("viewTag").textContent = "Bản đồ bản vẽ"; $("viewTag").hidden = false;
+    fill($("sheet"), emptyBox("Đang lập bản đồ bản vẽ…", "Đọc tờ, hình, hạng mục, khối, vật liệu (tất định, không dùng AI). Bản vẽ lớn mất vài giây."));
+    let g;
+    try { g = await api("/api/graph", {file: path, refresh: !!refresh}); }
+    catch (e) { fail(e, "Lập bản đồ bản vẽ"); leaveMap(); return; }
+    if (S.file !== path || !S.mapOn) return;
+    renderMap(g);
+  }
+  function renderMap(g) {
+    const s = g.stats;
+    const label = {ok: "Đủ", partial: "Chưa đủ", blocked: "Chưa mở"};
+    const actBtn = (a) => {
+      if (!a || !MAP_ACTIONS[a.id]) return null;
+      const txt = {unicode: "Chuyển Unicode", bulk: "Sửa hàng loạt", open3d: "Mở 3D hạng mục", sheet: "Xem tờ"}[a.id];
+      return el("button", {class: "btn-s btn-sm", type: "button", onclick: () => MAP_ACTIONS[a.id](a)}, txt);
+    };
+    const gates = g.gates.map((gt) => el("div", {class: "gate " + gt.status},
+      el("div", {class: "g-head"}, b(gt.title), el("span", {class: "chip", text: `${label[gt.status]} ${gt.done}/${gt.total}`})),
+      el("div", {class: "bar"}, (() => { const i = el("i"); i.style.width = `${gt.total ? Math.round(100 * gt.done / gt.total) : 0}%`; return i; })()),
+      el("div", {class: "f-d", text: gt.note}),
+      gt.task_count ? el("details", {open: gt.status !== "ok" && gt.task_count <= 6},
+        el("summary", {text: `${gt.task_count} việc cần làm`}),
+        gt.tasks.map((t) => el("div", {class: "task"},
+          el("div", {}, b(t.title), " · ", t.where),
+          el("div", {class: "t-why", text: "Vì sao: " + t.why}),
+          el("div", {text: "Sửa nhanh: " + t.fix_here}),
+          t.fix_cad && t.fix_cad !== "—" ? el("div", {text: "Trong AutoCAD: " + t.fix_cad}) : null,
+          el("div", {class: "t-act"}, actBtn(t.action)))),
+        gt.task_count > gt.tasks.length ? el("div", {class: "f-d", text: `… và ${gt.task_count - gt.tasks.length} việc khác.`}) : null) : null));
+    const head = el("tr", {}, ["Hạng mục", "Tờ", "Mặt bằng / đứng / cắt", "Khối", "Vật liệu được ghi chú", "Dựng 3D", ""].map((t) => el("th", {text: t})));
+    const rows = g.items.map((r) => el("tr", {},
+      el("td", {}, b(r.name), el("div", {class: "f-d", text: r.id})), el("td", {text: String(r.sheets)}),
+      el("td", {text: `${r.plans} / ${r.elevations} / ${r.sections}`}), el("td", {text: String(r.modules)}),
+      el("td", {text: r.materials.join(", ") || "—"}), el("td", {text: r.status + (r.gaps ? ` (${r.gaps} phần thiếu)` : "")}),
+      el("td", {}, el("button", {class: "btn-s btn-sm", type: "button", onclick: () => load3d(S.file, r.id)}, "Xem 3D"))));
+    const mats = g.nodes.filter((n) => n.type === "material").sort((a, c) => c.attrs.mentions - a.attrs.mentions);
+    fill($("sheet"), el("div", {class: "map"},
+      el("div", {class: "bar-act"},
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: leaveMap}, "← Quay lại bản vẽ"),
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: () => loadMap(true)}, "Lập lại bản đồ"),
+        el("button", {class: "btn-p btn-sm", type: "button", onclick: toolBulk}, "Sửa hàng loạt")),
+      el("div", {class: "m-stats", text: `${s.sheets} tờ · ${s.views} hình (${s.views_typed_pct}% có loại; ${s.fragments} mảnh lẻ bỏ qua) · ${s.items} hạng mục · ${s.modules} khối · ${s.materials} loại vật liệu được ghi chú${g.cached ? " · bản đã lưu" : ""}`}),
+      el("h3", {text: "Sẵn sàng cho các bước tiếp theo"}),
+      el("div", {class: "gates"}, gates),
+      el("h3", {text: "Hạng mục"}),
+      el("table", {class: "tblmap"}, head, rows),
+      mats.length ? [el("h3", {text: "Vật liệu được ghi chú"}), el("div", {class: "matchips"},
+        mats.map((m) => el("span", {title: m.attrs.samples.join("\n")}, `${m.label} · ${m.attrs.mentions}`)))] : null,
+      el("p", {class: "f-d", text: "Bản đồ do code đọc từ bản vẽ (tất định). Bước sau: trợ lý AI đề xuất phần code chưa đọc được (hình chưa có tiêu đề, ghép mặt đứng–mặt bằng, gán vật liệu) để bạn xác nhận."})));
+    $("cvInfo").textContent = `Bản đồ · ${s.nodes} nút · ${s.edges} quan hệ`;
   }
 
   // ---------- GIẢI THÍCH CHUYÊN SÂU BẰNG AI ----------
@@ -2906,6 +3023,7 @@
     $("toolTranslate").addEventListener("click", (e) => toolTranslate($("toolLang").value, e.currentTarget, $("toolMode") ? $("toolMode").value : "copy"));
     $("toolTemplate").addEventListener("click", toolTemplate);
     $("toolBulk").addEventListener("click", toolBulk);
+    $("toolMap").addEventListener("click", () => loadMap(false));
     $("zoomIn").addEventListener("click", () => (S.v3d ? S.v3d.zoom(1.25) : zoomButton(0.8)));
     $("zoomOut").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0.8) : zoomButton(1.25)));
     $("zoomFit").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0) : zoomButton(0)));
