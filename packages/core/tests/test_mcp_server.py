@@ -22,7 +22,8 @@ from cadguard.agent.tools import MAX_QUERY_BYTES, MAX_QUERY_RECORDS
 
 CORE = Path(cadguard.__file__).resolve().parents[1]
 TIMEOUT = 90  # giây cho mỗi phiên/tiến trình con, để test không treo
-TOOL_NAMES = {"list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff"}
+TOOL_NAMES = {"list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff", "get_scene", "measure",
+              "list_ergonomic_checks"}
 PRIVATE_NAMES = ("PRIVATE_LAYER", "PRIVATE_STYLE", "PRIVATE_BLOCK", "PRIVATE_VALUE", "private_file", "Du_an_PRIVATE")
 PRIVATE_REL = "Du_an_PRIVATE/private_file.dxf"
 # Nội dung bản vẽ (chữ, toạ độ) trong tệp riêng tư: Bậc 1 không được đưa ra cho trợ lý (trường mới text/pos/pts/insert).
@@ -182,7 +183,7 @@ def test_list_tools_default_six_read_only_no_write(ws_env):
         return (await s.list_tools()).tools
 
     tools, _ = _session(ws_env, body)
-    assert {t.name for t in tools} == TOOL_NAMES and len(tools) == 6
+    assert {t.name for t in tools} == TOOL_NAMES and len(tools) == 9
     assert "propose_changeset" not in {t.name for t in tools} and "apply_changeset" not in {t.name for t in tools}
     for t in tools:
         assert t.description and t.inputSchema["type"] == "object"

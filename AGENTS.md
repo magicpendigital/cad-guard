@@ -21,6 +21,7 @@ Windows (PowerShell):
 - Giao diện cục bộ kiểm luật + trợ lý: `python -m cadguard app --workspace <thư mục>` (`docs/app.md`)
 - Chỉ mục tờ (trang in) + ứng viên rác: `python -m cadguard sheets <dxf> [--json]` (`sheets.py`, `textcodec.py` giải mã TCVN3/VNI; bậc chốt tờ `gate.py`, trạng thái `sheet_state.py`)
 - Dựng 3D tất định: `python -m cadguard scene <dxf> --out cảnh.glb|.html|.json [--form form.html] [--supplement x.cgsup.json] [--with khac.dxf]`
+- Dựng 3D từ bản vẽ 2D kiểu công ty (Luồng 2, `docs/3d-feasibility.md`): `cadguard scene <dxf> --item <mã hạng mục|auto> --out x.glb|.html|.json` (`cg.scene/2`, `scene/views2d.py`, `scene/assemble.py`), đo khả năng `cadguard scene-assess <dxf> [--json]`; công thái học `cadguard/ergonomics.py` + `standards/ergonomics-v0.yaml` (khoảng chờ duyệt, không điền số không nguồn)
 - Tờ, Unicode, template, dịch, thực thi trong AutoCAD (Đợt A–F, `docs/sheets-presentation.md`): `cadguard sheets <dxf> [--render <thư mục>]`, `cadguard unicode <dxf|dwg> [--sheets] [--yes] [--dwg]`, `cadguard template learn|check|apply <dxf>`, `cadguard translate <dxf> --to en|zh`, `cadguard rule-set <mã> --disable|--severity|--param`, `cadguard learn-layers <dxf>`, `cadguard autocad-run unicode|translate|template|check` (gọi từ CGUNICODE/CGDICH/CGTRINHBAY/CGKIEM)
 - Studio (web cục bộ, LLM xem nội dung bản vẽ sau khi đồng ý từng phiên, dựng 3D, bổ sung phần thiếu): `python -m cadguard studio [--backend auto|api|cli|none]` (`plans/cad-guard-3d.md` mục 3c)
 

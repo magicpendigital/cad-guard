@@ -376,14 +376,14 @@ def make_company_kitchen(path: Path, lower_h: float = 850.0, upper_z0: float = 1
     _kt_title(msp, "MẶT ĐỨNG TỦ BẾP SYN", (ex + 1000, 1650), k)
     py = 600.0  # mặt bằng: mép trước tủ ở y = py, tường sau ở y = py + 600
     msp.add_line((ex, py + 600), (ex + 4000, py + 600), dxfattribs={"layer": "SYN_Tuong"})
-    msp.add_line((ex, py - 200), (ex, py + 600), dxfattribs={"layer": "SYN_Tuong"})
+    msp.add_line((ex, py - (aisle or 200)), (ex, py + 600), dxfattribs={"layer": "SYN_Tuong"})
     if aisle is not None:
         msp.add_line((ex, py - aisle), (ex + 4000, py - aisle), dxfattribs={"layer": "SYN_Tuong"})
     _rect(msp, ex + 600, py, ex + 3000, py + 600, "SYN_Noithat")
     _rect(msp, ex + 600, py + 250, ex + 3000, py + 600, "SYN_Khuat")
-    _kt_dim(msp, (ex + 600, py), (ex + 3000, py), (ex + 1800, py - 150 if aisle is None else py + 900))
+    _kt_dim(msp, (ex + 600, py), (ex + 3000, py), (ex + 1800, py - 150))
     _kt_dim(msp, (ex + 3000, py), (ex + 3000, py + 600), (ex + 3300, py + 300), angle=90)
-    _kt_title(msp, "MẶT BẰNG TỦ BẾP SYN", (ex + 1000, 250 if aisle is None else py - aisle - 300), k)
+    _kt_title(msp, "MẶT BẰNG TỦ BẾP SYN", (ex + 1000, 250), k)
 
     # Tờ 3: mặt cắt Y1 (ngang = chiều sâu từ tường sau, dọc = cao)
     x0 = 21000.0 + 420 * k

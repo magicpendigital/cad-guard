@@ -66,6 +66,36 @@ từ bản vẽ. **Hoãn** dựng cả phòng từ mặt bằng tầng cho tới
 Chỉ tiêu theo dõi khi làm tiếp: tỉ lệ khối có cả ba chiều từ bản vẽ (không `default`), số `gaps[]` mỗi hạng mục, thời gian
 người dùng xác nhận ghép.
 
-## 5. Kết quả làm thử (cập nhật sau 3D-3)
+## 5. Kết quả làm thử 3D-1 → 3D-4 (10/11/2026, cùng tệp)
 
-Xem mục 6 (được bổ sung khi chạy bộ dựng `cg.scene/2` trên tệp thử).
+Bộ dựng `cg.scene/2` (`scene/assemble.py`) chạy trên 11 hạng mục, không người nhập, không LLM:
+
+| Chỉ số | Giá trị |
+| --- | --- |
+| Hạng mục dựng được ít nhất 1 khối | 6 / 11 (5 hạng mục còn lại: không có mặt bằng hoặc không có mặt đứng có hình) |
+| Khối tủ dựng được | 13; cánh/ngăn kéo nhận được: 34; đợt (từ mặt đứng bỏ cánh): 52 |
+| Kích thước khối (rộng/sâu/cao, 39 số) | từ DIMENSION: 12 (31 %); đo trên nét hình: 27 (69 %); **mặc định/đoán: 0** |
+| Cao sàn–trần | 7 hạng mục, đều từ kích thước ghi trên bản vẽ |
+| Phần thiếu `gaps[]` | 2 chiều sâu tủ treo (mặt bằng không vẽ nét khuất), 13 mặt đứng/hạng mục chưa ghép được (khác hướng nhìn, thiếu hình) |
+| Tường trong cảnh hạng mục | 1 (mặt bằng hạng mục ít khi vẽ tường trên layer tường) |
+| Mục tiêu tối thiểu "1 phòng" | Đạt ở mức hạng mục bếp khô: 4 khối (tủ dưới, tủ cao, hai cụm tủ trên/kệ), 8 mặt cánh/ngăn kéo, cao trần 2885 từ kích thước, 1 `gap` sâu tủ treo phải; GLB + trang xem cùng mã cảnh |
+| Ảnh phối cảnh | Trình xem HTML/canvas sẵn có và GLB (mở được bằng trình xem glTF bất kỳ). Blender MCP không chạy trong phiên đo nên chưa có ảnh render |
+
+Nhận xét: khối hộp và cánh đúng vị trí tương đối, nhưng phần lớn kích thước khối là "đo trên nét" chứ chưa bám kích thước ghi
+(kích thước ghi thường đo từng ô/cánh, không đo hộp tủ). Tách khối dựa trên nhóm cánh nên cụm thiết bị không có cánh (lò,
+tủ lạnh) có thể thành khối thấp lạ (vd. một khối cao 289): cần người xác nhận nhãn trên App trước khi đánh giá công thái học.
+
+Công thái học (3D-4, `standards/ergonomics-v0.yaml`, `cadguard/ergonomics.py`): 8 tiêu chí ER-01…ER-08, **mọi khoảng
+khuyến nghị để trống, trạng thái "chờ duyệt"** (chỉ ghi tài liệu nên tra: EN 1116, ISO 3055, QCVN 10, số liệu nhân trắc
+học người Việt… người duyệt phải kiểm số hiệu và chép khoảng). Trên tệp thử: các tiêu chí có số đo đều báo "chờ duyệt"
+(chỉ hiện số đo), ER-06 vùng quét cánh "đạt" ở 3 hạng mục có cánh. Bộ fixture có đáp án: cao mặt bàn 850/700 (đạt/không đạt
+với khoảng thử), cánh 596 quét vào lối đi 450 (va 146 mm); harness loại 100 % mục nhận xét không có số đo làm bằng chứng
+hoặc có số bịa (test `tests/test_ergonomics.py`).
+
+## 6. Việc tiếp theo đề xuất
+
+1. Người duyệt điền khoảng ER-xx có nguồn (tạo `ergonomics-v0.1`), rồi mới bật kết luận đạt/không đạt.
+2. Ghép mặt đứng hướng B/C với dải tủ chữ L (quay trục theo ký hiệu hướng nhìn trên mặt bằng).
+3. Bám mép khối vào kích thước ghi gần nhất (tăng tỉ lệ `dimension` từ 31 %), nhận diện thiết bị (lò, chậu, bếp) cho ER-08.
+4. Gọi LLM thật để đề xuất ghép/nhãn (đã có dữ liệu gửi `/api/scene/prompt` và mã kiểm `/api/scene/propose`; chưa nối engine).
+5. Render phối cảnh bằng Blender khi có Blender + MCP trên máy (GLB đã sẵn).
