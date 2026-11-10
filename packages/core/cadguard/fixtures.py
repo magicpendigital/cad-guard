@@ -305,7 +305,112 @@ def make_cabinet_conflict(path: Path) -> None:
     make_cabinet_views(path, top_w=810.0)
 
 
+# ---- Bộ "kiểu công ty" cho dựng 3D từ bản vẽ 2D (Luồng 2). TỔNG HỢP, mô phỏng CẤU TRÚC cách vẽ đã đo trên tệp phiên
+# thử (không chép nội dung): nhiều tờ A3 trong Model, khối khung tên có số bản vẽ "<hạng mục>. <tờ>", mỗi tờ nhiều
+# hình chiếu có tiêu đề chữ lớn, tường/đồ/nét cắt/nét khuất/kích thước trên layer riêng, ký hiệu mặt cắt có nhãn.
+KT_LAYERS = ["SYN_Tuong", "SYN_Noithat", "SYN_Netcat", "SYN_Khuat", "SYN_Dim", "SYN_Text", "SYN_Kyhieu"]
+
+
+def _kt_dim(msp, p1, p2, base, angle=0):
+    msp.add_linear_dim(base=base, p1=p1, p2=p2, angle=angle, dxfattribs={"layer": "SYN_Dim"}).render()
+
+
+def _kt_title(msp, text, at, k):
+    msp.add_text(text, height=2.5 * k, dxfattribs={"layer": "SYN_Text", "style": "STD", "insert": at})
+
+
+def make_company_kitchen(path: Path, lower_h: float = 850.0, upper_z0: float = 1500.0, aisle: float | None = None,
+                         room_h: float = 2700.0) -> None:
+    """Ba tờ: (1) SYN.01. 01 mặt bằng bố trí 1:50: phòng 4000×3000 tường đôi dày 200, dải tủ bếp 2400×600 sát tường
+    trên; (2) SYN.10. 01 tủ bếp 1:20: mặt đứng (tủ dưới 2400×`lower_h`, tủ trên 2400×700 từ cao `upper_z0`, mỗi tủ 4
+    cánh 600; tường, sàn, trần cao `room_h`) và mặt bằng (tủ dưới nét liền sâu 600, tủ trên nét khuất sâu 350); ký hiệu
+    mặt cắt y1; (3) SYN.10. 02 mặt cắt Y1. `aisle`: thêm tường đối diện cách mặt tủ `aisle` mm (thử vùng quét cánh)."""
+    doc = ezdxf.new("R2018", setup=True)
+    doc.header["$INSUNITS"] = 4
+    for name in KT_LAYERS:
+        doc.layers.add(name)
+    doc.layers.get("SYN_Khuat").dxf.linetype = "DASHED"
+    _company_frame(doc)
+    mark = doc.blocks.new("SYN_DAUCAT")
+    mark.add_circle((0, 0), 150, dxfattribs={"layer": "SYN_Kyhieu"})
+    mark.add_line((0, -150), (0, -600), dxfattribs={"layer": "SYN_Kyhieu"})
+    mark.add_attdef("NHAN", (-60, -40), dxfattribs={"height": 80, "layer": "SYN_Kyhieu"})
+    msp = doc.modelspace()
+
+    def frame(x, k, number, name):
+        ref = msp.add_blockref(CO_FRAME, (x, 0), dxfattribs={"layer": "SYN-KHUNG", "xscale": k, "yscale": k})
+        ref.add_auto_attribs({"DU_AN": "CĂN HỘ SYN", "TEN_BAN_VE": name, "SO_BAN_VE": number, "TI_LE": f"1/{k}",
+                              "NGAY": "10/11/2026"})
+
+    # Tờ 1: mặt bằng bố trí 1:50
+    frame(0, 50, "SYN.01. 01", "MẶT BẰNG BỐ TRÍ")
+    msp.add_lwpolyline([(2800, 2800), (7200, 2800), (7200, 6200), (2800, 6200)], close=True, dxfattribs={"layer": "SYN_Tuong"})
+    msp.add_lwpolyline([(3000, 3000), (7000, 3000), (7000, 6000), (3000, 6000)], close=True, dxfattribs={"layer": "SYN_Tuong"})
+    _rect(msp, 3600, 5400, 6000, 6000, "SYN_Noithat")
+    _rect(msp, 3600, 5650, 6000, 6000, "SYN_Khuat")
+    msp.add_text("P. BẾP", height=150, dxfattribs={"layer": "SYN_Text", "style": "STD", "insert": (4600, 4300)})
+    _kt_dim(msp, (3000, 3000), (7000, 3000), (5000, 2400))
+    _kt_dim(msp, (3000, 3000), (3000, 6000), (2400, 4500), angle=90)
+    _kt_dim(msp, (3600, 5400), (6000, 5400), (4800, 5000))
+    _kt_dim(msp, (6000, 5400), (6000, 6000), (6400, 5700), angle=90)
+    _kt_title(msp, "MẶT BẰNG BỐ TRÍ", (3800, 1700), 50)
+
+    # Tờ 2: tủ bếp 1:20 (mặt đứng ở trên, mặt bằng ở dưới, cùng gốc X)
+    x0, k = 21000.0, 20
+    frame(x0, k, "SYN.10. 01", "CHI TIẾT TỦ BẾP SYN")
+    ex, fz = x0 + 1000, 2000.0  # gốc X (mép trong tường trái), cao độ sàn trên giấy
+    for a, b in (((ex, fz), (ex + 4000, fz)), ((ex, fz + room_h), (ex + 4000, fz + room_h)),
+                 ((ex, fz), (ex, fz + room_h)), ((ex + 4000, fz), (ex + 4000, fz + room_h))):
+        msp.add_line(a, b, dxfattribs={"layer": "SYN_Tuong"})
+    for z0, z1 in ((0.0, lower_h), (upper_z0, upper_z0 + 700)):
+        _rect(msp, ex + 600, fz + z0, ex + 3000, fz + z1, "SYN_Noithat")
+        for i in range(4):
+            _rect(msp, ex + 600 + 600 * i + 2, fz + z0 + (100 if z0 == 0 else 2), ex + 600 + 600 * (i + 1) - 2, fz + z1 - 2, "SYN_Noithat")
+    _kt_dim(msp, (ex + 600, fz + upper_z0 + 700), (ex + 3000, fz + upper_z0 + 700), (ex + 1800, fz + room_h + 200))
+    _kt_dim(msp, (ex, fz + room_h), (ex + 4000, fz + room_h), (ex + 2000, fz + room_h + 400))
+    _kt_dim(msp, (ex, fz), (ex, fz + room_h), (ex - 400, fz + 1000), angle=90)
+    _kt_dim(msp, (ex + 600, fz), (ex + 600, fz + lower_h), (ex - 200, fz + 400), angle=90)
+    _kt_dim(msp, (ex + 600, fz + upper_z0), (ex + 600, fz + upper_z0 + 700), (ex - 200, fz + upper_z0 + 300), angle=90)
+    ref = msp.add_blockref("SYN_DAUCAT", (ex + 1500, fz + 400), dxfattribs={"layer": "SYN_Kyhieu", "xscale": 0.5, "yscale": 0.5})
+    ref.add_auto_attribs({"NHAN": "y1"})
+    _kt_title(msp, "MẶT ĐỨNG TỦ BẾP SYN", (ex + 1000, 1650), k)
+    py = 600.0  # mặt bằng: mép trước tủ ở y = py, tường sau ở y = py + 600
+    msp.add_line((ex, py + 600), (ex + 4000, py + 600), dxfattribs={"layer": "SYN_Tuong"})
+    msp.add_line((ex, py - (aisle or 200)), (ex, py + 600), dxfattribs={"layer": "SYN_Tuong"})
+    if aisle is not None:
+        msp.add_line((ex, py - aisle), (ex + 4000, py - aisle), dxfattribs={"layer": "SYN_Tuong"})
+    _rect(msp, ex + 600, py, ex + 3000, py + 600, "SYN_Noithat")
+    _rect(msp, ex + 600, py + 250, ex + 3000, py + 600, "SYN_Khuat")
+    _kt_dim(msp, (ex + 600, py), (ex + 3000, py), (ex + 1800, py - 150))
+    _kt_dim(msp, (ex + 3000, py), (ex + 3000, py + 600), (ex + 3300, py + 300), angle=90)
+    _kt_title(msp, "MẶT BẰNG TỦ BẾP SYN", (ex + 1000, 250), k)
+
+    # Tờ 3: mặt cắt Y1 (ngang = chiều sâu từ tường sau, dọc = cao)
+    x0 = 21000.0 + 420 * k
+    frame(x0, k, "SYN.10. 02", "CHI TIẾT TỦ BẾP SYN")
+    sx, sz = x0 + 1500, 1000.0
+    msp.add_line((sx, sz), (sx, sz + room_h), dxfattribs={"layer": "SYN_Tuong"})
+    msp.add_line((sx, sz), (sx + 1500, sz), dxfattribs={"layer": "SYN_Tuong"})
+    _rect(msp, sx, sz, sx + 600, sz + lower_h, "SYN_Netcat")
+    _rect(msp, sx, sz + upper_z0, sx + 350, sz + upper_z0 + 700, "SYN_Netcat")
+    _kt_dim(msp, (sx, sz + lower_h), (sx + 600, sz + lower_h), (sx + 300, sz + lower_h + 150))
+    _kt_dim(msp, (sx + 600, sz), (sx + 600, sz + lower_h), (sx + 800, sz + 400), angle=90)
+    _kt_title(msp, "MẶT CẮT Y1 TỦ BẾP SYN", (sx, 600), k)
+    _finish(doc, path)
+
+
+def make_company_kitchen_low(path: Path) -> None:
+    make_company_kitchen(path, lower_h=700.0)
+
+
+def make_company_kitchen_aisle(path: Path) -> None:
+    make_company_kitchen(path, aisle=450.0)
+
+
 SCENE_FIXTURES = {
+    "company_kitchen.dxf": make_company_kitchen,
+    "company_kitchen_low.dxf": make_company_kitchen_low,
+    "company_kitchen_aisle.dxf": make_company_kitchen_aisle,
     "cabinet_views_ok.dxf": make_cabinet_views,
     "cabinet_nolayers.dxf": make_cabinet_nolayers,
     "cabinet_views_front_only.dxf": make_cabinet_front_only,

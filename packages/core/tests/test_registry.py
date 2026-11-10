@@ -19,7 +19,7 @@ CORE = Path(cadguard.__file__).resolve().parents[1]
 def test_never_any_apply_tool_and_fixed_order(propose, compare):
     o = SpecOptions(allow_propose=propose, compare_without_profile=compare)
     names = [d.name for d in tool_defs(o)]
-    assert names[:6] == list(registry.READ_TOOLS)
+    assert names[:len(registry.READ_TOOLS)] == list(registry.READ_TOOLS)
     assert (registry.PROPOSE_TOOL in names) is propose and (registry.BASELINE_TOOL in names) is compare
     assert not registry.FORBIDDEN_TOOLS & set(names)
     for s in specs(o):

@@ -102,6 +102,14 @@ def _entity_rec(e, space: str) -> EntityRec:
                 rec.dim_value = _r(e.get_measurement())
             except Exception:  # noqa: BLE001
                 pass
+            try:  # điểm đo của kích thước thẳng (dựng 3D: gán số đo vào cạnh hình)
+                kind = int(e.dxf.get("dimtype", 0)) & 15
+                rec.dim_kind = kind
+                if kind in (0, 1) and e.dxf.hasattr("defpoint2") and e.dxf.hasattr("defpoint3"):
+                    rec.dim_pts = [_pt(e.dxf.defpoint2), _pt(e.dxf.defpoint3), _pt(e.dxf.defpoint)]
+                    rec.dim_angle = _r(e.dxf.get("angle", 0.0) or 0.0) if kind == 0 else None
+            except Exception:  # noqa: BLE001
+                pass
             try:  # vị trí kích thước (để gán vào Tờ, khoanh vùng lỗi): điểm giữa chữ, thiếu thì điểm định nghĩa
                 rec.pos = _pt(e.dxf.text_midpoint if e.dxf.hasattr("text_midpoint") else e.dxf.defpoint)
             except Exception:  # noqa: BLE001

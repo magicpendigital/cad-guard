@@ -829,14 +829,24 @@ def preview(app: AppData, rel: Any, wait: Any = None, layout: Any = "Model") -> 
 MAX_BOXES = 5000
 
 
-def scene3d(app: AppData, rel: Any) -> dict:
-    """Cảnh 3D tất định (`cadguard scene`) ở chế độ chỉ xem: hộp + màu vật liệu, không tên tệp/đường dẫn."""
+def scene3d(app: AppData, rel: Any, item: Any = None) -> dict:
+    """Cảnh 3D tất định ở chế độ chỉ xem: hộp + màu vật liệu, không tên tệp/đường dẫn.
+
+    Bản vẽ kiểu công ty (hạng mục có mặt bằng + mặt đứng): cảnh `cg.scene/2` theo hạng mục (`app/scene_api.py`);
+    còn lại: cảnh `cg.scene/1` theo quy ước layer/khối."""
     from ..scene import build_scene
     from ..scene.geometry import boxes
     from ..scene.gltf import color_for
+    from . import scene_api
 
     path = app.resolve(rel)
-    sc = build_scene(app.model(path))
+    model = app.model(path)
+    if item or scene_api.has_items(model):
+        try:
+            return {"file": app.rel(path), **scene_api.view(model, app.ws.root, item)}
+        except scene_api.SceneApiError as exc:
+            raise ApiError(str(exc), 422) from None
+    sc = build_scene(model)
     bx = boxes(sc)
     data = [{"b": [list(p) for p in b.base], "z0": b.z0, "z1": b.z1, "c": list(color_for(b.material)), "k": b.kind}
             for b in bx[:MAX_BOXES]]
@@ -844,6 +854,28 @@ def scene3d(app: AppData, rel: Any) -> dict:
             "counts": {"walls": len(sc.walls), "modules": len(sc.modules), "panels": len(sc.panels),
                        "gaps": len(sc.gaps), "skipped": len(sc.skipped)},
             "gaps": [g.message for g in sc.gaps[:20]], "notes": list(sc.notes)[:10]}
+
+
+def scene_action(app: AppData, rel: Any, action: str, body: dict) -> dict:
+    """Nhập phần thiếu / xác nhận đề xuất (`set`), lưu đề xuất cần xác nhận (`propose`), dữ liệu gửi LLM (`prompt`),
+    tải GLB (`glb`). Chỉ ghi tệp bổ sung trong `.cadguard/scene/`; bản vẽ không bị sửa."""
+    from . import scene_api
+
+    path = app.resolve(rel)
+    model = app.model(path)
+    root = app.ws.root
+    try:
+        if action == "set":
+            return {"file": app.rel(path), **scene_api.set_value(model, root, body.get("item"), body.get("key"), body.get("value"))}
+        if action == "propose":
+            return scene_api.add_proposals(model, root, body.get("item"), body.get("proposals"))
+        if action == "prompt":
+            return scene_api.prompt(model, root, body.get("item"))
+        if action == "glb":
+            return scene_api.glb(model, root, body.get("item"))
+    except scene_api.SceneApiError as exc:
+        raise ApiError(str(exc), 422) from None
+    raise ApiError("Thao tác 3D không hợp lệ.")
 
 
 def handover(app: AppData, rel: Any, dept: Any) -> dict:

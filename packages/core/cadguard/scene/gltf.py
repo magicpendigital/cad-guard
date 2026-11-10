@@ -21,7 +21,9 @@ PALETTE = [
     (0.78, 0.78, 0.60),
     (0.70, 0.60, 0.78),
 ]
-FIXED = {"wall": (0.93, 0.93, 0.91), "floor": (0.60, 0.58, 0.55), "default": (0.80, 0.80, 0.80)}
+FIXED = {"wall": (0.93, 0.93, 0.91), "floor": (0.60, 0.58, 0.55), "default": (0.80, 0.80, 0.80), "ceiling": (0.97, 0.97, 0.97),
+         "module-base": (0.86, 0.72, 0.52), "module-wall": (0.78, 0.66, 0.50), "module-tall": (0.74, 0.62, 0.48),
+         "front-door": (0.95, 0.90, 0.80), "front-drawer": (0.90, 0.85, 0.74)}
 
 
 def color_for(material: str) -> tuple[float, float, float]:
@@ -49,8 +51,12 @@ def box_faces(b: Box) -> list[tuple[list[tuple[float, float, float]], tuple[floa
 
 
 def build_glb(scene: Scene) -> bytes:
+    return glb_from_boxes(boxes(scene), "cadguard cg.scene/1")
+
+
+def glb_from_boxes(box_list: list[Box], generator: str, extras: dict | None = None) -> bytes:
     groups: dict[str, list[Box]] = {}
-    for b in boxes(scene):
+    for b in box_list:
         groups.setdefault(b.material, []).append(b)
 
     bin_parts: list[bytes] = []
@@ -93,7 +99,7 @@ def build_glb(scene: Scene) -> bytes:
         nodes.append({"mesh": len(meshes) - 1, "name": mat})
 
     doc = {
-        "asset": {"version": "2.0", "generator": "cadguard cg.scene/1"},
+        "asset": {"version": "2.0", "generator": generator, **({"extras": extras} if extras else {})},
         "scene": 0,
         "scenes": [{"nodes": list(range(len(nodes)))}],
         "nodes": nodes,

@@ -32,6 +32,6 @@ cwd = '<THU_MUC_LAM_VIEC>'
 startup_timeout_sec = 60
 tool_timeout_sec = 120
 required = true
-enabled_tools = ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff"]
+enabled_tools = ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff", "get_scene", "measure", "list_ergonomic_checks"]
 # Chỉ cần khi chạy cad-guard từ mã nguồn thay vì đã `pip install`:
 # env = { PYTHONPATH = '<THU_MUC_REPO>\packages\core' }

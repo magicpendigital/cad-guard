@@ -644,3 +644,7 @@ body.acad-panel .tabs{overflow-x:auto}
 .hide-discussion .edge-tab{display:block;position:fixed;right:0;top:42%;z-index:30;writing-mode:vertical-rl;padding:12px 6px;border:1px solid var(--border-strong);border-right:0;border-radius:8px 0 0 8px;background:var(--accent,#2563eb);color:#fff;font:600 13px/1 inherit;cursor:pointer}
 .btn-attn{outline:2px solid var(--accent,#2563eb)}
 .ai-note{font-size:12px;color:var(--text2)}
+
+/* 3D cg.scene/2 */
+.tbl3d{border-collapse:collapse;margin:6px 0;font-size:12px}.tbl3d td,.tbl3d th{border:1px solid var(--line,#ccc);padding:2px 6px;text-align:left}
+.gap3d{border-left:3px solid #d64;padding:4px 8px;margin:4px 0}.gap3d label{display:inline-block;margin:2px 8px 2px 0}

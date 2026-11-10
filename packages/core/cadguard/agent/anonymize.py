@@ -3,7 +3,7 @@ import hashlib
 import re
 import secrets
 
-PREFIX = {"layer": "L", "block": "B", "style": "S", "file": "F", "layout": "Y", "dimstyle": "D"}
+PREFIX = {"layer": "L", "block": "B", "style": "S", "file": "F", "layout": "Y", "dimstyle": "D", "item": "H"}  # H: hạng mục (cảnh 3D)
 TOKEN_RE = re.compile(r"^[" + "".join(PREFIX.values()) + r"]_[0-9a-f]{10}$")
 
 

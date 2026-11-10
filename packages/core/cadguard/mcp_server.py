@@ -2,7 +2,8 @@
 
 Chạy: `python -m cadguard mcp --workspace <thư mục>`.
 
-- Mặc định CHỈ ĐỌC: 6 công cụ (list_drawings, audit, explain_rule, get_model_summary, query_model, diff).
+- Mặc định CHỈ ĐỌC: 9 công cụ (list_drawings, audit, explain_rule, get_model_summary, query_model, diff; cảnh 3D:
+  get_scene, measure, list_ergonomic_checks).
 - `--allow-propose` (mặc định TẮT) thêm `propose_changeset`: chạy khô và ghi changeset JSON vào
   `<thư mục làm việc>/.cadguard/changesets/`; không bao giờ ghi DXF.
 - KHÔNG có `apply_changeset` qua MCP: áp dụng (ghi tệp mới) chỉ do người dùng qua `cadguard apply`, sau khi xem trước
@@ -152,7 +153,7 @@ def _import_sdk():
 
 def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0", allow_propose: bool = False,
                  allow_autocad: bool = False):
-    """Tạo máy chủ MCP cấp thấp từ sổ khai báo `agent.registry`: 6 công cụ chỉ đọc, thêm propose_changeset khi
+    """Tạo máy chủ MCP cấp thấp từ sổ khai báo `agent.registry`: 9 công cụ chỉ đọc, thêm propose_changeset khi
     `allow_propose`. Không bao giờ có apply. Tham số kiểm bằng `registry.check_args` (thông điệp tiếng Việt, không lặp
     lại giá trị), giống hệt engine API. Công cụ chạy trong luồng phụ, tuần tự (khoá) vì bộ ẩn danh giữ trạng thái phiên."""
     import threading

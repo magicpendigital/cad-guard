@@ -1,0 +1,108 @@
+# standards/ergonomics-v0.yaml — tiêu chí công thái học đo trên cảnh 3D `cg.scene/2` (Luồng 2, 3D-4).
+#
+# BẢN NHÁP CHỜ DUYỆT. Thay cho bản nháp Draff (ngưỡng viết cứng, gắn "chuẩn VN" không nguồn, số bịa) đã bị hoãn.
+# Nguyên tắc:
+# - Mỗi tiêu chí có đại lượng đo, đối tượng áp dụng, nguồn. Khoảng khuyến nghị (`params.range`) CHỈ điền khi đã chép
+#   đúng từ tài liệu có số hiệu/tài liệu công ty đã duyệt. Chưa có nguồn đáng tin thì để `range: null` và
+#   `status: chờ duyệt`: cadguard vẫn ĐO và hiện số đo, nhưng không kết luận đạt/không đạt.
+# - `params.candidate_sources` là tài liệu nên tra để điền khoảng; agent soạn bảng này KHÔNG chép số từ trí nhớ.
+# - Luật ER-xx chạy trên cảnh 3D bằng `cadguard/ergonomics.py` (không phải bộ luật 2D), nên `implemented: false` ở
+#   đây (sổ luật 2D không có hàm ER-xx). Người duyệt: chủ dự án / trưởng phòng thiết kế. Đổi khoảng = phiên bản mới.
+name: ergonomics-v0
+version: 0.1.0-draft
+description: 'Công thái học đồ nội thất v0 (nháp chờ duyệt): đo trên cảnh 3D dựng từ bản vẽ; khoảng khuyến nghị chỉ điền khi có nguồn.'
+globals:
+  scene_schema: cg.scene/2
+  review_schema: cg.ergonomics-review/1
+rules:
+- id: ER-01
+  title: Cao mặt bàn bếp (đỉnh tủ dưới so với sàn)
+  reads: cảnh 3D, khối loại base (chân ở sàn), z0 + cao
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: 'Chờ duyệt: chưa có khoảng từ tài liệu có số hiệu trong repo.'
+  implemented: false
+  enabled: true
+  params: {measure: base_top, unit: mm, applies_to: [base], range: null, status: chờ duyệt,
+           candidate_sources: ['EN 1116 Kitchen furniture — Co-ordinating sizes for kitchen furniture and kitchen appliances',
+                               'ISO 3055 Kitchen equipment — Coordinating sizes', 'Tài liệu thiết kế bếp của công ty']}
+- id: ER-02
+  title: Khoảng hở giữa mặt bàn và đáy tủ treo phía trên
+  reads: cảnh 3D, cặp khối base / wall chồng nhau theo phương ngang
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: 'Chờ duyệt: chưa có khoảng từ tài liệu có số hiệu trong repo.'
+  implemented: false
+  enabled: true
+  params: {measure: wall_over_base_gap, unit: mm, applies_to: [base, wall], range: null, status: chờ duyệt,
+           candidate_sources: ['EN 1116', 'Hướng dẫn lắp đặt của nhà sản xuất máy hút mùi (khi có bếp nấu bên dưới)',
+                               'Tài liệu thiết kế bếp của công ty']}
+- id: ER-03
+  title: Chiều sâu tủ dưới
+  reads: cảnh 3D, khối base, sâu
+  kind: deterministic
+  severity: I
+  false_positive_risk: low
+  source: 'Chờ duyệt.'
+  implemented: false
+  enabled: true
+  params: {measure: base_depth, unit: mm, applies_to: [base], range: null, status: chờ duyệt,
+           candidate_sources: ['EN 1116', 'ISO 3055', 'Tài liệu thiết kế bếp của công ty']}
+- id: ER-04
+  title: Chiều sâu tủ treo
+  reads: cảnh 3D, khối wall, sâu
+  kind: deterministic
+  severity: I
+  false_positive_risk: low
+  source: 'Chờ duyệt.'
+  implemented: false
+  enabled: true
+  params: {measure: wall_depth, unit: mm, applies_to: [wall], range: null, status: chờ duyệt,
+           candidate_sources: ['EN 1116', 'Tài liệu thiết kế bếp của công ty']}
+- id: ER-05
+  title: Cao đỉnh khối cao nhất (tầm với kệ/tủ treo, tủ cao)
+  reads: cảnh 3D, khối wall/tall, z0 + cao
+  kind: deterministic
+  severity: I
+  false_positive_risk: medium
+  source: 'Chờ duyệt: tầm với phụ thuộc người dùng (chiều cao, tuổi); cần nguồn nhân trắc học người Việt.'
+  implemented: false
+  enabled: true
+  params: {measure: top_reach, unit: mm, applies_to: [wall, tall], range: null, status: chờ duyệt,
+           candidate_sources: ['TCVN 5781 Phương pháp đo cơ thể người (phương pháp đo, không phải ngưỡng)',
+                               'Số liệu nhân trắc học người Việt Nam đã công bố', 'Panero & Zelnik, Human Dimension & Interior Space']}
+- id: ER-06
+  title: Vùng quét cánh mở không va tường hoặc khối khác
+  reads: cảnh 3D, cánh (door) của khối, tường, khối khác
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'Hình học: cánh bản lề quét một vùng sâu bằng bề rộng cánh trước mặt tủ; không cần ngưỡng.'
+  implemented: false
+  enabled: true
+  params: {measure: door_swing_clearance, unit: mm, applies_to: [door], range: null, status: hình học (không cần ngưỡng),
+           candidate_sources: []}
+- id: ER-07
+  title: Lối đi trước mặt tủ (tới tường hoặc khối đối diện)
+  reads: cảnh 3D, mặt trước khối, tường/khối đối diện
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: 'Chờ duyệt.'
+  implemented: false
+  enabled: true
+  params: {measure: front_clearance, unit: mm, applies_to: [base, tall], range: null, status: chờ duyệt,
+           candidate_sources: ['QCVN 10 Công trình bảo đảm người khuyết tật tiếp cận sử dụng (khi áp dụng)',
+                               'Neufert, Architects'' Data', 'Tài liệu thiết kế của công ty']}
+- id: ER-08
+  title: Tam giác làm việc bếp (bếp nấu – chậu rửa – tủ lạnh)
+  reads: cảnh 3D cần nhận diện thiết bị
+  kind: deterministic
+  severity: I
+  false_positive_risk: high
+  source: 'Chưa đo được: cảnh 3D chưa nhận diện thiết bị bếp.'
+  implemented: false
+  enabled: false
+  params: {measure: work_triangle, unit: mm, applies_to: [], range: null, status: chưa đo được, candidate_sources: []}

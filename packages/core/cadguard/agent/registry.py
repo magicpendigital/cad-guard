@@ -25,7 +25,9 @@ MAX_QUERY_BYTES = 65536
 MAX_DIFF_ITEMS = 500
 MAX_PROPOSE_OPS = 50
 
-READ_TOOLS = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff")
+READ_TOOLS = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff", "get_scene", "measure",
+              "list_ergonomic_checks")
+SCENE_TOOLS = ("get_scene", "measure", "list_ergonomic_checks")  # 3D cg.scene/2 + công thái học (Luồng 2)
 PROPOSE_TOOL = "propose_changeset"
 TRANSLATE_TOOL = "propose_translation"  # cùng cờ allow_propose; không có khi ẩn danh (dự án NDA)
 AUTOCAD_TOOL = "show_in_autocad"  # M3: chỉ khi allow_autocad; điều hướng AutoCAD, không sửa bản vẽ
@@ -260,11 +262,56 @@ def _show_in_autocad() -> ToolDef:
     )
 
 
-_READ_DEFS: tuple[Callable[[], ToolDef], ...] = (_list_drawings, _audit, _explain_rule, _summary, _query, _diff)
+_ITEM = {"type": ["string", "null"], "maxLength": 200,
+         "description": "Mã hạng mục (nhóm tờ theo số bản vẽ) từ get_scene; bỏ trống = hạng mục đầu tiên dựng được."}
+_ELEM = {"type": "string", "minLength": 1, "maxLength": 120, "description": "Mã phần tử của cảnh: khối (M1), cánh (M1.F2), tường (…:W1)."}
+
+
+def _scene_tools():
+    from . import scene_tools
+
+    return scene_tools
+
+
+def _get_scene() -> ToolDef:
+    return ToolDef(
+        "get_scene", "read",
+        lambda o: "Cảnh 3D cg.scene/2 của một hạng mục đồ dựng TẤT ĐỊNH từ mặt bằng + mặt đứng: khối tủ (loại base/wall/tall, "
+                  "rộng/sâu/cao/cao độ chân, mm), nguồn từng số (dimension = kích thước ghi trên bản vẽ, geometry = đo trên "
+                  "nét, user = người nhập, default = mặc định), số cánh/ngăn kéo/đợt, cao sàn–trần, phần thiếu (gaps), "
+                  "danh sách hạng mục. Không tự đoán số còn thiếu: hỏi người dùng nhập trên App.",
+        lambda o: _obj({"file": _FILE, "item": _ITEM}, ["file"]),
+        lambda ctx, a, o: _scene_tools().get_scene(ctx, a["file"], a.get("item")),
+    )
+
+
+def _measure() -> ToolDef:
+    return ToolDef(
+        "measure", "read",
+        lambda o: "Đo khe hở giữa hai phần tử của cảnh 3D theo trục X/Y/Z (mm; âm = chồng nhau) và khoảng cách nhỏ nhất. "
+                  "Dùng mã từ get_scene. Số đo tất định, dùng làm bằng chứng cho nhận xét.",
+        lambda o: _obj({"file": _FILE, "a": _ELEM, "b": _ELEM, "item": _ITEM}, ["file", "a", "b"]),
+        lambda ctx, a, o: _scene_tools().measure(ctx, a["file"], a["a"], a["b"], a.get("item")),
+    )
+
+
+def _ergonomic_checks() -> ToolDef:
+    return ToolDef(
+        "list_ergonomic_checks", "read",
+        lambda o: "Kết quả tiêu chí công thái học ER-xx (chuẩn ergonomics-v0) đo trên cảnh 3D: số đo (mã m1…, phần tử, handle, "
+                  "nguồn) và trạng thái. 'chờ duyệt' = chưa có khoảng khuyến nghị có nguồn: chỉ được nêu số đo, KHÔNG kết luận "
+                  "đạt/không đạt. Nhận xét phải trỏ tới mã số đo (lược đồ cg.ergonomics-review/1).",
+        lambda o: _obj({"file": _FILE, "item": _ITEM}, ["file"]),
+        lambda ctx, a, o: _scene_tools().list_ergonomic_checks(ctx, a["file"], a.get("item")),
+    )
+
+
+_READ_DEFS: tuple[Callable[[], ToolDef], ...] = (_list_drawings, _audit, _explain_rule, _summary, _query, _diff,
+                                                 _get_scene, _measure, _ergonomic_checks)
 
 
 def tool_defs(o: SpecOptions) -> list[ToolDef]:
-    """Công cụ của một phiên theo thứ tự cố định: 6 công cụ đọc; + bản không hồ sơ khi so sánh; + propose khi bật."""
+    """Công cụ của một phiên theo thứ tự cố định: 9 công cụ đọc (6 bản vẽ + 3 cảnh 3D/công thái học); + bản không hồ sơ khi so sánh; + propose khi bật."""
     out = [f() for f in _READ_DEFS]
     if o.compare_without_profile:
         out.append(_baseline())

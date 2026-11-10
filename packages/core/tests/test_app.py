@@ -846,6 +846,35 @@ def test_scene_view_only(served):
     assert "scene/cabinet" not in json.dumps(s["boxes"])
 
 
+def test_scene2_item_gap_proposal_and_glb(served):
+    import base64
+
+    f = "scene/company_kitchen.dxf"
+    status, _h, s = served.post("/api/scene", {"file": f, "item": "SYN.10"})
+    assert status == 200 and s["schema"] == "cg.scene/2" and s["counts"]["modules"] == 2 and not s["gaps"]
+    assert {m["w"]["src"] for m in s["modules"]} == {"kích thước"}
+    # đề xuất AI: số đo bị loại, ghép/nhãn hợp lệ được lưu chờ xác nhận
+    elev = next(lk["elevation"] for lk in s["links"])
+    plan = next(lk["plan"] for lk in s["links"])
+    status, _h, p = served.post("/api/scene/propose", {"file": f, "item": "SYN.10", "proposals": [
+        {"key": "module:M2:d", "value": "400", "reason": "đoán"},
+        {"key": "label:M1", "value": "tủ bếp dưới", "reason": "cao 850, chân ở sàn"},
+        {"key": f"link:{elev}", "value": plan}]})
+    assert status == 200 and len(p["accepted"]) == 2 and p["rejected"][0]["key"] == "module:M2:d"
+    assert {x["key"] for x in p["scene"]["proposals"]} == {"label:M1", f"link:{elev}"}
+    status, _h, s2 = served.post("/api/scene/set", {"file": f, "item": "SYN.10", "key": "label:M1", "value": "tủ bếp dưới"})
+    assert status == 200 and next(m for m in s2["modules"] if m["id"] == "M1")["label"] == "tủ bếp dưới"
+    assert all(x["key"] != "label:M1" for x in s2["proposals"])
+    status, _h, bad = served.post("/api/scene/set", {"file": f, "item": "SYN.10", "key": "room:ceiling", "value": "abc"})
+    assert status == 422
+    status, _h, g = served.post("/api/scene/glb", {"file": f, "item": "SYN.10"})
+    blob = base64.b64decode(g["b64"])
+    assert status == 200 and blob[:4] == b"glTF" and g["scene_hash"] == s2["scene_hash"]
+    assert g["scene_hash"].encode() in blob  # xem trước = xuất: cùng mã cảnh trong GLB
+    status, _h, pr = served.post("/api/scene/prompt", {"file": f, "item": "SYN.10"})
+    assert status == 200 and "company_kitchen" not in json.dumps(pr) and pr["views"]
+
+
 def test_drawing_list_is_capped(ws, monkeypatch):
     from cadguard.app import api as app_api
 
