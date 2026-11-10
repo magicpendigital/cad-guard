@@ -1,0 +1,130 @@
+# standards/sheet-layout-v0.yaml — trình bày tờ theo template của công ty (kế hoạch sheets-presentation mục 4.3).
+# Luật đọc chỉ mục tờ (sheets.py) + template cg.template/1 (cadguard template learn); không có template thì bỏ qua.
+# Sửa mặc định = tạo phiên bản chuẩn mới; người dùng bật/tắt, đổi mức độ trên giao diện (rule_config.py).
+name: sheet-layout-v0
+version: 0.1.0
+description: 'Trình bày tờ theo template công ty v0: khung tên, trường bắt buộc, tỉ lệ, vùng vẽ, cỡ chữ in, đánh số, chữ Unicode.'
+globals:
+  # Đưa vào lúc nạp từ <dự án>/.cadguard/template/template.yaml (hoặc template của máy). Không sửa ở đây.
+  template: null
+rules:
+- id: TP-01
+  title: Mỗi tờ dùng đúng khung tên của template đã chọn
+  reads: chỉ mục tờ (khung trong Model), tên khối khung
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: 'plans/cad-guard-sheets-presentation.md mục 4.3; template công ty'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-02
+  title: Định nghĩa khối khung tên khớp template (không bị sửa, phá khối, sai phiên bản)
+  reads: định nghĩa khối (số đối tượng, loại, khung bao)
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'mục 4.3; chữ ký khối học từ tờ mẫu'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-03
+  title: Thông tin cố định trong khung tên (tên công ty, địa chỉ, nhãn) đúng template
+  reads: thuộc tính khung tên, trường cố định của template
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'mục 4.3; TCVN 3821:2008 (ISO 7200)'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-04
+  title: Trường bắt buộc của khung tên có giá trị và đúng mẫu
+  reads: thuộc tính khung tên
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: 'mục 4.3; TCVN 3821:2008 (ISO 7200)'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-05
+  title: Hệ số khung thuộc danh sách tỉ lệ cho phép, phóng đều X = Y
+  reads: hệ số chèn khung tên
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'mục 4.3; tệp phiên thử có hệ số 19,77 và 66,87'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-06
+  title: Tỉ lệ ghi trong khung tên khớp hệ số khung
+  reads: thuộc tính tỉ lệ, hệ số khung
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: 'mục 4.3'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-07
+  title: Nội dung nằm trong vùng vẽ, không tràn khung, không đè dải khung tên
+  reads: toạ độ đối tượng thuộc tờ, vùng vẽ của template
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: 'mục 4.3; TCVN 7285:2003 (ISO 5457) lề trái 20 mm, còn lại 10 mm'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-08
+  title: Không có đối tượng nằm ngoài mọi tờ
+  reads: chỉ mục tờ
+  kind: deterministic
+  severity: I
+  false_positive_risk: low
+  source: 'mục 4.3; tệp phiên thử có đối tượng ngoài tờ'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-09
+  title: Cỡ chữ in ra (chiều cao ÷ hệ số khung) không nhỏ hơn mức tối thiểu của template
+  reads: chiều cao chữ, hệ số khung
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'mục 4.3; TCVN 7284 (ISO 3098) chữ viết trên bản vẽ'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-10
+  title: Số bản vẽ duy nhất, thứ tự khớp vị trí tờ
+  reads: thuộc tính số bản vẽ, thứ tự tờ
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'mục 4.3'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+- id: TP-11
+  title: Các tờ thẳng hàng, khoảng cách đều
+  reads: vị trí khung tờ
+  kind: deterministic
+  severity: I
+  false_positive_risk: medium
+  source: 'mục 4.3 (mức thông tin)'
+  implemented: false
+  enabled: true
+  realtime_ok: false
+- id: TP-12
+  title: Chữ trong tờ là Unicode (không dùng phông TCVN3/VNI)
+  reads: kiểu chữ và phông của chữ thuộc tờ
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'mục 3.1, 4.3; phông Unicode công ty Be Vietnam Pro'
+  implemented: true
+  enabled: true
+  realtime_ok: false

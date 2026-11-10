@@ -158,9 +158,20 @@ def apply_settings(std: Standard, data: dict, where: str = "cài đặt luật")
 
 
 def effective_standard(name: str, standards_dir: Path | None = None, profile: CompanyProfile | None = None,
-                       workspace: Path | None = None, use_settings: bool = True) -> Standard:
+                       workspace: Path | None = None, use_settings: bool = True,
+                       template: Path | None = None) -> Standard:
     """Chuẩn đã áp hồ sơ công ty + cài đặt luật máy + dự án. Hồ sơ viết cho chuẩn khác -> ProfileError (như trước)."""
     std = load_standard(name, standards_dir, profile=profile)
+    if "template" in std.globals:  # gói trình bày: nạp template của dự án/máy (template.py)
+        from .template import TemplateError, find_template, load_template
+
+        tp = Path(template) if template is not None else find_template(workspace)
+        if tp is not None:
+            std = std.model_copy(deep=True)
+            try:
+                std.globals["template"] = load_template(tp)
+            except TemplateError:
+                std.globals["template"] = None
     if not use_settings:
         return std
     std = std.model_copy(deep=True)

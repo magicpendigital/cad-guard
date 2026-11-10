@@ -6,19 +6,39 @@
     {
       "id": "thiet-ke",
       "name": "Thiết kế",
-      "standards": ["design-hygiene-v0"],
+      "standards": [
+        "design-hygiene-v0"
+      ],
       "role": "Nhận yêu cầu từ khách, ra bản triển khai không gian",
       "description": "Vệ sinh và nhất quán bản vẽ trước khi giao Kỹ thuật.",
-      "next": ["ky-thuat"]
+      "next": [
+        "ky-thuat"
+      ]
     },
     {
       "id": "ky-thuat",
       "name": "Kỹ thuật",
-      "standards": ["design-hygiene-v0", "furniture-v0"],
+      "standards": [
+        "design-hygiene-v0",
+        "furniture-v0"
+      ],
       "role": "Triển khai chi tiết, bóc tách, kiểm kích thước và bảng kê",
       "description": "Bản vẽ triển khai: vệ sinh bản vẽ, khung tên, layer, chữ, kích thước, chi tiết.",
-      "next": ["thiet-ke-3d", "lap-trinh-san-xuat"],
+      "next": [
+        "thiet-ke-3d",
+        "lap-trinh-san-xuat"
+      ],
       "priority": true
+    },
+    {
+      "id": "trinh-bay",
+      "name": "Trình bày hồ sơ",
+      "standards": [
+        "sheet-layout-v0"
+      ],
+      "role": "Trình bày tờ theo template công ty trước khi in hồ sơ",
+      "description": "Khung tên, trường bắt buộc, tỉ lệ, vùng vẽ, cỡ chữ in, đánh số tờ, chữ Unicode (gói sheet-layout-v0, cần template học từ tờ mẫu).",
+      "next": []
     },
     {
       "id": "thiet-ke-3d",
@@ -32,7 +52,9 @@
     {
       "id": "lap-trinh-san-xuat",
       "name": "Lập trình sản xuất",
-      "standards": ["furniture-v0"],
+      "standards": [
+        "furniture-v0"
+      ],
       "role": "Chuẩn bị dữ liệu cho máy CNC và cắt",
       "description": "Kiểm trước khi xuất cho máy và xưởng.",
       "next": []

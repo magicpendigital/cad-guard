@@ -91,11 +91,16 @@ def _rel(ws: Workspace, path: Path) -> str:
     return path.resolve().relative_to(ws.root).as_posix()
 
 
-def load_std(standard: str, standards_dir: Path | None, profile: CompanyProfile | None) -> Standard:
+def load_std(standard: str, standards_dir: Path | None, profile: CompanyProfile | None,
+             workspace: Path | None = None) -> Standard:
     if not isinstance(standard, str) or not re.fullmatch(r"[a-z0-9][a-z0-9.\-]*", standard):
         raise ChangesetError("Tên chuẩn không hợp lệ.")
     use = profile if profile is not None and profile.standard == standard else None
     try:
+        if workspace is not None:  # cài đặt luật + template của dự án (rule_config): cùng số với App/CLI/MCP
+            from ..rule_config import effective_standard
+
+            return effective_standard(standard, standards_dir, profile=use, workspace=workspace)
         return load_standard(standard, standards_dir, profile=use)
     except FileNotFoundError:
         raise ChangesetError(f"Không có chuẩn '{standard}'.") from None
@@ -134,7 +139,7 @@ def propose(ws: Workspace, file: str, ops_data: Any, *, standard: str = DEFAULT_
     """Chạy khô và lưu changeset. `ops` (đã kiểm) dùng thay `ops_data` khi người gọi đã tự kiểm/giải mã."""
     path = ws.resolve(file)
     ops = ops if ops is not None else parse_ops(ops_data)
-    std = load_std(standard, standards_dir, profile)
+    std = load_std(standard, standards_dir, profile, ws.root)
     prot = protection_for(protected_layers, profile)
     sha = sha256_file(path)
     before, after = read_doc(path), read_doc(path)
@@ -200,9 +205,10 @@ def output_path(ws: Workspace, cs: Changeset, src: Path, out_dir: str | None) ->
 
 
 def check_profile(cs: Changeset, profile: CompanyProfile | None) -> None:
-    if cs.profile is None:
+    if cs.profile is None or "name" not in cs.profile:  # chỉ cài đặt luật của dự án/máy, không hồ sơ công ty
         return
-    if profile is None or {"name": profile.name, "version": profile.version} != cs.profile:
+    if profile is None or {"name": profile.name, "version": profile.version} != {
+            "name": cs.profile.get("name"), "version": cs.profile.get("version")}:
         raise ChangesetError(f"Changeset được đề xuất với hồ sơ công ty '{cs.profile.get('name')}' "
                              f"{cs.profile.get('version')}; hãy áp dụng với đúng hồ sơ đó (--profile).")
 
@@ -219,7 +225,7 @@ def load_for_apply(ws: Workspace, ref: str, profile: CompanyProfile | None, stan
         raise ChangesetError("Tệp gốc đã thay đổi sau khi đề xuất (mã băm không khớp): từ chối áp dụng. "
                              "Hãy đề xuất lại changeset trên tệp hiện tại.")
     ops = parse_ops(cs.ops)
-    std = load_std(cs.standard, standards_dir, profile)
+    std = load_std(cs.standard, standards_dir, profile, ws.root)
     if std.version != cs.standard_version:
         raise ChangesetError(f"Changeset viết cho {cs.standard} {cs.standard_version}, chuẩn hiện có là {std.version}.")
     prot = Protection(**cs.protection.model_dump())

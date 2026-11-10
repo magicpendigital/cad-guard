@@ -471,6 +471,42 @@ def learn_layers(app: AppData, rel: Any, standard: Any, scope: Any = "project") 
     return {**out, "table": rules_table(app, std)}
 
 
+def template_info(app: AppData) -> dict:
+    from ..template import TemplateError, find_template, load_template
+
+    tp = find_template(app.ws.root)
+    if tp is None:
+        return {"template": None}
+    try:
+        tpl = load_template(tp)
+    except TemplateError as exc:
+        return {"template": None, "error": str(exc)}
+    scope = "project" if tp.is_relative_to(app.ws.root) else "machine"
+    return {"template": {k: tpl.get(k) for k in ("name", "company", "version", "frame", "fields", "rules", "logo", "source")},
+            "scope": scope}
+
+
+def template_learn(app: AppData, rel: Any, sheet: Any, logo: Any = None, name: Any = None) -> dict:
+    """Học template từ một tờ của bản vẽ đang mở; lưu vào <dự án>/.cadguard/template."""
+    from ..template import TemplateError, learn
+
+    path = app.resolve(rel)
+    if not isinstance(sheet, int) or sheet < 1:
+        raise ApiError("Chọn một tờ (số thứ tự từ 1).")
+    lp = None
+    if logo:
+        if not isinstance(logo, str) or len(logo) > 1024:
+            raise ApiError("Đường dẫn logo không hợp lệ.")
+        lp = Path(logo)
+        if lp.suffix.lower() not in (".png", ".jpg", ".jpeg", ".bmp") or not lp.is_file():
+            raise ApiError("Logo phải là tệp ảnh PNG/JPG có thật trên máy.")
+    try:
+        learn(path, sheet, app.ws.root / ".cadguard" / "template", logo=lp, name=name if isinstance(name, str) else "")
+    except TemplateError as exc:
+        raise ApiError(str(exc)) from None
+    return template_info(app)
+
+
 def reset_rule(app: AppData, standard: Any, rule_id: Any, scope: Any = "project") -> dict:
     std = app.check_standard(standard)
     if not isinstance(rule_id, str) or not re.fullmatch(r"[A-Za-z0-9.\-]{1,32}", rule_id):
@@ -588,6 +624,26 @@ def suggest_ops(app: AppData, rel: Any, standard: Any) -> dict:
             "Xoá kiểu chữ và kiểu kích thước không dùng",
             "Chỉ xoá định nghĩa không được tham chiếu; không xoá đối tượng hình học. Đặt cuối để dọn cả kiểu vừa được "
             "giải phóng bởi thao tác đổi kiểu chữ.")
+    from ..template import TemplateError, apply_ops, find_template, load_template
+
+    tp = find_template(app.ws.root)
+    if tp is not None:
+        try:
+            tpl = load_template(tp)
+            fill, notes_t = apply_ops(model, tpl, renumber=False)
+            renum, _n = apply_ops(model, tpl, renumber=True, fill_scale=False, fixed=False)
+        except TemplateError:
+            fill, renum, notes_t = [], [], []
+        if fill:
+            add("TP-06", fill[0], "Điền khung tên theo template (thông tin cố định, tỉ lệ theo hệ số khung)",
+                f"{len(fill[0]['items'])} khung tên được điền lại; chỉ đổi giá trị thuộc tính, không đụng hình vẽ.",
+                checked=False)
+        if renum:
+            add("TP-10", renum[0], "Đánh số bản vẽ lại theo thứ tự tờ",
+                f"{len(renum[0]['items'])} khung tên đổi số theo mẫu của template (trái sang phải, trên xuống dưới).",
+                checked=False)
+        for n in notes_t[:20]:
+            notes.append({"rule_id": "TP-05", "message": n})
     enc = app.structure(model).encoding
     if enc.get("styles") or enc.get("guessed_tcvn3"):
         add("VS-07", {"op": "convert_unicode"}, "Chuyển chữ TCVN3/VNI sang Unicode (phông Be Vietnam Pro)",

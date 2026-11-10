@@ -54,4 +54,4 @@ def sample(handles: list[str], n: int = 5) -> list[str]:
 
 
 # Nạp các module luật để chúng tự đăng ký.
-from . import data_hygiene, hygiene, layers, sheets, text_views  # noqa: E402,F401
+from . import data_hygiene, hygiene, layers, presentation, sheets, text_views  # noqa: E402,F401

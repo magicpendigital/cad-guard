@@ -291,6 +291,71 @@ def cmd_unicode(args: argparse.Namespace) -> int:
     return run_edit(path, [op], yes=args.yes, dwg=args.dwg, label="chuyển Unicode")
 
 
+def cmd_template(args: argparse.Namespace) -> int:
+    """Template trình bày: học từ tờ mẫu, kiểm (gói TP), áp dụng (điền khung tên, đánh số) ra tệp mới."""
+    import json
+
+    from .dwg import DwgError, ensure_dxf
+    from .template import TemplateError, apply_ops, find_template, learn, load_template
+
+    try:
+        path = ensure_dxf(Path(args.path))
+    except DwgError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    ws = Path(args.workspace) if args.workspace else Path(args.path).resolve().parent
+    if args.action == "learn":
+        out = Path(args.out) if args.out else ws / ".cadguard" / "template"
+        try:
+            tpl = learn(path, args.sheet, out, logo=Path(args.logo) if args.logo else None, name=args.name or "",
+                        company=args.company or "")
+        except TemplateError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        fr = tpl["frame"]
+        fixed = [f["tag"] for f in tpl["fields"] if f["kind"] == "fixed"]
+        var = [f["tag"] for f in tpl["fields"] if f["kind"] != "fixed"]
+        print(f"Đã học template '{tpl['name']}' từ tờ {args.sheet}: khung {fr['block']} khổ {fr['paper'] or '?'}; "
+              f"trường cố định: {', '.join(fixed) or '—'}; thay đổi: {', '.join(var) or '—'}; "
+              f"tỉ lệ cho phép: {', '.join(f'1:{x:g}' for x in tpl['rules']['allowed_scales'])}; "
+              f"chữ in tối thiểu {tpl['rules']['min_text_mm']:g} mm" + ("; có logo" if tpl.get("logo") else "") + ".")
+        print(f"Lưu ở: {out}")
+        return 0
+    tp = Path(args.template) if args.template else find_template(ws)
+    if tp is None:
+        print("Chưa có template: chạy 'cadguard template learn <tệp> --sheet N' trước.", file=sys.stderr)
+        return 2
+    if args.action == "check":
+        from .reader_select import read_with
+        from .rule_config import effective_standard
+        from .runner import audit_model
+
+        std = effective_standard("sheet-layout-v0", workspace=ws, template=tp)
+        res = audit_model(read_with(path, "ezdxf"), std)
+        if args.json:
+            print(json.dumps([{"rule_id": f.rule_id, "severity": f.severity, "message": f.message, "count": f.count,
+                               "handles": f.handles} for f in res.findings], ensure_ascii=False, indent=1))
+        else:
+            for f in res.findings:
+                print(f"[{f.severity}] {f.rule_id}: {f.message}")
+            print(f"{len(res.findings)} phát hiện trình bày ({res.rules_run} luật chạy).")
+        return 1 if any(f.severity == "E" for f in res.findings) else 0
+    from .reader_select import read_with
+
+    try:
+        tpl = load_template(tp)
+    except TemplateError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    ops, notes = apply_ops(read_with(path, "ezdxf"), tpl, renumber=args.renumber)
+    for n in notes:
+        print("Không tự làm: " + n)
+    if not ops:
+        print("Khung tên đã khớp template, không có gì để áp dụng.")
+        return 0
+    return run_edit(path, ops, yes=args.yes, standard="sheet-layout-v0", dwg=args.dwg, label="template")
+
+
 def cmd_profile(args: argparse.Namespace) -> int:
     """Hồ sơ số liệu cho bản vẽ thật: chỉ số tổng hợp, khoá là mã băm, không tên tệp/layer/nội dung."""
     from .profile import profile_dxf, profile_dxf_stream
@@ -791,6 +856,22 @@ def main(argv: list[str] | None = None) -> int:
     un.add_argument("--yes", action="store_true", help="áp dụng ngay sau khi xem trước đạt (không hỏi)")
     un.add_argument("--dwg", action="store_true", help="ghi thêm bản DWG của tệp mới (cần accoreconsole)")
     un.set_defaults(fn=cmd_unicode)
+
+    tp = sub.add_parser("template", help="template trình bày của công ty: learn (học từ tờ mẫu) | check | apply")
+    tp.add_argument("action", choices=["learn", "check", "apply"])
+    tp.add_argument("path", help="tệp .dxf (hoặc .dwg khi có AutoCAD bản đầy đủ)")
+    tp.add_argument("--sheet", type=int, default=1, help="learn: số tờ mẫu (đánh số như cadguard sheets)")
+    tp.add_argument("--logo", default=None, help="learn: tệp ảnh logo công ty (PNG…)")
+    tp.add_argument("--name", default=None, help="learn: tên template")
+    tp.add_argument("--company", default=None, help="learn: tên công ty")
+    tp.add_argument("--out", default=None, help="learn: thư mục lưu (mặc định <dự án>/.cadguard/template)")
+    tp.add_argument("--workspace", default=None, help="thư mục dự án (mặc định thư mục chứa bản vẽ)")
+    tp.add_argument("--template", default=None, help="check/apply: tệp template.yaml (mặc định của dự án/máy)")
+    tp.add_argument("--renumber", action="store_true", help="apply: đánh số bản vẽ lại theo thứ tự tờ")
+    tp.add_argument("--json", action="store_true")
+    tp.add_argument("--yes", action="store_true", help="apply: áp dụng ngay khi xem trước đạt")
+    tp.add_argument("--dwg", action="store_true", help="apply: ghi thêm DWG (cần accoreconsole)")
+    tp.set_defaults(fn=cmd_template)
 
     ll = sub.add_parser("learn-layers", help="học quy ước tên layer của công ty từ một bản vẽ (giảm nhiễu LY-01)")
     ll.add_argument("path")

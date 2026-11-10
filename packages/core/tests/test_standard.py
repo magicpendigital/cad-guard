@@ -9,7 +9,7 @@ from cadguard.rules import REGISTRY
 from cadguard.standard import load_standard
 
 REPO = Path(__file__).resolve().parents[3]
-STANDARDS = ["furniture-v0", "design-hygiene-v0"]
+STANDARDS = ["furniture-v0", "design-hygiene-v0", "sheet-layout-v0"]
 # sha256 của standards/furniture-v0.yaml trên `main` (xuống dòng chuẩn hoá về LF). Chuẩn đã công bố không sửa đè.
 FURNITURE_V0_SHA256 = "19cc6ea101bc34a162507139f3ffe2e45a406fa08a9485437c43c61acca257d0"
 
@@ -28,7 +28,7 @@ def test_catalog_is_complete_and_unique(standard):
 def test_implemented_flag_matches_registry(standard):
     flagged = {r.id for r in standard.rules if r.implemented}
     assert flagged <= set(REGISTRY), "mỗi luật `implemented: true` của furniture-v0 phải có hàm luật"
-    assert flagged == {i for i in REGISTRY if not i.startswith("VS-")}, "hàm luật ngoài VS-* phải thuộc furniture-v0"
+    assert flagged == {i for i in REGISTRY if not i.startswith(("VS-", "TP-"))}, "hàm luật ngoài VS-*/TP-* phải thuộc furniture-v0"
 
 
 def test_registry_matches_all_standards():

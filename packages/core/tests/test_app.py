@@ -253,7 +253,7 @@ def test_session_departments_and_drawings(served):
     assert status == 200
     names = {d["name"]: d["standards"] for d in s["departments"]}
     assert names == {"Thiết kế": ["design-hygiene-v0"], "Kỹ thuật": ["design-hygiene-v0", "furniture-v0"],
-                     "Thiết kế 3D": [], "Lập trình sản xuất": ["furniture-v0"]}
+                     "Trình bày hồ sơ": ["sheet-layout-v0"], "Thiết kế 3D": [], "Lập trình sản xuất": ["furniture-v0"]}
     tech = next(d for d in s["departments"] if d["id"] == "ky-thuat")
     assert tech["priority"] is True and tech["next"] == ["thiet-ke-3d", "lap-trinh-san-xuat"] and s["default"] == "ky-thuat"
     assert next(d for d in s["departments"] if d["id"] == "thiet-ke-3d")["view"] == "scene"

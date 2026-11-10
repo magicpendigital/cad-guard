@@ -1448,6 +1448,16 @@
     if (nj || (j.empty_layers || []).length || (j.unused_blocks || []).length)
       kids.push(el("button", {type: "button", class: "sh-chip junk", onclick: showJunk, title: "Ứng viên rác: chỉ là gợi ý để xem, cad-guard không tự xoá"},
         el("span", {class: "sh-n", text: "Ứng viên rác"}), el("span", {class: "sh-sub", text: `${fmt(nj)} đối tượng · ${(j.empty_layers || []).length} layer · ${(j.unused_blocks || []).length} khối`})));
+    const cur = S.sheetSel ? sh.sheets.findIndex((s) => s.id === S.sheetSel) : -1;
+    if (cur >= 0 && sh.sheets[cur].kind === "frame")
+      kids.push(el("button", {type: "button", class: "sh-chip", title: "Lấy tờ này làm tờ mẫu: học khung tên, trường, tỉ lệ, cỡ chữ (gói luật sheet-layout-v0)",
+        onclick: async () => {
+          const logo = window.prompt("Đường dẫn tệp logo công ty (PNG/JPG), để trống nếu không có:", "") || "";
+          try {
+            const r = await api("/api/template/learn", {file: S.file, sheet: cur + 1, logo: logo.trim() || null});
+            toast(`Đã học template '${r.template.name}' từ ${sh.sheets[cur].name}. Quét với chuẩn sheet-layout-v0 để kiểm trình bày.`);
+          } catch (e) { toast(e.message); }
+        }}, el("span", {class: "sh-n", text: "Học template từ tờ này"}), el("span", {class: "sh-sub", text: "khung tên chuẩn công ty"})));
     fill(bar, el("span", {class: "sh-lbl", text: "Tờ"}), ...kids);
   }
 
