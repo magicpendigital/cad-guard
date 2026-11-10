@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import parse_qs, urlsplit
 
+from ..privacy import effective as privacy_effective, label as privacy_label, set_project_anonymize as privacy_set
 from .. import __version__
 from ..review.types import ReviewError, LOCAL
 from ..standard import ProfileError, find_standards_dir, load_profile
@@ -214,6 +215,22 @@ class CadGuardApp:
         cs = api.list_changesets(data)["changesets"]
         return history.overview(data.history.read(), data.departments["departments"], titles.get, realtime.get, cs)
 
+    def _anon(self) -> bool:
+        return self.data.anonymize if self.data is not None else privacy_effective(None, self.config.anonymize)
+
+    def set_privacy(self, value: Any) -> dict:
+        data = self.d()
+        if not isinstance(value, bool):
+            raise ApiError("anonymize phải là true/false.")
+        if self.config.anonymize is not None:
+            raise ApiError("Chế độ dữ liệu đang bị ép bằng cờ dòng lệnh (--anonymize/--no-anonymize).", 409)
+        try:
+            privacy_set(data.ws.root, value)
+        except OSError:
+            raise ApiError("Không ghi được cài đặt dự án.", 500) from None
+        data.anonymize = value
+        return {"anonymize": value, "session": self.session()}
+
     def session(self) -> dict:
         data = self.data
         prof = data.profile if data else None
@@ -225,8 +242,9 @@ class CadGuardApp:
             "profile": None if prof is None else {"name": prof.name, "version": prof.version, "standard": prof.standard,
                                                   "description": prof.description},
             "profile_note": self.profile_note,
-            "anonymize": self.config.anonymize,
-            "data_mode": "Ẩn danh Bậc 1 (mặc định)" if self.config.anonymize else "KHÔNG ẩn danh (--no-anonymize)",
+            "anonymize": self._anon(),
+            "anonymize_forced": self.config.anonymize is not None,
+            "data_mode": privacy_label(self._anon()),
             "flags": {"experimental": eff["experimental"], "allow_openrouter": eff["allow_openrouter"],
                       "account": eff["account"], "cli_experimental": self.config.experimental,
                       "cli_allow_openrouter": self.config.allow_openrouter, "cli_account": self.config.account},
@@ -289,6 +307,7 @@ class CadGuardApp:
                                                            if isinstance(b.get("path"), str) else False},
             ("POST", "/api/project/profile/pick"): lambda q, b: self.pick("profile"),
             ("POST", "/api/project/profile"): lambda q, b: self.set_profile(b.get("path")),
+            ("POST", "/api/project/privacy"): lambda q, b: self.set_privacy(b.get("anonymize")),
             ("GET", "/api/drawings"): lambda q, b: api.list_drawings(d()),
             ("POST", "/api/audit"): lambda q, b: api.audit_file(d(), b.get("file"), b.get("standard"), b.get("dept")),
             ("POST", "/api/autocad/show"): lambda q, b: api.show_in_autocad(d(), b.get("file"), b.get("handles"),
@@ -310,6 +329,10 @@ class CadGuardApp:
             ("GET", "/api/home"): lambda q, b: self.home(q1(q, "dept")),
             ("GET", "/api/overview"): lambda q, b: self.overview(),
             ("GET", "/api/rules"): lambda q, b: api.rules_table(d(), q1(q, "standard")),
+            ("POST", "/api/rules/update"): lambda q, b: api.update_rule(d(), b.get("standard"), b.get("rule_id"),
+                                                                       b.get("changes"), b.get("scope", "project")),
+            ("POST", "/api/rules/reset"): lambda q, b: api.reset_rule(d(), b.get("standard"), b.get("rule_id"),
+                                                                     b.get("scope", "project")),
             ("POST", "/api/changeset/suggest"): lambda q, b: api.suggest_ops(d(), b.get("file"), b.get("standard")),
             ("POST", "/api/changeset/propose"): lambda q, b: api.propose_changeset(
                 d(), b.get("file"), b.get("standard"), b.get("ops"), b.get("protected_layers")),

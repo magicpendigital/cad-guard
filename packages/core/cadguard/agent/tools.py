@@ -125,7 +125,9 @@ def _standard(ctx, name):
     if not path.is_relative_to(root) or not path.is_file():
         raise ToolError("Không tìm thấy chuẩn.")
     profile = ctx.profile if ctx.profile is not None and ctx.profile.standard == name else None
-    return load_standard(name, root, profile=profile)
+    from ..rule_config import effective_standard
+
+    return effective_standard(name, root, profile=profile, workspace=ctx.workspace.root)
 
 
 def _bytes(value):

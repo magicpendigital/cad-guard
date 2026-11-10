@@ -28,3 +28,4 @@ def synthetic(tmp_path_factory):
 @pytest.fixture(autouse=True)
 def isolated_home(tmp_path, monkeypatch):
     monkeypatch.setenv("CADGUARD_HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("CADGUARD_CONFIG_DIR", str(tmp_path / "cfg-auto"))

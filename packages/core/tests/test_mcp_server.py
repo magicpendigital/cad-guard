@@ -107,7 +107,10 @@ def _session(ws_env, body, args=(), prefix=None, extra_env=None, errlog_name="se
 
     params = StdioServerParameters(
         command=sys.executable,
-        args=["-m", "cadguard", "mcp", "--workspace", str(ws_env["ws"]), *args],
+        # Mặc định đã là chế độ nội bộ (quyết định 10/11/2026); các test ở đây kiểm ẩn danh nên bật tường minh.
+        args=["-m", "cadguard", "mcp", "--workspace", str(ws_env["ws"]),
+              *([] if "--no-anonymize" in args or "--internal-default" in args else ["--anonymize"]),
+              *[x for x in args if x != "--internal-default"]],
         env=_env(ws_env["home"], prefix, extra_env),
         cwd=str(ws_env["base"]),
     )
@@ -256,7 +259,7 @@ def _all_outputs(ws_env, args=(), errlog_name="server.err"):
 
 
 @needs_sdk
-def test_anonymized_by_default(ws_env):
+def test_anonymized_when_enabled(ws_env):
     text, err = _all_outputs(ws_env)
     ws = str(ws_env["ws"])
     for secret in (*PRIVATE_NAMES, *PRIVATE_CONTENT, ws, json.dumps(ws)[1:-1], ws.replace("\\", "/")):
@@ -266,11 +269,11 @@ def test_anonymized_by_default(ws_env):
 
 
 @needs_sdk
-def test_no_anonymize_shows_names_and_warns(ws_env):
-    text, err = _all_outputs(ws_env, args=["--no-anonymize"], errlog_name="server_plain.err")
+def test_internal_mode_is_default_and_shows_names(ws_env):
+    text, err = _all_outputs(ws_env, args=["--internal-default"], errlog_name="server_plain.err")
     assert "PRIVATE_LAYER" in text and "private_file.dxf" in text and "PRIVATE_BLOCK" in text
-    assert "PRIVATE_NOTE" in text and "424242.4242" in text  # tắt ẩn danh (Bậc 2, có cảnh báo): thấy cả chữ, toạ độ
-    assert "CẢNH BÁO" in err and "--no-anonymize" in err
+    assert "PRIVATE_NOTE" in text and "424242.4242" in text  # chế độ nội bộ: thấy cả chữ, toạ độ
+    assert "chế độ nội bộ" in err and "--anonymize" in err
 
 
 def _every_tool_on_every_file(ws_env, args, errlog_name):

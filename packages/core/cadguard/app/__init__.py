@@ -19,8 +19,9 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
     p.add_argument("--profile", default=None, metavar="TỆP", help="hồ sơ công ty (YAML cg.company-profile/1)")
     p.add_argument("--port", type=int, default=0, help="cổng (mặc định 0 = ngẫu nhiên); chỉ nghe 127.0.0.1")
     p.add_argument("--no-browser", action="store_true", help="không tự mở trình duyệt; chỉ in địa chỉ")
-    p.add_argument("--no-anonymize", action="store_true",
-                   help="TẮT ẩn danh Bậc 1 cho trợ lý (trợ lý thấy tên layer/tệp/chữ thật). Chỉ dùng khi khách đã đồng ý")
+    p.add_argument("--anonymize", action="store_true", default=None,
+                   help="ép BẬT ẩn danh Bậc 1 cho trợ lý (dự án NDA). Mặc định theo công tắc của dự án; chưa đặt = nội bộ")
+    p.add_argument("--no-anonymize", action="store_true", help="ép chế độ nội bộ (trợ lý thấy nội dung thật)")
     p.add_argument("--experimental", action="store_true", help="bật engine thử nghiệm (codex-cli)")
     p.add_argument("--allow-openrouter", action="store_true", help="bật OpenRouter (bên trung gian thứ ba, mặc định tắt)")
     p.add_argument("--account", choices=["business", "api-key"], default=None,
@@ -40,7 +41,8 @@ def run_from_args(args: argparse.Namespace) -> int:
         print("Cổng phải trong khoảng 0–65535.", file=sys.stderr)
         return 2
     cfg = AppConfig(workspace=ws, profile_path=Path(args.profile).resolve() if args.profile else None,
-                    anonymize=not args.no_anonymize, experimental=args.experimental,
+                    anonymize=True if args.anonymize else (False if args.no_anonymize else None),
+                    experimental=args.experimental,
                     allow_openrouter=args.allow_openrouter, account=args.account,
                     autocad_com=not args.no_autocad_com,
                     standards_dir=Path(args.standards_dir) if args.standards_dir else None)
@@ -58,9 +60,6 @@ def run_from_args(args: argparse.Namespace) -> int:
     print("cad-guard app đang chạy (chỉ máy này, 127.0.0.1). Mở địa chỉ sau trong trình duyệt:")
     print(f"  {url}")
     print("Mã phiên trong địa chỉ là mật khẩu của phiên này: đừng gửi cho người khác. Nhấn Ctrl+C để dừng.")
-    if not cfg.anonymize:
-        print("CẢNH BÁO: đã tắt ẩn danh (--no-anonymize): trợ lý sẽ thấy tên layer/tệp/chữ thật trong bản vẽ.",
-              file=sys.stderr)
     sys.stdout.flush()
     if not args.no_browser:
         import webbrowser

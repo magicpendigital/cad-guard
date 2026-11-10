@@ -68,9 +68,16 @@ def add_arguments(p: argparse.ArgumentParser) -> None:
         "(không mặc định thư mục hiện tại để tránh lộ nhầm thư mục khác).",
     )
     p.add_argument(
+        "--anonymize",
+        action="store_true",
+        default=None,
+        help="BẬT ẩn danh Bậc 1 (dự án có NDA): trợ lý AI chỉ thấy mã phiên thay tên tệp/layer/khối. Mặc định theo "
+        "tệp .cadguard/project.yaml của thư mục làm việc (anonymize: true|false); không đặt thì chế độ nội bộ (không ẩn danh).",
+    )
+    p.add_argument(
         "--no-anonymize",
         action="store_true",
-        help="TẮT ẩn danh Bậc 1 (mặc định BẬT): trợ lý AI sẽ thấy tên tệp/layer/khối thật. Chỉ dùng khi khách đã đồng ý.",
+        help="ép chế độ nội bộ (không ẩn danh) kể cả khi dự án bật ẩn danh.",
     )
     p.add_argument(
         "--standard",
@@ -243,7 +250,10 @@ def run_from_args(args: argparse.Namespace) -> int:
             f"không dùng được với chuẩn '{standard}' (--standard)."
         )
         return 2
-    anonymize = not args.no_anonymize
+    from .privacy import effective as privacy_effective
+
+    flag = True if getattr(args, "anonymize", None) else (False if args.no_anonymize else None)
+    anonymize = privacy_effective(workspace.root, flag)
     ctx = tools.ToolContext(
         workspace,
         Anonymizer(enabled=anonymize),
@@ -269,10 +279,8 @@ def run_from_args(args: argparse.Namespace) -> int:
     if profile is not None:
         _err(f"cad-guard MCP: áp hồ sơ công ty '{profile.name}' phiên bản {profile.version} cho chuẩn {standard}.")
     if not anonymize:
-        _err(
-            "CẢNH BÁO: đã TẮT ẩn danh (--no-anonymize). Trợ lý AI sẽ thấy tên tệp, layer, khối và kiểu chữ thật "
-            "(ngoài Bậc 1). Chỉ dùng khi khách đã đồng ý bằng văn bản."
-        )
+        _err("cad-guard MCP: chế độ nội bộ, trợ lý thấy tên tệp, layer, khối và chữ thật. Dự án có NDA: --anonymize "
+             "hoặc đặt anonymize: true trong .cadguard/project.yaml.")
     allow_propose = bool(getattr(args, "allow_propose", False))
     allow_autocad = bool(getattr(args, "allow_autocad", False))
     server = build_server(ctx, standard, allow_propose=allow_propose, allow_autocad=allow_autocad)

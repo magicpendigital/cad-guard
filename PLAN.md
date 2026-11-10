@@ -1,14 +1,22 @@
 # PLAN.md — kim chỉ nam của cad-guard
 
-Cập nhật: 07/11/2026. Đây là **điểm vào duy nhất** để biết dự án đang ở đâu và làm gì tiếp. Chi tiết, lập luận và nhật ký quyết định vẫn nằm ở các tệp trong `plans/` (liệt kê ở mục 5). Khi hai nơi khác nhau, tệp này ghi trạng thái hiện tại; tệp trong `plans/` ghi lý do và lịch sử.
+Cập nhật: 10/11/2026. Đây là **điểm vào duy nhất** để biết dự án đang ở đâu và làm gì tiếp. Chi tiết, lập luận và nhật ký quyết định vẫn nằm ở các tệp trong `plans/` (liệt kê ở mục 5). Khi hai nơi khác nhau, tệp này ghi trạng thái hiện tại; tệp trong `plans/` ghi lý do và lịch sử.
 
 ## 1. Hướng đã duyệt (không đổi)
 
 - **Hướng C (CEO duyệt 03/11/2026):** làm theo TỆP, DXF là định dạng chung, không phụ thuộc phần mềm CAD. Plugin AutoCAD (hướng D) là lớp bổ sung; CEO đã mở cổng 09/11/2026 (mục 3).
-- Phát hiện lỗi bằng luật tất định; LLM chỉ giải thích và đề xuất.
-- Sửa bản vẽ: đề xuất → xem trước → người xác nhận → tệp **mới** → kiểm → hoàn tác.
-- Trợ lý mặc định ẩn danh Bậc 1. Studio gửi nội dung bản vẽ cho LLM chỉ khi người dùng đồng ý trong phiên.
-- Không đưa bản vẽ thật của khách vào repo, test, telemetry hay worktree của agent phát triển.
+- **Công cụ nội bộ công ty, chạy cục bộ (chủ dự án quyết định 10/11/2026, `plans/cad-guard-sheets-presentation.md` mục 5).** Đã mở: cổng hướng D (áp dụng thay đổi trong AutoCAD, Đợt F); trợ lý mặc định chế độ **nội bộ** (thấy nội dung thật), ẩn danh Bậc 1 là công tắc theo dự án cho hồ sơ NDA (`privacy.py`); Studio không hỏi đồng ý từng phiên; sửa/bật/tắt luật, mức độ, ngưỡng trực tiếp trên giao diện, không tài khoản (`rule_config.py`, thay quyết định 05/11 về admin theo nhóm luật); người dùng tự bật `realtime_ok` (luật chưa đo hiện nhãn "chưa đo"); agent phát triển được đọc bản vẽ thật ở thư mục ngoài repo để chẩn đoán.
+- Phát hiện lỗi bằng luật tất định. LLM được đọc nội dung, nhận xét, đề xuất sửa, dịch; kết quả luật vẫn do code tính, nhận xét của LLM gắn nhãn riêng.
+- **Năm rào giữ nguyên (chủ dự án đồng ý 10/11/2026):** mọi thay đổi có xem trước, bản sao lưu và hoàn tác (rút còn một lần bấm xác nhận), ghi ra tệp **mới**; khoá API không ghi ra tệp; bản vẽ thật không commit vào git, test chỉ dùng DXF tổng hợp; mã phiên tự động của app trên 127.0.0.1; telemetry chỉ số tổng hợp, không `git push`.
+
+### Trả lời mục 10 của đề xuất sheets-presentation (10/11/2026)
+
+1. Giữ năm rào "đề xuất giữ" ở mục 5.
+2. Ngôn ngữ đích: người dùng chọn **Tiếng Anh** hoặc **Tiếng Trung**; ngôn ngữ nguồn tự nhận theo nội dung bản vẽ.
+3. Phông Unicode chuẩn của công ty: **Be Vietnam Pro** (chuyển mã và template).
+4. Template khung tên: **học từ tờ mẫu** của tệp phiên thử; logo công ty Grande lấy từ tệp PNG/PDF của công ty (ngoài repo, người dùng chỉ đường dẫn khi chạy `cadguard template learn --logo`).
+5. Máy chạy **AutoCAD bản đầy đủ** (có COM và `accoreconsole`).
+6. Tệp phiên thử có **40 tờ**; chỉ mục tờ (`sheets.py`) ra đúng 40 sau khi sửa ngưỡng khung tối thiểu và nhận cả tờ trống của bộ khung tên có thuộc tính.
 
 ## 2. Trạng thái thật (có bằng chứng trong repo)
 

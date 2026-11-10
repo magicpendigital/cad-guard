@@ -3,7 +3,7 @@
 - Engine CLI (B): hạn mức tài khoản qua CLI người dùng đã cài và tự đăng nhập. Engine API (C): khoá API của họ.
 - Một lượt = `Engine.run(...)` trong luồng nền; sự kiện đi qua hàng đợi tới luồng HTTP (NDJSON). Dừng = `CancelToken`.
 - Trợ lý chỉ có `propose_changeset` khi người dùng bật công tắc; áp dụng LUÔN do người bấm trong giao diện.
-- Ẩn danh Bậc 1 mặc định (`server_options={"anonymize": True}`); tắt chỉ bằng cờ dòng lệnh `--no-anonymize`.
+- Chế độ dữ liệu theo dự án (`privacy.py`): mặc định nội bộ; dự án NDA bật ẩn danh Bậc 1 (`server_options={"anonymize": True}`).
 - Cấu hình hiệu lực = cờ dòng lệnh HOẶC cấu hình trên giao diện (màn Kết nối AI, `settings.py`): bật thử nghiệm Codex,
   OpenRouter, loại tài khoản agy, mô hình mặc định, trần chi phí mỗi phiên (truyền vào engine API).
 """
@@ -137,7 +137,8 @@ class Assistant:
             {"mode": "api", "title": "Dùng API (khoá của bạn)",
              "note": "Gọi thẳng nhà cung cấp bằng khoá của bạn; tính cước theo token. Khoá không bao giờ quay lại trình duyệt."},
         ]
-        return {"engines": out, "groups": groups, "anonymize": self.config.anonymize,
+        return {"engines": out, "groups": groups,
+                "anonymize": self.data.anonymize if self.data is not None else bool(self.config.anonymize),
                 "default_engine": eff["default_engine"], "max_cost_usd": eff["max_cost_usd"]}
 
     # ---------- một lượt trò chuyện ----------
@@ -177,7 +178,7 @@ class Assistant:
         run = ChatRun(secrets.token_hex(8), CancelToken())
         meta = {"type": "start", "run_id": run.run_id, "engine": name,
                 "mode": "cli" if name in CLI_ENGINES else ("api" if name in API_ENGINES else getattr(engine.info, "mode", "")),
-                "standard": standard, "allow_propose": allow_propose, "anonymize": cfg.anonymize,
+                "standard": standard, "allow_propose": allow_propose, "anonymize": data.anonymize,
                 "max_cost_usd": kwargs.get("max_cost_usd"),
                 "profile": {"name": data.profile.name, "version": data.profile.version} if profile else None}
         with self._lock:
@@ -188,7 +189,7 @@ class Assistant:
             saw_done = False
             try:
                 for ev in engine.run(messages, workspace=data.ws.root, standard=standard, profile=profile,
-                                     allow_propose=allow_propose, server_options={"anonymize": cfg.anonymize},
+                                     allow_propose=allow_propose, server_options={"anonymize": data.anonymize},
                                      cancel=run.cancel):
                     if ev.type == "usage" and isinstance(ev.data.get("usage"), Usage):
                         total.add(ev.data["usage"])

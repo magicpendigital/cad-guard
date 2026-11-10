@@ -201,7 +201,7 @@ def _area(b) -> float:
 
 def _frame_candidates(model: DrawingModel, ents: list[EntityRec], span: float) -> list[dict]:
     ext = {b.name.casefold(): b.extents for b in model.blocks if not b.is_layout}
-    min_size = 0.04 * span
+    min_size = 0.004 * span  # bản vẽ nhiều tờ trong Model: 40 tờ 1:10…1:70 trải rộng; khung nhỏ vẫn phải đủ MIN_CONTENT
     out = []
     for e in ents:
         box = None
@@ -228,10 +228,23 @@ def _frame_candidates(model: DrawingModel, ents: list[EntityRec], span: float) -
 def _accept_frames(cands: list[dict], grid: _Grid) -> list[dict]:
     for c in cands:
         c["content"] = len(grid.inside(c["box"]))
-    cands = [c for c in cands if c["content"] >= MIN_CONTENT]
+    # cùng một khối khung tên có thuộc tính chèn nhiều lần: là bộ tờ, kể cả tờ còn trống (tờ chờ vẽ vẫn được đếm)
+    block_uses: dict[str, int] = {}
+    for c in cands:
+        ins = c.get("insert")
+        if ins is not None and ins.attribs:
+            block_uses[ins.block.casefold()] = block_uses.get(ins.block.casefold(), 0) + 1
+
+    def _titled_set(c) -> bool:
+        ins = c.get("insert")
+        return ins is not None and bool(ins.attribs) and block_uses.get(ins.block.casefold(), 0) >= 3
+
+    cands = [c for c in cands if c["content"] >= MIN_CONTENT or _titled_set(c)]
     # nhóm cùng cỡ (± 1 %): bộ tờ
     for c in cands:
         c["peers"] = sum(1 for d in cands if abs(d["w"] - c["w"]) <= 0.01 * c["w"] and abs(d["h"] - c["h"]) <= 0.01 * c["h"])
+        if _titled_set(c):
+            c["peers"] = max(c["peers"], block_uses[c["insert"].block.casefold()])
     ok = [c for c in cands if c["named"] or c["exact"] or c["peers"] >= 2]
     # bỏ khung nằm trong khung đã nhận (viền trong của cùng khung tên, khung tên phụ), ưu tiên khối có tên khung
     ok.sort(key=lambda c: (-_area(c["box"]), not c["named"]))

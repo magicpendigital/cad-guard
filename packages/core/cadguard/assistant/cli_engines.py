@@ -58,6 +58,8 @@ def mcp_command(workspace: Path, *, profile: Path | None, standard: str | None, 
     opts = options or {}
     if opts.get("anonymize") is False:
         args.append("--no-anonymize")
+    elif opts.get("anonymize") is True:
+        args.append("--anonymize")
     if opts.get("stream_threshold_mb") is not None:
         args += ["--stream-threshold-mb", f"{float(opts['stream_threshold_mb']):g}"]
     if opts.get("max_entity_records") is not None:

@@ -284,9 +284,26 @@ def test_audit_explain_rules_on_synthetic(served):
     assert status == 404
 
     status, _h, r = served.get("/api/rules", standard="design-hygiene-v0")
-    assert status == 200 and r["read_only"] is True and r["counts"]["total"] == len(r["rules"]) >= 7
+    assert status == 200 and r["read_only"] is False and r["counts"]["total"] == len(r["rules"]) >= 7
     row = next(x for x in r["rules"] if x["id"] == "VS-02")
     assert row["params_default"] == row["params_effective"] and row["params_changed"] == []
+
+    # Sửa luật trên giao diện, không tài khoản: tắt VS-06 cho dự án -> lần quét sau không còn VS-06.
+    status, _h, before = served.post("/api/audit", {"file": "hygiene_bad.dxf", "standard": "design-hygiene-v0"})
+    assert status == 200 and any(g_rule == "VS-06" for g_rule in _rule_ids(before))
+    status, _h, up = served.post("/api/rules/update", {"standard": "design-hygiene-v0", "rule_id": "VS-06",
+                                                       "changes": {"enabled": False, "severity": "I"}})
+    assert status == 200 and up["rule"] == {"enabled": False, "severity": "I"}
+    assert next(x for x in up["table"]["rules"] if x["id"] == "VS-06")["enabled"] is False
+    status, _h, after = served.post("/api/audit", {"file": "hygiene_bad.dxf", "standard": "design-hygiene-v0"})
+    assert "VS-06" not in _rule_ids(after)
+    status, _h, bad = served.post("/api/rules/update", {"standard": "design-hygiene-v0", "rule_id": "VS-06",
+                                                        "changes": {"severity": "X"}})
+    assert status == 400
+    status, _h, rs = served.post("/api/rules/reset", {"standard": "design-hygiene-v0", "rule_id": "VS-06"})
+    assert status == 200 and rs["rule"] == {} and len(rs["table"]["log"]) == 2
+    status, _h, again = served.post("/api/audit", {"file": "hygiene_bad.dxf", "standard": "design-hygiene-v0"})
+    assert "VS-06" in _rule_ids(again)
 
     status, _h, s = served.post("/api/summary", {"file": BAD})
     assert status == 200 and s["layer_count"] > 0 and s["file"] == BAD
@@ -511,7 +528,7 @@ def test_no_anonymize_flag_is_reported_and_passed(ws):
     try:
         c = Client(app)
         status, _h, s = c.get("/api/session")
-        assert s["anonymize"] is False and "KHÔNG" in s["data_mode"]
+        assert s["anonymize"] is False and "Nội bộ" in s["data_mode"]
         conn, resp = _stream(c, {"engine": "fake-api", "messages": [{"role": "user", "content": "x"}],
                                  "standard": "furniture-v0"})
         _lines(resp)
@@ -1134,3 +1151,13 @@ def test_cli_app_workspace_is_optional():
     p = argparse.ArgumentParser()
     add_arguments(p)
     assert p.parse_args([]).workspace is None
+
+
+def _rule_ids(rep: dict) -> set[str]:
+    out = set()
+    for g in rep.get("groups", []):
+        for r in g.get("rules", []):
+            out.add(r["rule_id"])
+    for f in rep.get("findings", []) or []:
+        out.add(f["rule_id"])
+    return out

@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from ..agent import tools
+from .. import privacy, rule_config
+from ..rule_config import effective_standard
 from ..agent.anonymize import Anonymizer
 from ..agent.workspace import PathDenied, Workspace
 from ..changeset.apply import ID_RE, STORE_DIR, ChangesetError, apply, load_changeset, propose, undo
@@ -51,7 +53,7 @@ class ApiError(ValueError):
 class AppConfig:
     workspace: Path | None = None  # None = mở ứng dụng chưa chọn dự án (màn chọn dự án)
     profile_path: Path | None = None
-    anonymize: bool = True
+    anonymize: bool | None = None  # None = theo công tắc của dự án (.cadguard/project.yaml), mặc định nội bộ
     experimental: bool = False
     allow_openrouter: bool = False
     account: str | None = None
@@ -71,6 +73,7 @@ class AppData:
     standards_dir: Path = field(init=False)
     departments: dict = field(init=False)
     history: History = field(init=False)
+    anonymize: bool = field(init=False, default=False)
     previews: PreviewManager = field(init=False)
     _reviews: Any = field(init=False, default=None)
     _structs: dict = field(init=False, default_factory=dict)
@@ -97,6 +100,7 @@ class AppData:
         except PathDenied:
             raise ApiError("Thư mục dự án không tồn tại hoặc không đọc được.") from None
         self.history = History(self.ws.root)
+        self.anonymize = privacy.effective(self.ws.root, self.config.anonymize)
         self.previews = PreviewManager(self.ws.root)
         self.standards_dir = Path(self.config.standards_dir or find_standards_dir(Path(__file__).resolve())).resolve()
         if self.config.profile_path:
@@ -120,7 +124,9 @@ class AppData:
     def load_std(self, standard: str, with_profile: bool = True) -> Standard:
         standard = self.check_standard(standard)
         try:
-            return load_standard(standard, self.standards_dir, profile=self.profile_for(standard) if with_profile else None)
+            return effective_standard(standard, self.standards_dir,
+                                      profile=self.profile_for(standard) if with_profile else None,
+                                      workspace=self.ws.root, use_settings=with_profile)
         except ProfileError as exc:
             raise ApiError(str(exc)) from None
 
@@ -405,17 +411,22 @@ def rules_table(app: AppData, standard: Any) -> dict:
     """Tab Luật áp dụng (chỉ đọc): luật của chuẩn, tham số mặc định và đang áp (hồ sơ công ty), bật/tắt."""
     base = app.load_std(standard, with_profile=False)
     eff = app.load_std(standard, with_profile=True)
+    proj = rule_config.scope_settings(base.name, "project", app.ws.root)
+    mach = rule_config.scope_settings(base.name, "machine", None)
     rows = []
     for spec in base.rules:
         e = eff.rule(spec.id) or spec
         changed = sorted(k for k in spec.params if e.params.get(k) != spec.params.get(k))
         rows.append({
-            "id": spec.id, "title": spec.title, "severity": spec.severity, "kind": spec.kind,
+            "id": spec.id, "title": spec.title, "severity": e.severity, "severity_default": spec.severity,
+            "kind": spec.kind,
             "false_positive_risk": spec.false_positive_risk, "source": spec.source, "reads": spec.reads,
             "implemented": spec.implemented, "realtime_ok": spec.realtime_ok,
             "enabled_default": spec.enabled, "enabled": e.enabled,
             "params_default": spec.params, "params_effective": e.params, "params_changed": changed,
             "fix_ops": FIXABLE_RULES.get(spec.id, []),
+            "settings": {"project": proj.get(spec.id) or {}, "machine": mach.get(spec.id) or {}},
+            "measured": spec.realtime_ok,
         })
     globals_changed = sorted(k for k in base.globals if eff.globals.get(k) != base.globals.get(k))
     prof = app.profile
@@ -430,8 +441,34 @@ def rules_table(app: AppData, standard: Any) -> dict:
                    "running": sum(r["implemented"] and r["enabled"] for r in rows),
                    "disabled_by_profile": sum(r["enabled_default"] and not r["enabled"] for r in rows),
                    "params_changed": sum(bool(r["params_changed"]) for r in rows)},
-        "read_only": True,
+        "read_only": False,
+        "log": rule_config.read_log("project", app.ws.root, 30),
     }
+
+
+def update_rule(app: AppData, standard: Any, rule_id: Any, changes: Any, scope: Any = "project") -> dict:
+    """Sửa một luật (bật/tắt, mức độ, tham số) ở phạm vi dự án hoặc máy; có hiệu lực ở lần quét sau."""
+    std = app.check_standard(standard)
+    if not isinstance(rule_id, str) or not re.fullmatch(r"[A-Za-z0-9.\-]{1,32}", rule_id):
+        raise ApiError("Mã luật không hợp lệ.")
+    try:
+        out = rule_config.update_rule(std, rule_id, changes, scope=scope if isinstance(scope, str) else "",
+                                      workspace=app.ws.root, standards_dir=app.standards_dir)
+    except rule_config.RuleSettingsError as exc:
+        raise ApiError(str(exc)) from None
+    return {**out, "table": rules_table(app, std)}
+
+
+def reset_rule(app: AppData, standard: Any, rule_id: Any, scope: Any = "project") -> dict:
+    std = app.check_standard(standard)
+    if not isinstance(rule_id, str) or not re.fullmatch(r"[A-Za-z0-9.\-]{1,32}", rule_id):
+        raise ApiError("Mã luật không hợp lệ.")
+    try:
+        out = rule_config.reset_rule(std, rule_id, scope=scope if isinstance(scope, str) else "",
+                                     workspace=app.ws.root, standards_dir=app.standards_dir)
+    except rule_config.RuleSettingsError as exc:
+        raise ApiError(str(exc)) from None
+    return {**out, "table": rules_table(app, std)}
 
 
 # ---------- gợi ý thao tác sửa từ phát hiện (docs/changeset.md mục 3) ----------

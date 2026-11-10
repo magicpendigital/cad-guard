@@ -267,14 +267,13 @@
   function renderSession() {
     const s = S.session;
     $("projTop").textContent = s.project ? s.project.name : "chưa mở";
-    $("dataMode").textContent = s.anonymize ? "Bậc 1" : "KHÔNG ẩn danh";
-    $("dataChip").classList.toggle("danger", !s.anonymize);
+    $("dataMode").textContent = s.anonymize ? "Ẩn danh (NDA)" : "Nội bộ";
+    $("dataChip").classList.toggle("danger", false);
     $("dataChip").title = s.anonymize
-      ? "Bậc 1: trợ lý chỉ thấy kết quả công cụ đã ẩn danh (mã F_…, L_…), không thấy tên layer/tệp/chữ."
-      : "Đã khởi động với --no-anonymize: trợ lý thấy tên layer/tệp/chữ thật.";
+      ? "Dự án NDA: trợ lý chỉ thấy kết quả công cụ đã ẩn danh (mã F_…, L_…). Chức năng dịch bị khoá. Đổi ở Kết nối AI."
+      : "Nội bộ: trợ lý thấy nội dung thật của bản vẽ để hiểu và đề xuất. Dự án có NDA: bật ẩn danh ở Kết nối AI.";
     const ab = $("anonBanner");
-    ab.hidden = s.anonymize;
-    if (!s.anonymize) ab.textContent = "Cảnh báo: ẩn danh đã TẮT (khởi động với --no-anonymize). Trợ lý thấy tên layer, tên tệp và chữ thật trong bản vẽ. Chỉ dùng khi khách đã đồng ý; muốn bật lại thì khởi động lại không có cờ này.";
+    ab.hidden = true;
     const saved = localStorage.getItem("cg-dept");
     S.dept = deptById(S.dept && S.dept.id) || deptById(saved) || deptById(s.default) || s.departments[0];
     renderDeptMenu();
@@ -1302,7 +1301,9 @@
         el("button", {class: "f-rule link", type: "button", title: "Xem luật này", onclick: (e) => { e.stopPropagation(); showExplain(f.rule_id, f.std); }}, f.rule_id),
         tierPill(f), f.count > 1 ? pill("neu sm", S.sheetSel && !findingWide(f) ? `${fmt(countItems(inSheet))} chỗ trong tờ` : `${fmt(f.count)} chỗ`) : null,
         S.sheets && S.sheets.sheets.length && findingWide(f) ? pill("neu sm", "cả bản vẽ") : null,
-        el("span", {class: "std"}, pill("neu sm", f.std))),
+        el("span", {class: "std"}, pill("neu sm", f.std)),
+        el("button", {class: "link sm", type: "button", title: "Tắt luật này cho dự án (quét lại để thấy kết quả)", onclick: (e) => { e.stopPropagation(); disableRule(f.rule_id, f.std); }}, "Tắt luật"),
+        el("button", {class: "link sm", type: "button", title: "Sửa ngưỡng, mức độ của luật", onclick: async (e) => { e.stopPropagation(); await loadRulesQuiet(); showExplain(f.rule_id, f.std); }}, "Sửa ngưỡng")),
       el("div", {class: "f-title", text: f.title}),
       el("div", {class: "f-d"}, el("ul", {}, inSheet.slice(0, 3).map((it) => el("li", {text: it.message}))),
         inSheet.length > 3 ? el("span", {class: "muted", text: `+${inSheet.length - 3} mục khác`}) : null),
@@ -2017,7 +2018,7 @@
     const e = S.engine;
     $("engineName").textContent = e ? e.title.replace(/ \(.*$/, "").replace(/ — .*/, "") : "chưa có";
     const anon = S.session ? S.session.anonymize : true;
-    fill($("chatHead"), icon("bot"), el("span", {}, e ? ["Đang dùng ", b(e.title), anon ? " · chỉ thấy kết quả công cụ đã ẩn danh" : " · KHÔNG ẩn danh (--no-anonymize)"]
+    fill($("chatHead"), icon("bot"), el("span", {}, e ? ["Đang dùng ", b(e.title), anon ? " · dự án NDA: chỉ thấy kết quả đã ẩn danh" : " · nội bộ: thấy nội dung bản vẽ"]
       : "Chưa có trợ lý dùng được: cài/đăng nhập một CLI hoặc nhập khoá API ở màn Kết nối AI."));
     $("sendBtn").disabled = !e || S.busy;
     const items = [];
@@ -2185,8 +2186,8 @@
     const stdSel = $("ruleStd").value;
     const deps = S.session.departments;
     const deptsOf = (std) => deps.filter((d) => d.standards.includes(std));
-    const all = ruleRows().filter((r) => !stdSel || r.std === stdSel);
-    fill($("srcline"), pill("info", "Chỉ đọc"),
+    const all = ruleRows().filter((r) => (!stdSel || r.std === stdSel) && (r.implemented || F.kind === "todo"));
+    fill($("srcline"), pill("ok", "Sửa được, không cần tài khoản"),
       el("span", {}, Object.values(S.rules).map((d, i) => [i ? " · " : "", "Chuẩn ", b(`${d.standard} ${d.version}`)])),
       el("span", {}, "Hồ sơ công ty: ", S.session.profile ? b(`${S.session.profile.name} ${S.session.profile.version}`) : "không dùng"),
       el("span", {}, "Danh mục sinh từ tệp: ", Object.keys(S.rules).map((n, i) => [i ? " + " : "", el("code", {text: `standards/${n}.yaml`})]), " + ", el("code", {text: "departments.json"})));
@@ -2202,7 +2203,7 @@
         el("div", {class: "nm", text: d.name}), el("div", {class: "big", text: `${L.length} luật`}), bar,
         el("div", {class: "sub", text: d.standards.length ? `${run} đang chạy · ${off} tắt · ${nc} chưa cài code` : "Chưa có chuẩn (đang phát triển)"}));
     };
-    const todo = all.filter((r) => !r.implemented).length;
+    const todo = ruleRows().filter((r) => (!stdSel || r.std === stdSel) && !r.implemented).length;
     const covs = $("covs");
     covs.classList.toggle("c-auto", true);
     fill(covs, ...deps.map(card), el("button", {class: "cov gap", type: "button", "aria-pressed": F.kind === "todo" ? "true" : "false",
@@ -2217,7 +2218,7 @@
       if (F.kind === "run") return r.implemented && r.enabled;
       if (F.kind === "todo") return !r.implemented;
       if (F.kind === "off") return r.enabled_default && !r.enabled;
-      if (F.kind === "changed") return r.params_changed.length > 0;
+      if (F.kind === "changed") return r.params_changed.length > 0 || r.severity !== r.severity_default;
       return true;
     });
     const paramNodes = (r) => {
@@ -2231,8 +2232,10 @@
     fill($("rbody"), ...(rows.length ? rows.map((r) => {
       const sv = SEV[r.severity] || ["neu", r.severity];
       const ds = deptsOf(r.std);
-      const st = [!r.implemented ? pill("neu sm", "Chưa cài code") : !r.enabled ? pill("warn sm", r.enabled_default ? "Tắt bởi hồ sơ" : "Tắt") : pill("ok sm", "Đang chạy", "check")];
-      if (r.params_changed.length) st.push(pill("edit sm", "Hồ sơ chỉnh tham số"));
+      const st = [!r.implemented ? pill("neu sm", "Chưa cài code") : !r.enabled ? pill("warn sm", r.enabled_default ? "Đã tắt" : "Tắt") : pill("ok sm", "Đang chạy", "check")];
+      if (r.params_changed.length) st.push(pill("edit sm", "Đã chỉnh tham số"));
+      if (r.severity !== r.severity_default) st.push(pill("edit sm", `Mức ${r.severity_default} → ${r.severity}`));
+      if (r.implemented && !r.measured) st.push(pill("neu sm", "Chưa đo"));
       if (r.fix_ops.length) st.push(pill("info sm", "Có thao tác sửa"));
       return el("tr", {class: "row" + (r.implemented && r.enabled ? "" : " off"), onclick: (e) => { if (!e.target.closest("button")) showExplain(r.id, r.std); }},
         el("td", {}, el("button", {class: "code", type: "button", "aria-label": "Mở chi tiết luật " + r.id, onclick: () => showExplain(r.id, r.std)}, r.id),
@@ -2242,7 +2245,7 @@
         el("td", {}, paramNodes(r)),
         el("td", {}, el("div", {class: "stack"}, st)));
     }) : [el("tr", {}, el("td", {colspan: "5"}, emptyBox("Không có luật nào khớp bộ lọc", "Thử bỏ bớt bộ lọc.")))]));
-    $("rfoot").textContent = `Hiển thị ${rows.length} / ${all.length} luật. Bấm mã luật để xem chi tiết. Muốn đổi ngưỡng cho công ty: sửa hồ sơ công ty (YAML); đổi luật/ngưỡng của chuẩn: tạo phiên bản chuẩn mới.`;
+    $("rfoot").textContent = `Hiển thị ${rows.length} / ${all.length} luật. Bấm một luật để bật/tắt, đổi mức độ hoặc ngưỡng (dự án này hoặc mọi dự án trên máy). Luật chưa cài code ẩn mặc định.`;
     fill($("vhist"), ...Object.values(S.rules).map((d) => el("li", {}, el("time", {text: d.version}), el("span", {}, b(d.standard), " · ", d.description || `${d.counts.total} luật, ${d.counts.implemented} đã có code`))),
       S.session.profile ? el("li", {}, el("time", {text: S.session.profile.version}), el("span", {}, b(`Hồ sơ ${S.session.profile.name}`), ` · áp cho ${S.session.profile.standard}`)) : null);
   }
@@ -2265,6 +2268,7 @@
           ["Đọc gì", Array.isArray(r.reads) ? r.reads.join(", ") : r.reads], ["Hồ sơ công ty", r.profile ? `${r.profile.name} ${r.profile.version}` : "không áp"]]),
         el("h3", {text: "Tham số đang áp"}),
         params.length ? kv(params.map(([k, v]) => [k, JSON.stringify(v)])) : el("p", {text: "Không có tham số."}),
+        r.implemented ? ruleEditor(r.id, std) : null,
         r.fix_ops && r.fix_ops.length ? [el("h3", {text: "Thao tác sửa có sẵn"}), el("p", {text: r.fix_ops.join(", ")})] : null,
         r.description_md ? [el("h3", {text: "Trong tài liệu chuẩn"}), el("pre", {text: r.description_md})] : null),
       el("div", {class: "dr-f"}, el("span", {class: "spacer"}), el("button", {class: "btn-s", type: "button", onclick: closeDrawer}, "Đóng")));
@@ -2272,6 +2276,80 @@
     close.focus();
   }
   function closeDrawer() { const d = $("drawer"); d.classList.remove("on"); }
+
+  // Sửa luật trên giao diện, không tài khoản: bật/tắt, mức độ, tham số; phạm vi dự án hoặc mọi dự án trên máy.
+  function ruleRow(id, std) {
+    const data = (S.rules || {})[std];
+    return data ? data.rules.find((x) => x.id === id) : null;
+  }
+  async function saveRule(std, id, changes, scope, reset) {
+    try {
+      const res = await api(reset ? "/api/rules/reset" : "/api/rules/update", reset ? {standard: std, rule_id: id, scope} : {standard: std, rule_id: id, changes, scope});
+      S.rules = S.rules || {};
+      S.rules[std] = res.table;
+      toast(reset ? `Đã đưa ${id} về mặc định. Lần quét sau áp dụng.` : `Đã lưu ${id}. Lần quét sau áp dụng.`);
+      if (S.screen === "rules") renderRules();
+      showExplain(id, std);
+      return true;
+    } catch (e) { toast(e.message); return false; }
+  }
+  function ruleEditor(id, std) {
+    const row = ruleRow(id, std);
+    if (!row) {
+      if (S.session && S.session.standards) loadRulesQuiet().then(() => { if (ruleRow(id, std)) showExplain(id, std); });
+      return el("p", {class: "meta", text: "Đang tải cài đặt luật…"});
+    }
+    const scopeSel = el("select", {"aria-label": "Phạm vi áp dụng"},
+      el("option", {value: "project", text: "Dự án này"}), el("option", {value: "machine", text: "Mọi dự án trên máy"}));
+    const en = el("input", {type: "checkbox", id: "reEn"}); en.checked = row.enabled;
+    const sev = el("select", {id: "reSev", "aria-label": "Mức độ"}, ["E", "W", "I"].map((k) => el("option", {value: k, text: `${k} · ${SEV[k][1]}`})));
+    sev.value = row.severity;
+    const inputs = {};
+    const prm = Object.entries(row.params_default || {}).map(([k, d0]) => {
+      const cur = row.params_effective[k];
+      let inp;
+      if (typeof d0 === "boolean") { inp = el("input", {type: "checkbox"}); inp.checked = !!cur; }
+      else if (typeof d0 === "number") { inp = el("input", {type: "number", step: "any", value: String(cur)}); }
+      else if (Array.isArray(d0)) { inp = el("textarea", {rows: "2"}); inp.value = (cur || []).join("\n"); }
+      else { inp = el("input", {type: "text", value: String(cur ?? "")}); }
+      inputs[k] = [inp, d0];
+      return el("label", {class: "prm"}, el("span", {}, k, el("span", {class: "meta", text: ` (mặc định ${JSON.stringify(d0)})`})), inp);
+    });
+    const read = () => {
+      const params = {};
+      for (const [k, [inp, d0]] of Object.entries(inputs)) {
+        let v;
+        if (typeof d0 === "boolean") v = inp.checked;
+        else if (typeof d0 === "number") { v = Number(inp.value); if (Number.isInteger(d0) && !Number.isInteger(v)) v = Math.round(v); }
+        else if (Array.isArray(d0)) v = inp.value.split(/\n/).map((s) => s.trim()).filter(Boolean);
+        else v = inp.value;
+        params[k] = JSON.stringify(v) === JSON.stringify(d0) ? null : v;
+      }
+      return {enabled: en.checked === row.enabled_default ? null : en.checked, severity: sev.value === row.severity_default ? null : sev.value, params};
+    };
+    const set = row.settings || {};
+    const where = [Object.keys(set.machine || {}).length ? "máy" : "", Object.keys(set.project || {}).length ? "dự án" : ""].filter(Boolean).join(" + ");
+    return [el("h3", {text: "Sửa luật"}),
+      el("p", {class: "meta", text: "Không cần tài khoản. Lưu vào cài đặt của dự án hoặc của máy; tệp chuẩn gốc không đổi nên luôn về mặc định được. " + (where ? `Đang có cài đặt riêng ở: ${where}.` : "Đang dùng mặc định.")}),
+      row.measured ? null : el("p", {class: "meta"}, pill("neu sm", "Chưa đo"), " Độ chính xác của luật chưa được đo trên bản vẽ thật."),
+      el("div", {class: "re-grid"},
+        el("label", {for: "reEn", class: "prm"}, en, " Bật luật"),
+        el("label", {class: "prm"}, el("span", {text: "Mức độ"}), sev),
+        ...prm,
+        el("label", {class: "prm"}, el("span", {text: "Áp cho"}), scopeSel)),
+      el("div", {class: "bar-act mt6"},
+        el("button", {class: "btn-p btn-sm", type: "button", onclick: () => saveRule(std, id, read(), scopeSel.value, false)}, "Lưu"),
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: () => saveRule(std, id, null, scopeSel.value, true)}, "Về mặc định"))];
+  }
+  async function loadRulesQuiet() {
+    if (S.rules) return;
+    S.rules = {};
+    try { for (const n of S.session.standards) S.rules[n] = await api("/api/rules?standard=" + encodeURIComponent(n)); } catch (e) { /* bỏ qua */ }
+  }
+  async function disableRule(id, std) {
+    await loadRulesQuiet();
+    await saveRule(std, id, {enabled: false}, "project", false);
+  }
 
   // ---------- KẾT NỐI AI ----------
   const PROV_TITLE = {anthropic: "Anthropic", openai: "OpenAI", gemini: "Google Gemini", openrouter: "OpenRouter", ollama: "Ollama (trên máy)"};
@@ -2442,12 +2520,18 @@
     fill(def, el("option", {value: "", text: "Tự chọn engine đầu tiên dùng được"}), S.engines.map((e) => el("option", {value: e.name, text: e.title + (e.available ? "" : " (chưa dùng được)")})));
     def.value = ai.default_engine || "";
     const anon = S.session ? S.session.anonymize : true;
-    const tier = (checked, t, d, extra) => el("label", {class: "dis"}, el("input", {type: "radio", name: "tier", disabled: true, checked: !!checked}),
+    const forced = S.session && S.session.anonymize_forced;
+    const setPriv = async (v) => {
+      try { const r = await api("/api/project/privacy", {anonymize: v}); S.session = r.session; renderSession(); renderConnect(); toast(v ? "Đã bật ẩn danh cho dự án này." : "Đã chuyển dự án sang chế độ nội bộ."); }
+      catch (err) { toast(err.message); renderConnect(); }
+    };
+    const tier = (checked, t, d, extra, val) => el("label", {class: val === undefined || forced ? "dis" : ""}, el("input", {type: "radio", name: "tier", disabled: val === undefined || forced || !S.session || !S.session.project, checked: !!checked,
+      onchange: val === undefined ? null : () => setPriv(val)}),
       el("span", {}, el("span", {class: "t"}, t, extra || null), el("br"), el("span", {class: "d", text: d})));
     fill($("tiers"),
       tier(false, "Bậc 0 · Không dùng AI", "Chỉ chạy bộ luật. Không cần làm gì: không chọn trợ lý / không gửi câu hỏi thì không có gì rời máy."),
-      tier(anon, "Bậc 1 · Chỉ gửi kết quả đã ẩn danh", "AI chỉ thấy tóm tắt do công cụ trả về: mã băm thay tên, che chữ trong bản vẽ. Không thấy tệp bản vẽ.", pill("info pill-mid", "Mặc định")),
-      tier(!anon, "Bậc 2 · Gửi tên thật (không ẩn danh)", "Chỉ bật bằng cờ dòng lệnh --no-anonymize khi khách đã đồng ý bằng văn bản; giao diện không có nút bật."),
+      tier(!anon, "Nội bộ · Trợ lý thấy nội dung bản vẽ", "Mặc định cho công cụ nội bộ: trợ lý đọc tên layer, khối, chữ để hiểu, nhận xét, dịch. Kết quả luật vẫn do code tính.", pill("info pill-mid", "Mặc định"), false),
+      tier(anon, "Ẩn danh Bậc 1 · Dự án có NDA", "Chỉ gửi kết quả đã ẩn danh (mã thay tên, che chữ). Lưu theo dự án; chức năng dịch bị khoá." + (forced ? " Đang bị ép bằng cờ dòng lệnh." : ""), null, true),
       tier(false, "Bậc L · Chỉ mô hình chạy trên máy", "Chọn Ollama làm trợ lý: dữ liệu không rời máy. Chất lượng thấp hơn mô hình lớn."));
     $("cap").value = String(ai.max_cost_usd);
     renderCost(null);

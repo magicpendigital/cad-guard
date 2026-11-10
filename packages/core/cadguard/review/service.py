@@ -115,6 +115,7 @@ class ReviewService:
                     raise ReviewError("Đã đủ 8 phiên Studio; đóng một phiên trước.", 409)
                 tmp = tempfile.TemporaryDirectory(prefix="cadguard-review-studio-")
                 session = Session(data, Path(tmp.name), None)
+                session.consent = False  # cổng hồ sơ duyệt có người ngoài công ty: vẫn hỏi đồng ý
                 context = self._context(session, note)
                 encoded = json.dumps(context, ensure_ascii=False)
                 sid = secrets.token_hex(24)

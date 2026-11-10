@@ -56,7 +56,7 @@ class Session:
         self.source.write_bytes(data)
         self.hash = hashlib.sha256(data).hexdigest()[:16]
         self.backend = backend
-        self.consent = False
+        self.consent = True  # quyết định 10/11/2026: công cụ nội bộ, không hỏi đồng ý từng phiên (tắt được trên giao diện)
         self.supplement: dict[str, str] = {}
         self.view_handles: dict[str, list[str]] = {}
         self.edits: list[dict] = []

@@ -71,8 +71,12 @@ def cmd_audit(args: argparse.Namespace) -> int:
         return 2
     profile =load_profile(args.profile) if args.profile else None
     name = args.standard or (profile.standard if profile else DEFAULT_STANDARD)
-    std = load_standard(name, Path(args.standards_dir) if args.standards_dir else None, profile=profile)
+    from .rule_config import effective_standard, find_workspace
+
     files = _collect(args.paths)
+    ws = find_workspace(Path(args.paths[0])) if args.paths else None
+    std = effective_standard(name, Path(args.standards_dir) if args.standards_dir else None, profile=profile,
+                             workspace=ws)
     if not files:
         print("Không có tệp .dxf nào để quét.", file=sys.stderr)
         return 2
@@ -400,7 +404,10 @@ def cmd_watch(args: argparse.Namespace) -> int:
         return 2
     profile = load_profile(args.profile) if args.profile else None
     name = args.standard or (profile.standard if profile else DEFAULT_STANDARD)
-    std = load_standard(name, Path(args.standards_dir) if args.standards_dir else None, profile=profile)
+    from .rule_config import effective_standard
+
+    std = effective_standard(name, Path(args.standards_dir) if args.standards_dir else None, profile=profile,
+                             workspace=Path(args.folder))
     return watch.run(Path(args.folder), std, interval=args.interval, once=args.once, reader=args.reader,
                      threshold_mb=args.stream_threshold_mb)
 

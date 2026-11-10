@@ -624,3 +624,8 @@ body.acad-panel #s-work{grid-template-columns:minmax(0,1fr);min-width:0;overflow
 body.acad-panel #s-work>.col.right{display:flex;position:static;width:auto;border-left:0;box-shadow:none;min-width:0}
 body.acad-panel .tabs{overflow-x:auto}
 .sh-pick{width:100%;margin-top:4px}
+.re-grid{display:grid;gap:8px;margin-top:6px}
+.re-grid label.prm{display:flex;flex-direction:column;gap:3px;font-family:inherit}
+.re-grid label.prm:first-child{flex-direction:row;align-items:center;gap:6px}
+.re-grid input[type=number],.re-grid input[type=text],.re-grid textarea,.re-grid select{font:13px var(--mono);padding:4px 6px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg);color:var(--text)}
+.f-top .link.sm{font-size:12px;margin-left:6px}
