@@ -35,6 +35,15 @@ FIXABLE_RULES: dict[str, list[str]] = {
     "VS-04": ["set_bylayer"],
     "VS-06": ["clear_dim_text_override"],
     "VS-07": ["replace_text_style"],
+    # trình bày tờ theo template (sheet-layout-v0, kế hoạch sheets-presentation mục 4.4)
+    "TP-01": ["replace_title_block"],
+    "TP-03": ["set_attribs"],
+    "TP-04": ["set_attribs"],
+    "TP-05": ["set_sheet_scale"],
+    "TP-06": ["set_attribs", "set_sheet_scale"],
+    "TP-07": ["fit_sheet"],
+    "TP-10": ["set_attribs"],
+    "TP-12": ["convert_unicode"],
 }
 NO_FIX_NOTE: dict[str, str] = {
     "VS-05": "Bớt WIPEOUT/IMAGE/OLE là xoá đối tượng, ngoài từ vựng thao tác: hãy xử lý trong phần mềm CAD.",

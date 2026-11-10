@@ -40,9 +40,26 @@ Tệp phiên thử: **40 tờ** (25 tờ 1:15, 10 tờ 1:20, 1 tờ 1:10, 4 tờ
 - Kiểm: `cadguard template check <bản vẽ>` hoặc phòng **Trình bày hồ sơ** trong app. Luật TP-01…TP-10, TP-12
   (TP-11 chưa cài): đúng khung, chữ ký khối, trường cố định, trường bắt buộc/mẫu, tỉ lệ cho phép, tỉ lệ ghi khớp hệ số,
   tràn vùng vẽ/đè dải khung tên, đối tượng ngoài tờ, cỡ chữ in tối thiểu, số bản vẽ trùng/sai thứ tự, chữ chưa Unicode.
-- Áp dụng: `cadguard template apply <bản vẽ> [--renumber] [--yes]` hoặc gợi ý *Điền khung tên theo template* /
-  *Đánh số bản vẽ lại* ở tab Thay đổi. Chỉ đổi giá trị thuộc tính khung tên; hệ số khung lạ, khung khác template được
-  báo "không tự làm" (cần chỉnh trong CAD).
+- Áp dụng: `cadguard template apply <bản vẽ> [--renumber] [--attribs-only] [--yes]` hoặc các gợi ý TP ở tab Thay đổi.
+  Chỉ đổi khung tên, thuộc tính và hệ số/vị trí khung; không đụng hình vẽ, kích thước, chú thích. Thao tác theo thứ tự:
+  1. `replace_title_block` (TP-01): khung cũ cùng khổ được thay bằng khối template tại cùng góc dưới trái, giữ hệ số.
+     Giá trị thẻ cũ chuyển sang thẻ mới theo: bảng đã học `title_block_maps: {KHỐI_CŨ: {THẺ_CŨ: THẺ_MỚI}}` trong
+     `template.yaml` (sửa tay khi đoán sai), trùng tên, vai trò (giá trị dạng 1/NN → trường tỉ lệ; khớp mẫu số bản vẽ →
+     trường số), tên gần giống. Ánh xạ được in trong ghi chú; thẻ cũ không có chỗ được báo. Khối chưa có trong bản vẽ
+     được chép từ `titleblock.dxf` của template (kiểm mã băm lúc áp dụng).
+  2. `set_sheet_scale` (TP-05, TP-06): hệ số lạ (vd. 19,77) về tỉ lệ cho phép gần nhất, giữ tâm vùng vẽ, thuộc tính
+     phóng theo; **chỉ khi** nội dung vẫn nằm trong vùng vẽ và khung mới không trùm đối tượng của tờ khác.
+  3. `fit_sheet` (TP-07): nội dung tràn nhưng vừa vùng vẽ thì dời khung (không dời nội dung) cho nội dung vào giữa;
+     nội dung lớn hơn vùng vẽ hoặc đè dải khung tên chỉ được báo.
+  4. `set_attribs` (TP-03, TP-04, TP-06, TP-10): trường cố định, tỉ lệ theo hệ số (mới), đánh số tờ (`--renumber`).
+- Bước kiểm (`validate.py`, `FrameScope`) chỉ cho phép: đổi `name`/`insert`/hệ số đúng INSERT khung được nêu, đổi vị
+  trí/cỡ ATTRIB của khung đó, xoá ATTRIB cũ và thêm ATTRIB mới của khung được thay, thêm khối khung tên template cùng
+  layer/kiểu chữ chính khối đó dùng. Sau khi thay khung, lỗi có sẵn của tờ (vd. nội dung tràn) mới được luật TP kiểm:
+  báo là "chấp nhận tăng theo thao tác", không chặn.
+- Nghiệm thu trên fixture `make_model_sheets(legacy=(1,))`: sau áp dụng không còn TP-01/03/04/05/06/10; chỉ còn TP-07
+  (tờ 2: nội dung 360 mm > vùng vẽ 350 mm, chỉ báo), TP-08, TP-09, TP-12 (thao tác Unicode riêng); mọi đối tượng hình
+  vẽ/kích thước/chú thích giữ nguyên thuộc tính; hoàn tác xoá tệp mới, tệp gốc giữ nguyên mã băm.
+- Trong AutoCAD (CGTRINHBAY) chỉ áp phần thuộc tính; thay khung/hệ số/dời khung đi đường tệp.
 - Template Grande A3 đã học từ tờ 2 của tệp phiên thử (kèm logo PNG) tại `D:\CadGuardPhien\phien-01\.cadguard\template`.
 
 ## E. Dịch sang Tiếng Anh / Tiếng Trung
@@ -69,8 +86,7 @@ Tệp phiên thử: **40 tờ** (25 tờ 1:15, 10 tờ 1:20, 1 tờ 1:10, 4 tờ
 
 ## Chưa làm / giới hạn
 
-- Thao tác `replace_title_block`, `set_sheet_scale`, `fit_sheet` (đổi khung/hệ số/vị trí khung) và chế độ dịch `layer`
-  (giữ chữ gốc, thêm chữ dịch trên layer riêng) chưa làm: cần thêm đối tượng/di chuyển hình, đi ngoài bước kiểm hiện có.
+- Chế độ dịch `layer` (giữ chữ gốc, thêm chữ dịch trên layer riêng) chưa làm.
 - In PDF hàng loạt theo tờ qua AutoCAD, gộp Studio vào App, TP-11 chưa làm.
 - Bộ thực thi AutoCAD mới thử với COM giả trong test; cần kiểm tay trên AutoCAD 2027 (danh sách ở `docs/autocad.md`).
 - Phông Be Vietnam Pro chưa cài trên máy thử: AutoCAD sẽ thay phông cho tới khi cài (Google Fonts, giấy phép OFL).

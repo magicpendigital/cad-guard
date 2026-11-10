@@ -662,14 +662,25 @@ def suggest_ops(app: AppData, rel: Any, standard: Any) -> dict:
     if tp is not None:
         try:
             tpl = load_template(tp)
-            fill, notes_t = apply_ops(model, tpl, renumber=False)
-            renum, _n = apply_ops(model, tpl, renumber=True, fill_scale=False, fixed=False)
+            fill, notes_t = apply_ops(model, tpl, renumber=False, template_dir=tp.parent)
+            renum, _n = apply_ops(model, tpl, renumber=True, fill_scale=False, fixed=False, frames=False)
         except TemplateError:
             fill, renum, notes_t = [], [], []
-        if fill:
-            add("TP-06", fill[0], "Điền khung tên theo template (thông tin cố định, tỉ lệ theo hệ số khung)",
-                f"{len(fill[0]['items'])} khung tên được điền lại; chỉ đổi giá trị thuộc tính, không đụng hình vẽ.",
-                checked=False)
+        frame_titles = {
+            "replace_title_block": ("TP-01", "Thay khung tên cũ bằng khung template",
+                                    "khung tên cũ được thay bằng khối template tại cùng vị trí, giữ hệ số; giá trị thẻ cũ "
+                                    "chuyển sang thẻ mới (xem ghi chú). Không đụng hình vẽ, kích thước, chú thích."),
+            "set_sheet_scale": ("TP-05", "Đưa hệ số khung về tỉ lệ cho phép",
+                                "khung được phóng về tỉ lệ cho phép gần nhất, giữ tâm vùng vẽ; chỉ khi nội dung vẫn nằm "
+                                "trong vùng vẽ. Nội dung tờ không đổi."),
+            "fit_sheet": ("TP-07", "Dời khung cho nội dung vào giữa vùng vẽ",
+                          "chỉ dời khung tên (và thuộc tính), không dời hình vẽ."),
+            "set_attribs": ("TP-06", "Điền khung tên theo template (thông tin cố định, tỉ lệ theo hệ số khung)",
+                            "khung tên được điền lại; chỉ đổi giá trị thuộc tính, không đụng hình vẽ."),
+        }
+        for op in fill:
+            rid, title, desc = frame_titles[op["op"]]
+            add(rid, op, title, f"{len(op['items'])} {desc}", checked=False)
         if renum:
             add("TP-10", renum[0], "Đánh số bản vẽ lại theo thứ tự tờ",
                 f"{len(renum[0]['items'])} khung tên đổi số theo mẫu của template (trái sang phải, trên xuống dưới).",

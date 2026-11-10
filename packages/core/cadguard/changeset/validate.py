@@ -19,7 +19,7 @@ from ..runner import audit_model
 from ..standard import Standard
 from .diff import changed_attrs, diff_snapshots, sha256_file, snapshot, summary_vi
 from .engine import Protection, read_doc
-from .ops import PURGE_KINDS, allowed_attrs, allowed_data_types
+from .ops import FRAME_ATTRS, PURGE_KINDS, allowed_attrs, allowed_data_types
 
 MAX_LISTED = 20
 
@@ -66,6 +66,59 @@ def _allowed_defs(ops: list[Any]) -> dict[str, dict[str, set[str] | bool]]:
     return allow
 
 
+class FrameScope:
+    """Phạm vi được đổi của thao tác khung tên (replace_title_block, set_sheet_scale, fit_sheet): CHỈ đúng INSERT khung
+    nêu trong thao tác và ATTRIB của nó; khối khung tên mới chép từ template và layer/kiểu chữ mà chính khối đó dùng."""
+
+    def __init__(self, ops: list[Any], doc_a, doc_b) -> None:
+        self.attrs: dict[str, set[str]] = {}
+        self.removable: set[str] = set()  # ATTRIB cũ của khung bị thay
+        self.owners: set[str] = set()  # INSERT được nhận ATTRIB mới
+        self.blocks: set[str] = set()  # khối khung tên mới (casefold)
+        for o in ops:
+            if o.op not in FRAME_ATTRS:
+                continue
+            ins_attrs, att_attrs = FRAME_ATTRS[o.op]
+            for it in o.items:
+                h = it.insert.upper()
+                self.attrs.setdefault(h, set()).update(ins_attrs)
+                ins = doc_a.entitydb.get(it.insert) or doc_a.entitydb.get(h)
+                atts = list(ins.attribs) if ins is not None and ins.dxftype() == "INSERT" else []
+                for a in atts:
+                    self.attrs.setdefault(str(a.dxf.handle).upper(), set()).update(att_attrs)
+                if o.op == "replace_title_block":
+                    self.removable.update(str(a.dxf.handle).upper() for a in atts)
+                    self.owners.add(h)
+            if o.op == "replace_title_block" and o.block not in doc_a.blocks:
+                self.blocks.add(o.block.casefold())
+        self.layers: set[str] = set()
+        self.styles: set[str] = set()
+        for name in self.blocks:
+            blk = doc_b.blocks.get(name)
+            if blk is None:
+                continue
+            for e in blk:
+                self.layers.add(str(e.dxf.get("layer", "0")).casefold())
+                if e.dxf.hasattr("style"):
+                    self.styles.add(str(e.dxf.style).casefold())
+        self.new_attribs: set[str] = set()  # ATTRIB mới của khung được thay
+        for h in self.owners:
+            ins = doc_b.entitydb.get(h)
+            if ins is not None and ins.dxftype() == "INSERT":
+                self.new_attribs.update(str(a.dxf.handle).upper() for a in ins.attribs)
+
+    def __bool__(self) -> bool:
+        return bool(self.attrs)
+
+    def added_ok(self, e: dict) -> bool:
+        if e["space"].startswith("block:") and e["space"][6:].casefold() in self.blocks:
+            return True
+        return e["type"] == "ATTRIB" and e["handle"].upper() in self.new_attribs
+
+    def removed_ok(self, e: dict) -> bool:
+        return e["type"] == "ATTRIB" and e["handle"].upper() in self.removable
+
+
 def tolerated_rules(ops: list[Any]) -> set[str]:
     """Luật được phép tăng vì là tác dụng phụ đã biết, ghi rõ trong xem trước."""
     out: set[str] = set()
@@ -74,6 +127,10 @@ def tolerated_rules(ops: list[Any]) -> set[str]:
             out.add("VS-02")  # chuyển một phần: thêm kiểu chữ "<tên>-UNICODE"
         if o.op == "set_texts" and o.style:
             out.add("VS-02")  # dịch sang Tiếng Trung: thêm kiểu chữ CJK
+        if o.op == "replace_title_block":
+            # khung cũ không được các luật theo khung template kiểm; sau khi thay, các luật này mới chạy được trên tờ đó
+            # nên lỗi CÓ SẴN (vd. nội dung tràn khung) mới hiện ra: báo trong xem trước, không chặn
+            out.update({"TP-03", "TP-04", "TP-06", "TP-07", "TP-10"})
     return out
 
 
@@ -97,10 +154,15 @@ def evaluate(doc_a, doc_b, ops: list[Any], prot: Protection, std: Standard, sour
                              "Tệp gốc KHÔNG khớp mã băm trong changeset (đã bị sửa sau khi đề xuất)."))
 
     purged_blocks = {x.casefold() for x in d["definitions"]["blocks"]["removed"]}
-    removed = [e for e in d["entities"]["removed"] if not (e["space"].startswith("block:") and e["space"][6:].casefold() in purged_blocks)]
-    added = d["entities"]["added"]
+    frames = FrameScope(ops, doc_a, doc_b)
+    removed = [e for e in d["entities"]["removed"] if not (e["space"].startswith("block:") and e["space"][6:].casefold() in purged_blocks)
+               and not frames.removed_ok(e)]
+    added = [e for e in d["entities"]["added"] if not frames.added_ok(e)]
     by_type_a = Counter(s.type for s in sa["entities"].values() if not s.space.startswith("block:"))
     by_type_b = Counter(s.type for s in sb["entities"].values() if not s.space.startswith("block:"))
+    if frames.owners:  # số ATTRIB đổi theo khung tên mới: so phần còn lại
+        by_type_a.pop("ATTRIB", None)
+        by_type_b.pop("ATTRIB", None)
     count_ok = not removed and not added and by_type_a == by_type_b
     checks.append(_check(
         "entity_count", count_ok,
@@ -115,7 +177,7 @@ def evaluate(doc_a, doc_b, ops: list[Any], prot: Protection, std: Standard, sour
     touched_protected: list[str] = []
     for item in d["entities"]["changed"]:
         attrs = set(item["attrs"])
-        extra = attrs - allowed
+        extra = attrs - allowed - frames.attrs.get(item["handle"].upper(), set())
         if extra == {"data"} and item["type"] in data_types:
             extra = set()
         if extra or item.get("type_after"):
@@ -149,6 +211,9 @@ def evaluate(doc_a, doc_b, ops: list[Any], prot: Protection, std: Standard, sour
             rule = allow[kind][key]
             for name in d["definitions"][kind][key]:
                 if rule is True or name.casefold() in rule:
+                    continue
+                if key == "added" and name.casefold() in {"blocks": frames.blocks, "layers": frames.layers,
+                                                           "text_styles": frames.styles}.get(kind, set()):
                     continue
                 bad_defs.append(f"{kind}.{key}:{name}")
         for name in d["definitions"][kind]["changed"]:

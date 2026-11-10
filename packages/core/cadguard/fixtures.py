@@ -566,24 +566,46 @@ CO_NOTES_TCVN3 = ["tñ bÕp trªn", "c¸nh tñ MDF chèng Èm 18mm", "nÑp chØ 
 CO_NOTES_UNICODE = ["Tủ áo cánh mở", "Kính cường lực 8mm", "Sơn PU màu trắng"]
 
 
-def make_model_sheets(path: Path, sheets: list | None = None) -> None:
+LEGACY_FRAME = "SYN-KHUNG-CU"
+LEGACY_TAGS = {"DU_AN": "DUAN", "TEN_BAN_VE": "TENBV", "SO_BAN_VE": "KYHIEU", "TI_LE": "TL", "NGAY": "NGAYVE"}
+
+
+def _legacy_frame(doc) -> None:
+    """Khung tên CŨ của công ty (cùng khổ A3, khác khối, khác tên thẻ, dải khung tên hẹp hơn): ca thay khung."""
+    b = doc.blocks.new(LEGACY_FRAME)
+    b.add_lwpolyline([(0, 0), (420, 0), (420, 297), (0, 297)], close=True, dxfattribs={"layer": "SYN-KHUNG"})
+    b.add_lwpolyline([(20, 10), (410, 10), (410, 287), (20, 287)], close=True, dxfattribs={"layer": "SYN-KHUNG"})
+    b.add_line((380, 10), (380, 287), dxfattribs={"layer": "SYN-KHUNG"})
+    for i, tag in enumerate(LEGACY_TAGS.values()):
+        y = 200 - i * 40
+        b.add_attdef(tag, (382, y + 4), dxfattribs={"height": 2.5, "layer": "SYN-KHUNG", "style": "STD"})
+
+
+def make_model_sheets(path: Path, sheets: list | None = None, legacy: tuple[int, ...] = ()) -> None:
     """Sáu tờ A3 trong Model (khối khung tên công ty có thuộc tính), khung kề nhau, tỉ lệ 15/15/20/19,77/10/15; tờ 6
     trống. Cố ý: tỉ lệ ghi trong khung khác hệ số (tờ 3), hệ số lạ 19,77 (tờ 4), thiếu số bản vẽ và chữ in quá nhỏ
     (tờ 5), số bản vẽ trùng (tờ 6 = tờ 2), một đối tượng tràn khung (tờ 2), một khối nằm ngoài mọi tờ. Chữ ghi chú có
-    TCVN3 (phông .VnArial) và Unicode, một kích thước ghi đè chữ."""
+    TCVN3 (phông .VnArial) và Unicode, một kích thước ghi đè chữ. `legacy`: chỉ số (từ 0) các tờ dùng khung tên CŨ
+    `LEGACY_FRAME` (ca thay khung tên)."""
     doc = ezdxf.new("R2018", setup=True)
     doc.header["$INSUNITS"] = 4
     for name in HYG_LAYERS:
         doc.layers.add(name)
     doc.styles.add("VN-ARIAL", font=".VnArial")
     _company_frame(doc)
+    if legacy:
+        _legacy_frame(doc)
     marker = doc.blocks.new("SYN-KY-HIEU")
     marker.add_circle((0, 0), 50, dxfattribs={"layer": "SYN-NOI-THAT"})
     msp = doc.modelspace()
     x = 0.0
     for i, (k, values, content, note_mm) in enumerate(sheets or CO_SHEETS):
-        ref = msp.add_blockref(CO_FRAME, (x, 0), dxfattribs={"layer": "SYN-KHUNG", "xscale": k, "yscale": k})
-        ref.add_auto_attribs(values)
+        if i in legacy:  # khung cũ: cùng giá trị, tên thẻ cũ
+            ref = msp.add_blockref(LEGACY_FRAME, (x, 0), dxfattribs={"layer": "SYN-KHUNG", "xscale": k, "yscale": k})
+            ref.add_auto_attribs({LEGACY_TAGS[t]: v for t, v in values.items()})
+        else:
+            ref = msp.add_blockref(CO_FRAME, (x, 0), dxfattribs={"layer": "SYN-KHUNG", "xscale": k, "yscale": k})
+            ref.add_auto_attribs(values)
         if content:
             for j in range(8):
                 msp.add_line((x + 40 * k + j * 25 * k, 60 * k), (x + 40 * k + j * 25 * k, 220 * k), dxfattribs={"layer": "SYN-NOI-THAT"})

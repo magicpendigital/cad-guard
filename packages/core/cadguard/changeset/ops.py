@@ -145,9 +145,55 @@ class SetAttribs(_Base):
     items: Annotated[list[AttribItem], Field(min_length=1, max_length=5000)]
 
 
+Coord = Annotated[float, Field(ge=-1e12, le=1e12)]
+Point2 = Annotated[list[Coord], Field(min_length=2, max_length=2)]
+Sha256 = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+
+
+class FrameItem(_Base):
+    insert: Handle
+    values: dict[Annotated[str, Field(min_length=1, max_length=64)], TextValue] = Field(default_factory=dict)
+    at: Point2 | None = None  # điểm chèn mới (căn khung mới theo góc dưới trái khung cũ)
+
+
+class ReplaceTitleBlock(_Base):
+    """Thay khung tên cũ bằng khối khung tên của template tại cùng vị trí, giữ hệ số; ATTRIB cũ bị thay bằng ATTRIB
+    của khối mới (giá trị đã ánh xạ ở `values`). Khối chưa có trong bản vẽ thì chép từ `source` (titleblock.dxf của
+    template, kiểm `source_sha256`). Chỉ chạm INSERT khung tên và thuộc tính của nó."""
+    op: Literal["replace_title_block"]
+    block: Name
+    source: Annotated[str, Field(min_length=1, max_length=1024)] | None = None
+    source_sha256: Sha256 | None = None
+    items: Annotated[list[FrameItem], Field(min_length=1, max_length=2000)]
+
+
+class ScaleItem(_Base):
+    insert: Handle
+    scale: Annotated[float, Field(gt=0, le=1e5)]
+    at: Point2 | None = None  # điểm chèn mới (giữ tâm vùng vẽ đứng yên)
+
+
+class SetSheetScale(_Base):
+    """Đổi hệ số khung tên (phóng đều) về tỉ lệ cho phép; thuộc tính khung phóng theo. Không đụng nội dung tờ."""
+    op: Literal["set_sheet_scale"]
+    items: Annotated[list[ScaleItem], Field(min_length=1, max_length=2000)]
+
+
+class FitItem(_Base):
+    insert: Handle
+    offset: Point2
+
+
+class FitSheet(_Base):
+    """Dời khung tên (không dời nội dung) để nội dung vào giữa vùng vẽ."""
+    op: Literal["fit_sheet"]
+    items: Annotated[list[FitItem], Field(min_length=1, max_length=2000)]
+
+
 Op = Annotated[
     Union[RenameLayer, MergeLayers, MoveToLayer, SetByLayer, ReplaceTextStyle, ReplaceDimStyle, PurgeUnused,
-          SetTextHeight, ClearDimTextOverride, ConvertUnicode, SetTexts, SetAttribs],
+          SetTextHeight, ClearDimTextOverride, ConvertUnicode, SetTexts, SetAttribs, ReplaceTitleBlock,
+          SetSheetScale, FitSheet],
     Field(discriminator="op"),
 ]
 OP_TYPES: dict[str, type[_Base]] = {
@@ -163,6 +209,9 @@ OP_TYPES: dict[str, type[_Base]] = {
     "convert_unicode": ConvertUnicode,
     "set_texts": SetTexts,
     "set_attribs": SetAttribs,
+    "replace_title_block": ReplaceTitleBlock,
+    "set_sheet_scale": SetSheetScale,
+    "fit_sheet": FitSheet,
 }
 _ADAPTER = TypeAdapter(list[Op])
 
@@ -191,6 +240,17 @@ ALLOWED_ATTRS: dict[str, set[str]] = {
     "convert_unicode": {"text", "style"},
     "set_texts": {"text", "style"} | _DIM_RENDER,
     "set_attribs": {"text"},
+    # ba thao tác khung: KHÔNG nới chung; chỉ INSERT khung được nêu và ATTRIB của nó được đổi (validate: FRAME_ATTRS)
+    "replace_title_block": set(),
+    "set_sheet_scale": set(),
+    "fit_sheet": set(),
+}
+
+# Thuộc tính được đổi trên đúng INSERT khung tên (và ATTRIB của nó) mà thao tác khung nêu handle.
+FRAME_ATTRS: dict[str, tuple[set[str], set[str]]] = {
+    "replace_title_block": ({"name", "insert"}, set()),
+    "set_sheet_scale": ({"xscale", "yscale", "zscale", "insert"}, {"insert", "align_point", "height"}),
+    "fit_sheet": ({"insert"}, {"insert", "align_point"}),
 }
 
 # Mô tả ngắn (tiếng Việt) cho tài liệu, CLI và MCP.
@@ -207,6 +267,10 @@ OP_HELP: dict[str, str] = {
     "convert_unicode": "chuyển chữ TCVN3/VNI sang Unicode, trỏ kiểu chữ phông cũ sang phông Unicode {font, family, handles[]}; VS-07",
     "set_texts": "đặt nội dung chữ theo handle {items[{handle, text, expect}]} (dịch)",
     "set_attribs": "điền thuộc tính khung tên {items[{insert, values{THẺ: giá trị}}]}; TP-04, TP-10",
+    "replace_title_block": "thay khung tên cũ bằng khối template tại cùng vị trí, giữ hệ số {block, source, "
+                           "source_sha256, items[{insert, values, at}]}; TP-01",
+    "set_sheet_scale": "đưa hệ số khung về tỉ lệ cho phép, chỉ khung + thuộc tính {items[{insert, scale, at}]}; TP-05, TP-06",
+    "fit_sheet": "dời khung (không dời nội dung) để nội dung vào giữa vùng vẽ {items[{insert, offset}]}; TP-07",
 }
 
 
@@ -299,6 +363,8 @@ def map_names(op: Any, fn: Callable[[str, str], str]) -> Any:
         data["to"] = fn(kind, data["to"])
     elif name == "purge_unused" and "names" in data:
         data["names"] = lst("any", data["names"])
+    elif name == "replace_title_block":
+        data["block"] = fn("block", data["block"])
     return OP_TYPES[name].model_validate(data)
 
 

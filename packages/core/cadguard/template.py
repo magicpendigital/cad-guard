@@ -13,6 +13,7 @@ nhỏ nhất của tờ mẫu.
 from __future__ import annotations
 
 import hashlib
+import math
 import re
 import shutil
 from collections import Counter
@@ -22,7 +23,7 @@ from typing import Any
 import yaml
 
 from .model import DrawingModel
-from .sheets import PAPERS, SCALES, build_structure
+from .sheets import PAPERS, SCALES, build_structure, entity_center, entity_points
 
 SCHEMA = "cg.template/1"
 DIR_NAME = Path(".cadguard") / "template"
@@ -264,47 +265,219 @@ def _export_block(doc, block: str, dst: Path) -> None:
 
 # ---------- áp dụng (sinh thao tác changeset) ----------
 
+FIXABLE_TP = ("TP-01", "TP-03", "TP-04", "TP-05", "TP-06", "TP-07", "TP-10")  # sửa được bằng thao tác khung (mục 4.4)
+TAG_SIMILAR = 0.6
+
+
+def _norm_tag(tag: str) -> str:
+    return re.sub(r"[^0-9a-z]", "", tag.casefold())
+
+
+def map_tags(old: dict[str, str], fields: list[dict], learned: dict[str, str] | None = None) -> tuple[dict[str, str], list[str]]:
+    """Ánh xạ thẻ khung cũ -> thẻ template: bảng đã học (template.title_block_maps), trùng tên chuẩn hoá, vai trò
+    (giá trị dạng tỉ lệ -> trường tỉ lệ, khớp mẫu số bản vẽ -> trường số), rồi tên gần giống. Trả (ánh xạ, thẻ cũ
+    còn giá trị mà không ánh xạ được)."""
+    import difflib
+
+    new_tags = [f["tag"] for f in fields]
+    free = set(new_tags)
+    out: dict[str, str] = {}
+    learned = {k.upper(): v.upper() for k, v in (learned or {}).items()}
+    for o in old:
+        t = learned.get(o.upper())
+        if t in free:
+            out[o] = t
+            free.discard(t)
+    for o in old:
+        if o in out:
+            continue
+        t = next((n for n in new_tags if n in free and _norm_tag(n) == _norm_tag(o)), None)
+        if t:
+            out[o] = t
+            free.discard(t)
+    by_role = {f.get("role"): f for f in fields if f.get("role")}
+    for o, v in old.items():
+        if o in out or not v:
+            continue
+        sf, nf = by_role.get("scale"), by_role.get("number")
+        if sf and sf["tag"] in free and scale_value(v, bool(SCALE_TAG.search(o))) is not None:
+            out[o] = sf["tag"]
+            free.discard(sf["tag"])
+        elif nf and nf["tag"] in free and nf.get("pattern") and re.match(nf["pattern"], v.strip()):
+            out[o] = nf["tag"]
+            free.discard(nf["tag"])
+    for o in old:
+        if o in out:
+            continue
+        best = max(((difflib.SequenceMatcher(None, _norm_tag(o), _norm_tag(n)).ratio(), n) for n in sorted(free)),
+                   default=None)
+        if best and best[0] >= TAG_SIMILAR:
+            out[o] = best[1]
+            free.discard(best[1])
+    lost = [o for o, v in old.items() if o not in out and (v or "").strip()]
+    return out, lost
+
+
+def _inside(pts, x0, y0, k, area, tol) -> bool:
+    return all(area[0] - tol <= (px - x0) / k <= area[2] + tol and area[1] - tol <= (py - y0) / k <= area[3] + tol
+               for px, py in pts)
+
+
 def apply_ops(model: DrawingModel, tpl: dict, *, renumber: bool = False, fill_scale: bool = True,
-              fixed: bool = True) -> tuple[list[dict], list[str]]:
-    """Thao tác `set_attribs` đưa khung tên về template: trường cố định, trường tỉ lệ theo hệ số khung, đánh số tờ.
-    Không đụng hình vẽ, kích thước, chú thích. Trả (ops, ghi chú việc không tự làm được)."""
+              fixed: bool = True, frames: bool = True, template_dir: Path | None = None) -> tuple[list[dict], list[str]]:
+    """Thao tác đưa tờ về template (kế hoạch mục 4.4), theo thứ tự:
+
+    1. `replace_title_block`: khung khác template (khối khác, cùng khổ) được thay bằng khối template tại cùng góc dưới
+       trái, giữ hệ số, chuyển giá trị thẻ cũ theo `map_tags` (cần `template_dir` có `titleblock.dxf`);
+    2. `set_sheet_scale`: hệ số khung không thuộc tỉ lệ cho phép về tỉ lệ gần nhất, giữ tâm vùng vẽ, CHỈ KHI nội dung
+       vẫn nằm trong vùng vẽ và khung mới không trùm đối tượng của tờ khác/ngoài tờ;
+    3. `fit_sheet`: nội dung tràn vùng vẽ nhưng vừa thì dời khung cho nội dung vào giữa; không vừa thì chỉ báo;
+    4. `set_attribs`: trường cố định, tỉ lệ theo hệ số (mới), đánh số tờ.
+
+    Không đụng hình vẽ, kích thước, chú thích. `frames=False`: chỉ bước 4 (như trước). Trả (ops, ghi chú)."""
     st = build_structure(model)
     by_handle = {e.handle: e for e in model.entities}
-    block = tpl["frame"]["block"]
+    fr = tpl["frame"]
+    block = fr["block"]
+    te = fr.get("extents")
+    area = fr.get("drawing_area")
     fields = {f["tag"]: f for f in tpl.get("fields", [])}
     scale_f = next((f for f in fields.values() if f.get("role") == "scale"), None)
     num_f = next((f for f in fields.values() if f.get("role") == "number"), None)
-    items, notes = [], []
+    allowed = [float(x) for x in tpl.get("rules", {}).get("allowed_scales", [])]
+    learned_maps = {k.casefold(): v for k, v in (tpl.get("title_block_maps") or {}).items()}
+    blk_ext = {b.name.casefold(): b.extents for b in model.blocks}
+    src = Path(template_dir) / "titleblock.dxf" if template_dir is not None else None
+    replace: list[dict] = []
+    scales: list[dict] = []
+    fits: list[dict] = []
+    attribs: list[dict] = []
+    notes: list[str] = []
+    centers = []
+    for e in model.entities:
+        if e.space == "Model":
+            c = entity_center(e)
+            if c is not None:
+                centers.append((c[0], c[1], e.handle))
+    frame_handles = {s.frame_handle for s in st.sheets if s.frame_handle}
     seq = 0
+
+    def clear_window(s, x0, y0, k) -> bool:
+        """Khung mới (điểm chèn x0, y0, hệ số k) không chứa tâm đối tượng thuộc tờ KHÁC (khung tờ khác không tính:
+        điểm chèn nằm trên mép chung). Đối tượng ngoài mọi tờ được trùm thì về tờ này (TP-08 giảm)."""
+        bx0, by0, bx1, by1 = x0 + k * te[0], y0 + k * te[1], x0 + k * te[2], y0 + k * te[3]
+        return not any(bx0 <= cx <= bx1 and by0 <= cy <= by1 and st.sheet_of.get(h, s.id) != s.id
+                       and h not in frame_handles for cx, cy, h in centers)
+
     for s in st.sheets:
-        if s.kind != "frame" or s.block != block:
-            if s.kind == "frame":
-                notes.append(f"{s.name}: khung '{s.block or 'nét rời'}' khác template, cần thay khung trong CAD.")
+        if s.kind != "frame":
             continue
-        seq += 1
-        cur = {k.upper(): (v or "").strip() for k, v in (by_handle[s.frame_handle].attribs or {}).items()}
+        ins = by_handle.get(s.frame_handle)
+        is_tpl = s.block == block
+        is_insert = ins is not None and ins.type == "INSERT" and ins.insert is not None
+        cur = {k.upper(): (v or "").strip() for k, v in ((ins.attribs if ins else None) or {}).items()}
+        if not is_tpl and not (frames and is_insert and s.block):
+            notes.append(f"{s.name}: khung '{s.block or 'nét rời'}' khác template, cần thay khung trong CAD.")
+            continue
+        k = float(abs(ins.xscale or 1.0)) if is_insert else (s.factor or 1.0)
+        px, py = ins.insert if is_insert else (s.windows[0][0], s.windows[0][1])
         vals: dict[str, str] = {}
+        replaced = False
+        if not is_tpl:
+            oe = blk_ext.get((s.block or "").casefold())
+            if not (te and area and oe and src is not None and src.is_file()):
+                notes.append(f"{s.name}: khung '{s.block}' khác template; thiếu tệp khung tên template nên chưa thay được.")
+                continue
+            if abs(ins.rotation or 0.0) % 360 > 1e-6 or not s.uniform:
+                notes.append(f"{s.name}: khung '{s.block}' bị xoay hoặc phóng không đều; cần thay khung trong CAD.")
+                continue
+            ow, oh, tw, th = oe[2] - oe[0], oe[3] - oe[1], te[2] - te[0], te[3] - te[1]
+            if abs(ow - tw) > 0.02 * tw or abs(oh - th) > 0.02 * th:
+                notes.append(f"{s.name}: khung '{s.block}' khác khổ template ({ow:g}×{oh:g} so với {tw:g}×{th:g}); "
+                             "cần chọn khổ trong CAD.")
+                continue
+            mapping, lost = map_tags(cur, list(fields.values()), learned_maps.get(s.block.casefold()))
+            vals = {new: cur[old] for old, new in mapping.items() if cur.get(old)}
+            nx, ny = px + k * (oe[0] - te[0]), py + k * (oe[1] - te[1])
+            item: dict = {"insert": s.frame_handle, "values": vals}
+            if abs(nx - px) > 1e-9 or abs(ny - py) > 1e-9:
+                item["at"] = [nx, ny]
+            px, py = nx, ny
+            replace.append(item)
+            replaced = True
+            if mapping:
+                notes.append(f"{s.name}: thay khung '{s.block}' bằng '{block}', chuyển thẻ "
+                             + ", ".join(f"{o}→{n}" for o, n in mapping.items()) + ".")
+            if lost:
+                notes.append(f"{s.name}: thẻ cũ {', '.join(lost)} không có chỗ trong khung template; giá trị không được chuyển.")
+            cur = {t: vals.get(t, "") for t in fields}
+        factor = k
+        content = [h for h in s.handles if h != s.frame_handle and (e := by_handle.get(h)) is not None
+                   and e.type != "DIMENSION"]
+        pts = [p for h in content for p in entity_points(by_handle[h])]
+        if frames and te and area:
+            tol = 0.003 * (area[2] - area[0])
+            if fill_scale and allowed and not any(abs(k - a) <= 0.001 * a for a in allowed):
+                a = min(allowed, key=lambda x: abs(math.log(x / k)))
+                cx, cy = (area[0] + area[2]) / 2, (area[1] + area[3]) / 2
+                nx, ny = px + k * cx - a * cx, py + k * cy - a * cy
+                if not _inside(pts, nx, ny, a, area, tol):
+                    notes.append(f"{s.name}: đưa hệ số {k:g} về 1:{a:g} làm nội dung tràn vùng vẽ; cần chỉnh trong CAD.")
+                elif not clear_window(s, nx, ny, a):
+                    notes.append(f"{s.name}: đưa hệ số {k:g} về 1:{a:g} làm khung trùm đối tượng của tờ khác; "
+                                 "cần dời tờ trong CAD.")
+                else:
+                    scales.append({"insert": s.frame_handle, "scale": a, "at": [nx, ny]})
+                    factor, px, py = a, nx, ny
+            if pts and not _inside(pts, px, py, factor, area, tol):
+                xs = [(p[0] - px) / factor for p in pts]
+                ys = [(p[1] - py) / factor for p in pts]
+                bw, bh = max(xs) - min(xs), max(ys) - min(ys)
+                if bw > area[2] - area[0] or bh > area[3] - area[1]:
+                    notes.append(f"{s.name}: nội dung ({bw:.0f}×{bh:.0f} mm khi in) lớn hơn vùng vẽ hoặc đè dải khung "
+                                 "tên; chỉ báo, không tự co/dời hình vẽ.")
+                else:
+                    dx = (area[0] + area[2]) / 2 - (max(xs) + min(xs)) / 2
+                    dy = (area[1] + area[3]) / 2 - (max(ys) + min(ys)) / 2
+                    ox, oy = -factor * dx, -factor * dy
+                    if clear_window(s, px + ox, py + oy, factor):
+                        fits.append({"insert": s.frame_handle, "offset": [ox, oy]})
+                        px, py = px + ox, py + oy
+                    else:
+                        notes.append(f"{s.name}: dời khung cho nội dung vào giữa sẽ trùm đối tượng tờ khác; cần dời trong CAD.")
+        seq += 1
         if fixed:
             for tag, f in fields.items():
-                if f.get("kind") == "fixed" and tag in cur and cur[tag] != f.get("value", ""):
+                if f.get("kind") == "fixed" and (tag in cur or replaced) and cur.get(tag, "") != f.get("value", ""):
                     vals[tag] = f.get("value", "")
-        if fill_scale and scale_f and scale_f["tag"] in cur and s.factor:
-            allowed = [float(x) for x in tpl["rules"].get("allowed_scales", [])]
-            if any(abs(s.factor - a) <= 0.001 * a for a in allowed):
-                want = scale_f.get("format", "1/{n}").replace("{n}", f"{s.factor:g}")
+        if fill_scale and scale_f and scale_f["tag"] in cur and factor:
+            if any(abs(factor - a) <= 0.001 * a for a in allowed):
+                want = scale_f.get("format", "1/{n}").replace("{n}", f"{factor:g}")
                 if cur[scale_f["tag"]] != want:
                     vals[scale_f["tag"]] = want
-            else:
-                notes.append(f"{s.name}: hệ số khung {s.factor:g} không thuộc tỉ lệ cho phép; cần chỉnh khung trong CAD.")
+            elif not frames:
+                notes.append(f"{s.name}: hệ số khung {factor:g} không thuộc tỉ lệ cho phép; cần chỉnh khung trong CAD.")
         if renumber and num_f and num_f.get("number_format") and num_f["tag"] in cur:
             want = format_number(num_f["number_format"], seq)
             if cur[num_f["tag"]] != want:
                 vals[num_f["tag"]] = want
-        if vals:
-            items.append({"insert": s.frame_handle, "values": vals})
-    ops = [{"op": "set_attribs", "items": items}] if items else []
+        if not replaced and vals:
+            attribs.append({"insert": s.frame_handle, "values": vals})
+    ops: list[dict] = []
+    if replace:
+        op: dict = {"op": "replace_title_block", "block": block, "items": replace}
+        if src is not None and src.is_file():
+            op["source"] = str(src)
+            op["source_sha256"] = hashlib.sha256(src.read_bytes()).hexdigest()
+        ops.append(op)
+    if scales:
+        ops.append({"op": "set_sheet_scale", "items": scales})
+    if fits:
+        ops.append({"op": "fit_sheet", "items": fits})
+    if attribs:
+        ops.append({"op": "set_attribs", "items": attribs})
     return ops, notes
 
 
-__all__ = ["SCHEMA", "TemplateError", "apply_ops", "find_template", "format_number", "learn", "load_template",
+__all__ = ["FIXABLE_TP", "SCHEMA", "TemplateError", "apply_ops", "map_tags", "find_template", "format_number", "learn", "load_template",
            "number_format", "scale_format", "value_pattern"]

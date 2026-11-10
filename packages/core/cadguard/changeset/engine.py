@@ -481,7 +481,120 @@ def _set_attribs(doc, op, prot):
     return {"affected": n, "matched": len(op.items), "skipped_protected": skipped}
 
 
+# ---------- khung tên (template, kế hoạch sheets-presentation mục 4.4): chỉ INSERT khung + ATTRIB của nó ----------
+
+
+def _frame_insert(doc, handle: str, what: str, prot: Protection):
+    ins = _entity(doc, handle, what)
+    if ins.dxftype() != "INSERT":
+        raise OpError(f"{what}: handle {handle} không phải khối chèn (INSERT).")
+    if prot.is_protected(str(ins.dxf.get("layer", "0"))):
+        raise OpError(f"{what}: khung tên handle {handle} nằm trên layer được bảo vệ.")
+    rot = float(ins.dxf.get("rotation", 0.0) or 0.0) % 360
+    if min(abs(rot), abs(rot - 360)) > 1e-6:
+        raise OpError(f"{what}: khung tên handle {handle} bị xoay; chỉ hỗ trợ khung không xoay.")
+    return ins
+
+
+def _import_block(doc, block: str, source: str | None, sha: str | None) -> bool:
+    """Chép định nghĩa khối từ tệp template nếu bản vẽ chưa có. Trả True nếu đã chép."""
+    if block in doc.blocks:
+        return False
+    if not source:
+        raise OpError(f"replace_title_block: bản vẽ chưa có khối '{block}' và thao tác không chỉ ra tệp template (source).")
+    src = Path(source)
+    if src.suffix.lower() != ".dxf" or not src.is_file():
+        raise OpError(f"replace_title_block: không thấy tệp khung tên template '{src.name}'.")
+    if sha is not None:
+        import hashlib
+
+        if hashlib.sha256(src.read_bytes()).hexdigest() != sha:
+            raise OpError("replace_title_block: tệp khung tên template đã đổi sau khi đề xuất; hãy đề xuất lại.")
+    from ezdxf.addons import Importer
+
+    sdoc = read_doc(src)
+    if block not in sdoc.blocks:
+        raise OpError(f"replace_title_block: tệp template không có khối '{block}'.")
+    imp = Importer(sdoc, doc)
+    imp.import_block(block, rename=False)
+    imp.finalize()
+    return True
+
+
+def _replace_title_block(doc, op, prot):
+    imported = _import_block(doc, op.block, op.source, op.source_sha256)
+    blk = doc.blocks.get(op.block)
+    tags = {str(a.dxf.tag).upper() for a in blk.query("ATTDEF")}
+    n = 0
+    for it in op.items:
+        ins = _frame_insert(doc, it.insert, "replace_title_block", prot)
+        bad = [t for t in it.values if t.upper() not in tags]
+        if bad:
+            raise OpError(f"replace_title_block: khối '{op.block}' không có thẻ {', '.join(bad[:10])}.")
+        if str(ins.dxf.name).casefold() == op.block.casefold() and it.at is None:
+            continue
+        ins.delete_all_attribs()
+        ins.dxf.name = str(blk.name)
+        if it.at is not None:
+            z = float(ins.dxf.insert.z)
+            ins.dxf.insert = (float(it.at[0]), float(it.at[1]), z)
+        ins.add_auto_attribs({t.upper(): v for t, v in it.values.items()})
+        n += 1
+    return {"affected": n, "matched": len(op.items), "details": {"block_imported": imported, "block": op.block}}
+
+
+def _move_attribs(ins, old_insert, ratio: float) -> None:
+    """ATTRIB nằm trong WCS: đặt lại theo điểm chèn/hệ số mới của khung (khung không xoay)."""
+    new = ins.dxf.insert
+    for a in ins.attribs:
+        for key in ("insert", "align_point"):
+            if a.dxf.hasattr(key):
+                p = a.dxf.get(key)
+                a.dxf.set(key, (new.x + (p.x - old_insert.x) * ratio, new.y + (p.y - old_insert.y) * ratio, p.z))
+        if ratio != 1.0:
+            a.dxf.height = float(a.dxf.get("height", 1.0)) * ratio
+
+
+def _set_sheet_scale(doc, op, prot):
+    n = 0
+    for it in op.items:
+        ins = _frame_insert(doc, it.insert, "set_sheet_scale", prot)
+        sx, sy = float(ins.dxf.get("xscale", 1.0)), float(ins.dxf.get("yscale", 1.0))
+        if abs(abs(sx) - abs(sy)) > 1e-6 * max(1.0, abs(sx)) or sx <= 0 or sy <= 0:
+            raise OpError(f"set_sheet_scale: khung handle {it.insert} phóng không đều hoặc bị lật; sửa trong CAD.")
+        if abs(sx - it.scale) <= 1e-9 * it.scale and it.at is None:
+            continue
+        old = ins.dxf.insert
+        ratio = it.scale / sx
+        sz = float(ins.dxf.get("zscale", 1.0))
+        ins.dxf.xscale = ins.dxf.yscale = float(it.scale)
+        if abs(sz - sx) <= 1e-9 * max(1.0, sx):
+            ins.dxf.zscale = float(it.scale)
+        if it.at is not None:
+            ins.dxf.insert = (float(it.at[0]), float(it.at[1]), old.z)
+        _move_attribs(ins, old, ratio)
+        n += 1
+    return {"affected": n, "matched": len(op.items)}
+
+
+def _fit_sheet(doc, op, prot):
+    n = 0
+    for it in op.items:
+        ins = _frame_insert(doc, it.insert, "fit_sheet", prot)
+        dx, dy = float(it.offset[0]), float(it.offset[1])
+        if dx == 0 and dy == 0:
+            continue
+        old = ins.dxf.insert
+        ins.dxf.insert = (old.x + dx, old.y + dy, old.z)
+        _move_attribs(ins, old, 1.0)
+        n += 1
+    return {"affected": n, "matched": len(op.items)}
+
+
 HANDLERS = {
+    "replace_title_block": _replace_title_block,
+    "set_sheet_scale": _set_sheet_scale,
+    "fit_sheet": _fit_sheet,
     "convert_unicode": _convert_unicode,
     "set_texts": _set_texts,
     "set_attribs": _set_attribs,

@@ -347,7 +347,8 @@ def cmd_template(args: argparse.Namespace) -> int:
     except TemplateError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    ops, notes = apply_ops(read_with(path, "ezdxf"), tpl, renumber=args.renumber)
+    ops, notes = apply_ops(read_with(path, "ezdxf"), tpl, renumber=args.renumber, template_dir=tp.parent,
+                           frames=not getattr(args, "attribs_only", False))
     for n in notes:
         print("Không tự làm: " + n)
     if not ops:
@@ -460,7 +461,8 @@ def cmd_autocad_run(args: argparse.Namespace) -> int:
             print("Chưa có template: chạy 'cadguard template learn' hoặc nút 'Học template từ tờ này'.", file=sys.stderr)
             return _pause(args, 2)
         try:
-            ops, notes = apply_ops(read_with(dxf, "ezdxf"), load_template(tp), renumber=args.renumber)
+            # trong AutoCAD chỉ áp được thuộc tính (executor.SUPPORTED_OPS); thay khung/tỉ lệ/căn tờ đi đường tệp
+            ops, notes = apply_ops(read_with(dxf, "ezdxf"), load_template(tp), renumber=args.renumber, frames=False)
         except TemplateError as exc:
             print(str(exc), file=sys.stderr)
             return _pause(args, 2)
@@ -1051,6 +1053,8 @@ def main(argv: list[str] | None = None) -> int:
     tp.add_argument("--workspace", default=None, help="thư mục dự án (mặc định thư mục chứa bản vẽ)")
     tp.add_argument("--template", default=None, help="check/apply: tệp template.yaml (mặc định của dự án/máy)")
     tp.add_argument("--renumber", action="store_true", help="apply: đánh số bản vẽ lại theo thứ tự tờ")
+    tp.add_argument("--attribs-only", action="store_true",
+                    help="apply: chỉ điền thuộc tính, không thay khung/đổi hệ số/dời khung")
     tp.add_argument("--json", action="store_true")
     tp.add_argument("--yes", action="store_true", help="apply: áp dụng ngay khi xem trước đạt")
     tp.add_argument("--dwg", action="store_true", help="apply: ghi thêm DWG (cần accoreconsole)")
