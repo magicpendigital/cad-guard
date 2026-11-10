@@ -434,3 +434,37 @@ def test_cli_propose_bad_ops_vietnamese(ws, tmp_path):
     ops_file.write_text(json.dumps([{"op": "xoa_doi_tuong"}]), encoding="utf-8")
     p = _cli(["propose", str(ws.root / BAD), "--ops", str(ops_file)], tmp_path)
     assert p.returncode == 2 and "không có trong từ vựng" in p.stderr.decode("utf-8")
+
+
+def test_apply_tolerates_explicit_defaults_written_by_autocad(tmp_path):
+    """AutoCAD ghi tường minh giá trị mặc định (vd. độ rộng nét 43 = 0.0); ezdxf bỏ khi lưu. Không được coi là
+    'thuộc tính bị đổi ngoài phạm vi' (lỗi gặp ở bản vẽ thật 10/11: const_width ×6056)."""
+    root = tmp_path / "ws"
+    root.mkdir()
+    doc = ezdxf.new("R2018")
+    doc.layers.add("CU")
+    msp = doc.modelspace()
+    for i in range(3):
+        msp.add_lwpolyline([(0, i), (100, i), (100, i + 50)], dxfattribs={"layer": "CU"})
+    raw = root / "raw.dxf"
+    doc.saveas(raw)
+    lines = raw.read_text(encoding="utf-8").splitlines()
+    out_lines, i, injected = [], 0, 0
+    while i < len(lines):
+        out_lines.append(lines[i])
+        if lines[i].strip() == "90" and i > 0 and any(x.strip() == "LWPOLYLINE" for x in lines[max(0, i - 30):i]):
+            out_lines.append(lines[i + 1])
+            out_lines += [" 43", "0.0"]
+            injected += 1
+            i += 2
+            continue
+        i += 1
+    assert injected == 3
+    (root / "autocad.dxf").write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    assert read_doc(root / "autocad.dxf").modelspace().query("LWPOLYLINE")[0].dxf.hasattr("const_width")
+    ws = Workspace(root)
+    cs, pv = propose(ws, "autocad.dxf", [{"op": "rename_layer", "from": "CU", "to": "MOI"}], standard="design-hygiene-v0",
+                     standards_dir=STDS)
+    assert pv["ok"]
+    res = apply(ws, cs.id, confirm=True, standards_dir=STDS)
+    assert res["validation"]["ok"], res["validation"]["checks"]

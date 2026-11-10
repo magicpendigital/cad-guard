@@ -285,10 +285,32 @@ def summary_text(ok: bool, rules: dict, checks: list[dict]) -> str:
             f"giảm: {len(rules['improved'])}; xuất hiện mới/tăng: {rules['rules_regressed']}.")
 
 
+def _rewritten(path):
+    """Bản gốc sau khi ghi lại bằng cùng thư viện (ezdxf) rồi đọc lại.
+
+    Khi lưu, ezdxf chuẩn hoá giá trị mặc định (const_width=0, extrusion=(0,0,1), giãn dòng MTEXT…): bỏ ghi hoặc ghi
+    tường minh. Bản vẽ thật từ AutoCAD vì thế khác ở hàng nghìn đối tượng dù không thao tác nào đụng tới. So tệp ra với
+    bản gốc ĐÃ ghi lại thì chỉ còn đúng phần thao tác đổi (ghi lại lần hai không đổi gì, đã đo trên bản vẽ 15.183
+    đối tượng)."""
+    import os
+    import tempfile
+
+    fd, name = tempfile.mkstemp(suffix=".dxf", prefix="cg-base-")
+    os.close(fd)
+    try:
+        read_doc(path).saveas(name)
+        return read_doc(name)
+    finally:
+        try:
+            os.unlink(name)
+        except OSError:
+            pass
+
+
 def validate_output(original, output, ops: list[Any], prot: Protection, std: Standard,
                     source_sha256: str | None = None, max_items: int = 50) -> dict:
     """Mở lại hai tệp và kiểm. `source_sha256` (từ changeset) để kiểm tệp gốc chưa bị sửa."""
     ok_hash = None if source_sha256 is None else sha256_file(original) == source_sha256
-    res = evaluate(read_doc(original), read_doc(output), ops, prot, std, ok_hash, max_items)
+    res = evaluate(_rewritten(original), read_doc(output), ops, prot, std, ok_hash, max_items)
     res["output_sha256"] = sha256_file(output)
     return res
