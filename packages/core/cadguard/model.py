@@ -59,6 +59,11 @@ class EntityRec(BaseModel):
     text_height: float | None = None  # TEXT/MTEXT: chiều cao chữ (đơn vị bản vẽ)
     text_rotation: float | None = None  # TEXT/MTEXT: góc xoay (độ)
     arc: tuple[float, float, float, float, float] | None = None  # ARC: (tâm x, tâm y, bán kính, góc đầu, góc cuối) độ
+    # Dựng 3D từ bản vẽ 2D (Luồng 2, 10/11/2026; mô hình cũ không có vẫn hợp lệ). Chỉ DIMENSION thẳng (kiểu 0/1):
+    # [điểm đo 1 (13), điểm đo 2 (14), điểm đường kích thước (10)], góc đo (50, độ), kiểu (70 & 15).
+    dim_pts: list[tuple[float, float]] | None = None
+    dim_angle: float | None = None
+    dim_kind: int | None = None
 
 
 class StyleRec(BaseModel):

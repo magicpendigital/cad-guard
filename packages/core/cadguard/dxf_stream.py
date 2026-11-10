@@ -374,6 +374,12 @@ def _entity_rec(t: str, handle: str, layer: str, color, lw, tc, spec: dict, xs: 
             f["dim_text"] = spec.get(1, "") or ""
             f["pos"] = ((_r(_float(spec, 11)), _r(_float(spec, 21))) if 11 in spec
                         else (_r(_float(spec, 10)), _r(_float(spec, 20))))
+            kind = (_int(spec.get(70, "0")) or 0) & 15
+            f["dim_kind"] = kind
+            if kind in (0, 1) and 13 in spec and 14 in spec:
+                f["dim_pts"] = [(_r(_float(spec, 13)), _r(_float(spec, 23))), (_r(_float(spec, 14)), _r(_float(spec, 24))),
+                                (_r(_float(spec, 10)), _r(_float(spec, 20)))]
+                f["dim_angle"] = _r(_float(spec, 50) or 0.0) if kind == 0 else None
             try:
                 value = _dim_measurement(spec)
                 f["dim_value"] = None if value is None else _r(value)
