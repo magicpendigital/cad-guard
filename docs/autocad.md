@@ -157,10 +157,48 @@ Mỗi lệnh: SAVE → gõ lệnh → CGXUAT tự chạy → cửa sổ cad-guar
 (gõ U để trả lại), bản DWG đã lưu được chép vào `<thư mục làm việc>/.cadguard/backup/` trước khi sửa, bản vẽ không tự
 lưu. Nếu chữ trong bản vẽ đã khác lúc xem trước, không đổi gì. Chi tiết: `docs/sheets-presentation.md` mục F.
 
-Danh sách kiểm tay (chưa chạy trên AutoCAD 2027):
+### 8.1 Danh sách kiểm tay
 
-1. CGUNICODE trên một bản vẽ có chữ `.VnTime`: chữ hiện đúng tiếng Việt (sau khi cài phông Be Vietnam Pro); U trả lại.
-2. CGDICH → en: chữ đổi sang tiếng Anh, số/kích thước giữ nguyên; U trả lại.
-3. CGTRINHBAY: thuộc tính khung tên đổi theo template; hình vẽ không đổi.
-4. Sửa một chữ sau CGXUAT rồi xác nhận áp: phải bị từ chối ("đã khác lúc xem trước").
-5. Bản vẽ có thay đổi chưa lưu: lệnh báo SAVE trước.
+**Trạng thái 10/11/2026: CHƯA chạy trên AutoCAD 2027 có giao diện.** Phiên Luồng 1 chỉ chạy `accoreconsole` (không
+giao diện) để in PDF theo tờ (`cadguard sheets --pdf`, 40/40 tờ trên bản sao tệp phiên thử) và test với COM giả. Bước
+chuẩn bị A ghi cấu hình AutoCAD của người dùng (`acaddoc.lsp`, khoá Applications) nên để người dùng tự bấm. Ghi kết quả
+vào mục 5 (ngày, bản AutoCAD, mục đạt/không đạt, ghi chú).
+
+Chuẩn bị (một lần):
+
+- A. `cadguard app` → tab **Cài đặt** → *Gắn CAD Guard vào AutoCAD* → Cài. Kiểm: `%APPDATA%\Autodesk\AutoCAD 2027\…  Supportcaddoc.lsp` có khối đánh dấu CAD Guard; thư mục cài có `cadguard.lsp`, `cadguard-run.cmd`,
+  `cadguard-acad.json` trỏ đúng Python và mã của `main` (không phải nhánh/worktree cũ).
+- B. Đóng hết phiên CAD Guard cũ (hoặc khởi động lại máy), mở lại AutoCAD; lần đầu chọn *Always load* ở hộp thoại bảo mật.
+- C. Bản vẽ thử: `cadguard fixtures <thư mục>` → mở `sheets/model_sheets.dxf` → SAVEAS DWG 2018 vào thư mục thử
+  (không dùng bản vẽ khách cho các bước sửa). Chuẩn bị template: `cadguard template learn <tệp>.dxf --sheet 1`.
+
+CADGUARD (lệnh một bước, LISP):
+
+1. Bản vẽ chưa đặt tên (Drawing1): `CADGUARD` → hộp thoại "hãy lưu bản vẽ…", không tạo thư mục, không mở trình duyệt.
+2. Bản vẽ đã lưu: `CADGUARD` → tạo `<thư mục bản vẽ>\CADGuard\`, có `<tên>.dxf` (CGXUAT), trình duyệt mở CAD Guard
+   đúng bản vẽ đó (không phải phiên cũ); thanh tiêu đề AutoCAD vẫn là `.dwg`, bản DWG không đổi (so ngày sửa).
+3. Gõ `CADGUARD` lần hai: dùng lại phiên đang chạy (không mở thêm cửa sổ/cổng mới), tự chuyển sang bản vẽ.
+4. Đổi bản vẽ chưa lưu (vẽ thêm một đường, không SAVE) → `CADGUARD`: bản xuất có đường mới (DXFOUT xuất trạng thái đang
+   mở); AutoCAD không tự lưu.
+5. Chưa gắn CAD Guard (gỡ ở tab Cài đặt, mở lại AutoCAD): `CADGUARD` báo "chưa được cài… Cài đặt > Gắn CAD Guard".
+
+CGBANG (plugin .NET, bảng neo):
+
+6. Sau bước A + B, mở AutoCAD **không** NETLOAD tay: `CGBANG` chạy được (plugin tự nạp qua khoá Applications,
+   `LOADCTRLS` = 2); dòng lệnh có `[cad-guard] Đã nạp plugin…` đúng dấu tiếng Việt.
+7. `CGBANG`: bảng neo phải hiện CAD Guard, tự mở đúng bản vẽ đang mở, quét được; tab Cài đặt hiện trong bảng (không phải
+   giao diện phiên cũ). Bảng hẹp không bị cắt mép.
+8. Trong bảng, thẻ lỗi → **Tới trong AutoCAD**: AutoCAD phóng tới và chọn đúng đối tượng (kiểm bằng `LIST`).
+9. `CGGHIM`: ghim số trên bản vẽ giữ cỡ cố định khi phóng to/thu nhỏ; gõ lại để tắt.
+10. Đóng/mở lại bảng nhiều lần, chuyển sang bản vẽ khác: bảng theo bản vẽ đang hoạt động, không treo AutoCAD.
+
+Sửa trong bản vẽ đang mở (Đợt F):
+
+11. CGUNICODE trên một bản vẽ có chữ `.VnTime`: chữ hiện đúng tiếng Việt (sau khi cài phông Be Vietnam Pro); U trả lại.
+12. CGDICH → en: chữ đổi sang tiếng Anh, số/kích thước giữ nguyên; U trả lại. (Chế độ song ngữ `layer` chỉ đi đường tệp:
+    `cadguard translate --mode layer`, mở `<tên>.enlayer.dxf`, bật/tắt layer `CG-DICH-EN`.)
+13. CGTRINHBAY: thuộc tính khung tên đổi theo template; hình vẽ không đổi. Thay khung/đổi hệ số/dời khung không làm
+    trong AutoCAD: CGTRINHBAY in "Không tự làm…"; dùng `cadguard template apply` ra tệp mới.
+14. Sửa một chữ sau CGXUAT rồi xác nhận áp: phải bị từ chối ("đã khác lúc xem trước").
+15. Bản vẽ có thay đổi chưa lưu: lệnh báo SAVE trước.
+16. Sau mỗi lần áp: `<thư mục làm việc>\.cadguardackup\` có bản DWG sao lưu; U trả đúng trạng thái trước.
