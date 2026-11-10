@@ -33,6 +33,7 @@ CJK_STYLE = "CG-ZH"
 LAYER_FONT = ("BeVietnamPro-Regular.ttf", "Be Vietnam Pro")  # phông Unicode công ty (như convert_unicode)
 LAYER_STYLE = "CG-DICH"
 BATCH = 60
+MAX_SPLIT = 2  # lô LLM lỗi/thiếu kết quả: chia đôi thử lại tối đa 2 lần
 MAX_ITEMS = 20000
 GLOSSARY_FILE = Path(".cadguard") / "glossary.yaml"
 TM_FILE = Path(".cadguard") / "translation-memory.json"
@@ -259,16 +260,30 @@ def translate_items(items: list[Item], target: str, *, source_lang: str, backend
             it.source = "tm"
         else:
             todo.append(it)
-    llm_calls = 0
+    llm_calls = llm_errors = 0
     if backend is not None and todo:
         uniq: dict[str, Item] = {}
         for it in todo:
             uniq.setdefault(it.masked, it)
         reps = list(uniq.values())
         got: dict[str, str] = {}
-        for i in range(0, len(reps), BATCH):
-            got.update(_llm_batch(backend, reps[i:i + BATCH], target, glossary, source_lang))
+        queue = [(reps[i:i + BATCH], 0) for i in range(0, len(reps), BATCH)]
+        while queue:
+            batch, depth = queue.pop(0)
             llm_calls += 1
+            try:
+                out = _llm_batch(backend, batch, target, glossary, source_lang)
+            except Exception:  # noqa: BLE001 - LLM lỗi/quá giờ: chia đôi lô thử lại, không bỏ cả lần dịch
+                out = None
+                llm_errors += 1
+            if out is not None:
+                got.update(out)
+            missing = [it for it in batch if it.handle not in got]
+            if missing and len(missing) > 1 and depth < MAX_SPLIT and (out is None or len(missing) < len(batch)):
+                half = (len(missing) + 1) // 2
+                queue += [(missing[:half], depth + 1), (missing[half:], depth + 1)]
+            elif missing and out is None and depth < MAX_SPLIT:
+                queue.append((missing, depth + 1))
         by_masked = {r.masked: got.get(r.handle) for r in reps}
         for it in todo:
             out = by_masked.get(it.masked)
@@ -290,7 +305,7 @@ def translate_items(items: list[Item], target: str, *, source_lang: str, backend
                 it.issues.append(f"lệch thuật ngữ '{t[source_lang]}' → '{want}'")
         if _width(it.target, target) > 1.3 * _width(it.plain, source_lang) and len(it.plain) >= 4:
             it.issues.append("chữ dịch dài hơn nhiều: có thể tràn khung")
-    return {"llm_calls": llm_calls}
+    return {"llm_calls": llm_calls, "llm_errors": llm_errors}
 
 
 def _width(s: str, lang: str) -> float:
@@ -394,7 +409,7 @@ def build(path: Path, target: str, *, workspace: Path, handles: set[str] | None 
         "issue_count": sum(1 for it in items if it.issues), "legacy_converted": conv.converted if mode == "copy" else 0,
         "mode": mode, "layer": layer_name(target) if mode == "layer" else None,
         "layer_skipped": len(skipped_layer), "layer_skipped_handles": skipped_layer[:200],
-        "llm": getattr(backend, "name", None), "llm_calls": stats["llm_calls"],
+        "llm": getattr(backend, "name", None), "llm_calls": stats["llm_calls"], "llm_errors": stats["llm_errors"],
         "rows": [{"handle": it.handle, "type": it.type, "source": it.plain[:200], "target": (it.target or "")[:200],
                   "from": it.source, "masked": it.masked} for it in items][:MAX_ITEMS],
     }

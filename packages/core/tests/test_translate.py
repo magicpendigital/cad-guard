@@ -231,3 +231,18 @@ def test_cli_translate_layer(ws, capsys):
     assert main(["translate", str(ws / "m.dxf"), "--to", "en", "--engine", "none", "--mode", "layer", "--yes"]) == 0
     out = capsys.readouterr().out
     assert "CG-DICH-EN" in out and (ws / "m.enlayer.dxf").is_file()
+
+
+def test_llm_error_splits_batch_and_retries(ws):
+    """Một lượt LLM lỗi (vd. quá giờ) không làm hỏng cả lần dịch: lô được chia đôi và thử lại."""
+    class Flaky(FakeLlm):
+        def complete(self, system, messages):
+            n = len(json.loads(messages[0]["content"])["items"])
+            if n > 8:
+                self.calls += 1
+                raise RuntimeError("quá giờ")
+            return super().complete(system, messages)
+
+    llm = Flaky("en")
+    rep = translate.build(ws / "m.dxf", "en", workspace=ws, backend=llm, update_tm=False)["report"]
+    assert rep["llm_errors"] >= 1 and rep["untranslated"] == 0 and rep["by_source"].get("llm")
