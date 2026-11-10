@@ -242,6 +242,61 @@ def tp10(model: DrawingModel, ctx: Ctx) -> list[Finding]:
     return out
 
 
+def _rows(frames):
+    """Hàng tờ: chồng nhau > 50 % theo chiều đứng (như thứ tự đọc của chỉ mục tờ), trong hàng sắp trái sang phải."""
+    rows: list[list] = []
+    for s in sorted(frames, key=lambda s: -s.windows[0][3]):
+        b = s.windows[0]
+        for row in rows:
+            r = row[0].windows[0]
+            if min(r[3], b[3]) - max(r[1], b[1]) > 0.5 * min(r[3] - r[1], b[3] - b[1]):
+                row.append(s)
+                break
+        else:
+            rows.append([s])
+    return [sorted(r, key=lambda s: s.windows[0][0]) for r in rows]
+
+
+@rule("TP-11")
+def tp11(model: DrawingModel, ctx: Ctx) -> list[Finding]:
+    """Tờ trong một hàng thẳng mép dưới; khoảng cách giữa các tờ kề nhau đều; không chồng nhau. Mức thông tin."""
+    st = _structure(model)
+    frames = [s for s in st.sheets if s.kind == "frame" and s.windows]
+    if len(frames) < 2:
+        raise Skip("cần ít nhất 2 tờ dạng khung trong Model")
+    tol_y = float(ctx.params.get("align_tol", 0.01))  # theo chiều cao tờ thấp nhất của hàng
+    tol_x = float(ctx.params.get("gap_tol", 0.02))  # theo chiều rộng tờ hẹp nhất của hàng
+    out = []
+    for row in _rows(frames):
+        if len(row) < 2:
+            continue
+        boxes = [s.windows[0] for s in row]
+        h = min(b[3] - b[1] for b in boxes)
+        w = min(b[2] - b[0] for b in boxes)
+        bottoms = sorted(b[1] for b in boxes)
+        ref = bottoms[len(bottoms) // 2]
+        off = [s for s, b in zip(row, boxes) if abs(b[1] - ref) > tol_y * h]
+        names = f"{row[0].name}…{row[-1].name}"
+        if off:
+            out.append(Finding("TP-11", f"Hàng {names}: {len(off)} tờ lệch mép dưới so với hàng ("
+                                        + ", ".join(s.name for s in off[:8]) + ")", count=len(off),
+                               handles=[s.frame_handle for s in off if s.frame_handle][:5]))
+        gaps = [boxes[i + 1][0] - boxes[i][2] for i in range(len(boxes) - 1)]
+        over = [row[i + 1] for i, g in enumerate(gaps) if g < -tol_x * w]
+        if over:
+            out.append(Finding("TP-11", f"Hàng {names}: {len(over)} tờ chồng lên tờ bên trái ("
+                                        + ", ".join(s.name for s in over[:8]) + ")", count=len(over),
+                               handles=[s.frame_handle for s in over if s.frame_handle][:5]))
+        elif len(gaps) >= 2:
+            mid = sorted(gaps)[len(gaps) // 2]
+            odd = [row[i + 1] for i, g in enumerate(gaps) if abs(g - mid) > tol_x * w]
+            if odd:
+                out.append(Finding("TP-11", f"Hàng {names}: khoảng cách giữa các tờ không đều (thường {mid:g}; khác ở "
+                                            + ", ".join(s.name for s in odd[:8]) + ")", count=len(odd),
+                                   handles=[s.frame_handle for s in odd if s.frame_handle][:5]))
+    return out
+
+
 @rule("TP-12")
 def tp12(model: DrawingModel, ctx: Ctx) -> list[Finding]:
     st, frames = _frames(model, ctx)

@@ -329,9 +329,10 @@ def apply_ops(model: DrawingModel, tpl: dict, *, renumber: bool = False, fill_sc
 
     1. `replace_title_block`: khung khác template (khối khác, cùng khổ) được thay bằng khối template tại cùng góc dưới
        trái, giữ hệ số, chuyển giá trị thẻ cũ theo `map_tags` (cần `template_dir` có `titleblock.dxf`);
-    2. `set_sheet_scale`: hệ số khung không thuộc tỉ lệ cho phép về tỉ lệ gần nhất, giữ tâm vùng vẽ, CHỈ KHI nội dung
+    2. `set_sheet_scale`: hệ số khung không thuộc tỉ lệ cho phép về tỉ lệ gần nhất, giữ tâm ngang và mép dưới, CHỈ KHI nội dung
        vẫn nằm trong vùng vẽ và khung mới không trùm đối tượng của tờ khác/ngoài tờ;
-    3. `fit_sheet`: nội dung tràn vùng vẽ nhưng vừa thì dời khung cho nội dung vào giữa; không vừa thì chỉ báo;
+    3. `fit_sheet`: nội dung tràn vùng vẽ nhưng vừa thì dời khung cho nội dung vào giữa theo chiều đang tràn (chiều kia
+       giữ nguyên để hàng tờ vẫn thẳng); không vừa thì chỉ báo;
     4. `set_attribs`: trường cố định, tỉ lệ theo hệ số (mới), đánh số tờ.
 
     Không đụng hình vẽ, kích thước, chú thích. `frames=False`: chỉ bước 4 (như trước). Trả (ops, ghi chú)."""
@@ -419,8 +420,9 @@ def apply_ops(model: DrawingModel, tpl: dict, *, renumber: bool = False, fill_sc
             tol = 0.003 * (area[2] - area[0])
             if fill_scale and allowed and not any(abs(k - a) <= 0.001 * a for a in allowed):
                 a = min(allowed, key=lambda x: abs(math.log(x / k)))
-                cx, cy = (area[0] + area[2]) / 2, (area[1] + area[3]) / 2
-                nx, ny = px + k * cx - a * cx, py + k * cy - a * cy
+                # giữ tâm ngang của vùng vẽ và MÉP DƯỚI khung (hàng tờ vẫn thẳng, TP-11)
+                cx = (area[0] + area[2]) / 2
+                nx, ny = px + k * cx - a * cx, py + k * te[1] - a * te[1]
                 if not _inside(pts, nx, ny, a, area, tol):
                     notes.append(f"{s.name}: đưa hệ số {k:g} về 1:{a:g} làm nội dung tràn vùng vẽ; cần chỉnh trong CAD.")
                 elif not clear_window(s, nx, ny, a):
@@ -437,8 +439,11 @@ def apply_ops(model: DrawingModel, tpl: dict, *, renumber: bool = False, fill_sc
                     notes.append(f"{s.name}: nội dung ({bw:.0f}×{bh:.0f} mm khi in) lớn hơn vùng vẽ hoặc đè dải khung "
                                  "tên; chỉ báo, không tự co/dời hình vẽ.")
                 else:
-                    dx = (area[0] + area[2]) / 2 - (max(xs) + min(xs)) / 2
-                    dy = (area[1] + area[3]) / 2 - (max(ys) + min(ys)) / 2
+                    # chỉ dời theo chiều đang tràn (chiều còn lại giữ nguyên để hàng tờ vẫn thẳng, TP-11)
+                    in_x = area[0] - tol <= min(xs) and max(xs) <= area[2] + tol
+                    in_y = area[1] - tol <= min(ys) and max(ys) <= area[3] + tol
+                    dx = 0.0 if in_x else (area[0] + area[2]) / 2 - (max(xs) + min(xs)) / 2
+                    dy = 0.0 if in_y else (area[1] + area[3]) / 2 - (max(ys) + min(ys)) / 2
                     ox, oy = -factor * dx, -factor * dy
                     if clear_window(s, px + ox, py + oy, factor):
                         fits.append({"insert": s.frame_handle, "offset": [ox, oy]})

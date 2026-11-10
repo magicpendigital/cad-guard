@@ -29,6 +29,12 @@ Tệp phiên thử: **40 tờ** (25 tờ 1:15, 10 tờ 1:20, 1 tờ 1:10, 4 tờ
   Thay đổi (mặc định không chọn). Tệp phiên thử: 675 chuỗi (TEXT, MTEXT, thuộc tính, MULTILEADER), 0 không chắc.
 - `cadguard sheets <bản vẽ> --render <thư mục> [--pick 1,3]`: SVG từng tờ + `index.html`, chữ mã cũ hiện đúng (giải mã
   trong bộ nhớ). 40 tờ thật: ~15 giây. `--format png|pdf` cần matplotlib (tuỳ chọn).
+- `cadguard sheets <bản vẽ> --pdf <thư mục> [--pick 1,3-5] [--ctb monochrome.ctb]`: **in PDF từng tờ qua AutoCAD**
+  (`accoreconsole`, một lần mở bản vẽ, mỗi tờ một lệnh `-PLOT` cửa sổ đúng khung, khổ ISO full bleed theo khổ khung,
+  vừa khổ, căn giữa). Tên tệp theo số bản vẽ của template (`NT-01.pdf`); không có template hoặc thiếu số: `To-05.pdf`;
+  trùng số: thêm `-to06`. Khung hệ số lạ (1:66,87) nhận khổ theo kích thước ÷ hệ số. Không ghi đè PDF có sẵn; tờ dạng
+  layout chưa hỗ trợ. Tệp phiên thử (bản sao, AutoCAD 2027): **40/40 tờ** trong 16,8 giây (27 giây cả đọc chỉ mục),
+  tên theo số bản vẽ, khổ A3 420 × 297 mm. Test với AutoCAD thật: `CADGUARD_TEST_AUTOCAD=1`.
 - DWG: `audit`, `sheets`, `unicode`, `translate`, `template` nhận thẳng `.dwg` khi máy có AutoCAD bản đầy đủ
   (`accoreconsole`, tự tìm qua sổ đăng ký; đặt `CADGUARD_ACCORECONSOLE` nếu cần). `--dwg` ghi thêm bản DWG của tệp mới.
 
@@ -37,9 +43,10 @@ Tệp phiên thử: **40 tờ** (25 tờ 1:15, 10 tờ 1:20, 1 tờ 1:10, 4 tờ
 - Học từ một tờ mẫu: `cadguard template learn <bản vẽ> --sheet N --logo <logo.png> --name "…" --company "…"`, hoặc nút
   **Học template từ tờ này** trên thanh Tờ của app. Lưu ở `<dự án>/.cadguard/template/` (`template.yaml`,
   `titleblock.dxf`, logo).
-- Kiểm: `cadguard template check <bản vẽ>` hoặc phòng **Trình bày hồ sơ** trong app. Luật TP-01…TP-10, TP-12
-  (TP-11 chưa cài): đúng khung, chữ ký khối, trường cố định, trường bắt buộc/mẫu, tỉ lệ cho phép, tỉ lệ ghi khớp hệ số,
-  tràn vùng vẽ/đè dải khung tên, đối tượng ngoài tờ, cỡ chữ in tối thiểu, số bản vẽ trùng/sai thứ tự, chữ chưa Unicode.
+- Kiểm: `cadguard template check <bản vẽ>` hoặc phòng **Trình bày hồ sơ** trong app. Luật TP-01…TP-12: đúng khung, chữ ký khối, trường cố định, trường bắt buộc/mẫu, tỉ lệ cho phép, tỉ lệ ghi khớp hệ số,
+  tràn vùng vẽ/đè dải khung tên, đối tượng ngoài tờ, cỡ chữ in tối thiểu, số bản vẽ trùng/sai thứ tự, hàng tờ thẳng mép
+  dưới/khoảng cách đều/không chồng (TP-11, mức thông tin, không cần template; tham số `align_tol`, `gap_tol`), chữ chưa
+  Unicode. Tệp phiên thử: TP-11 ra 1 phát hiện (một hàng 31 tờ, một khe khác).
 - Áp dụng: `cadguard template apply <bản vẽ> [--renumber] [--attribs-only] [--yes]` hoặc các gợi ý TP ở tab Thay đổi.
   Chỉ đổi khung tên, thuộc tính và hệ số/vị trí khung; không đụng hình vẽ, kích thước, chú thích. Thao tác theo thứ tự:
   1. `replace_title_block` (TP-01): khung cũ cùng khổ được thay bằng khối template tại cùng góc dưới trái, giữ hệ số.
@@ -60,6 +67,10 @@ Tệp phiên thử: **40 tờ** (25 tờ 1:15, 10 tờ 1:20, 1 tờ 1:10, 4 tờ
   (tờ 2: nội dung 360 mm > vùng vẽ 350 mm, chỉ báo), TP-08, TP-09, TP-12 (thao tác Unicode riêng); mọi đối tượng hình
   vẽ/kích thước/chú thích giữ nguyên thuộc tính; hoàn tác xoá tệp mới, tệp gốc giữ nguyên mã băm.
 - Trong AutoCAD (CGTRINHBAY) chỉ áp phần thuộc tính; thay khung/hệ số/dời khung đi đường tệp.
+- Xem trước trên bản sao tệp phiên thử (chưa áp dụng): 50 đối tượng đổi (chỉ khung tên và thuộc tính), kiểm ĐẠT;
+  TP-06 11 → 4, TP-07 33 → 16, TP-05 5 → 4; TP-11 1 → 7 (dời khung cho nội dung vào vùng vẽ làm hàng tờ lệch, mức thông
+  tin, được báo là tác dụng phụ). 4 tờ 1:66,87 không đưa về tỉ lệ chuẩn được (nội dung sẽ tràn), 4 tờ nội dung lớn hơn
+  vùng vẽ: chỉ báo.
 - Template Grande A3 đã học từ tờ 2 của tệp phiên thử (kèm logo PNG) tại `D:\CadGuardPhien\phien-01\.cadguard\template`.
 
 ## E. Dịch sang Tiếng Anh / Tiếng Trung
@@ -93,6 +104,6 @@ Tệp phiên thử: **40 tờ** (25 tờ 1:15, 10 tờ 1:20, 1 tờ 1:10, 4 tờ
 
 ## Chưa làm / giới hạn
 
-- In PDF hàng loạt theo tờ qua AutoCAD, gộp Studio vào App, TP-11 chưa làm.
+- Gộp Studio vào App chưa làm.
 - Bộ thực thi AutoCAD mới thử với COM giả trong test; cần kiểm tay trên AutoCAD 2027 (danh sách ở `docs/autocad.md`).
 - Phông Be Vietnam Pro chưa cài trên máy thử: AutoCAD sẽ thay phông cho tới khi cài (Google Fonts, giấy phép OFL).

@@ -213,3 +213,24 @@ def test_cli_template_apply_frames(tmp_path, capsys):
     assert len(outs) == 1
     ids, _ = _ids(ws, outs[0].name)
     assert set(ids) <= NOT_FIXABLE
+
+
+def test_tp11_rows_aligned_and_evenly_spaced(tmp_path):
+    fixtures.make_model_sheets(tmp_path / "m.dxf")  # tờ kề nhau, cùng mép dưới: không có TP-11
+    std = rule_config.effective_standard("sheet-layout-v0", STD, workspace=tmp_path)
+    assert not [f for f in audit_model(read_dxf(tmp_path / "m.dxf"), std).findings if f.rule_id == "TP-11"]
+    doc = ezdxf.readfile(tmp_path / "m.dxf")
+    frames = sorted((e for e in doc.modelspace().query("INSERT") if e.dxf.name == fixtures.CO_FRAME),
+                    key=lambda e: e.dxf.insert.x)
+    frames[2].translate(0, 300, 0)  # tờ 3 lệch lên
+    for f in frames[4:]:  # khe 500 trước tờ 5 (các khe khác 0)
+        f.translate(500, 0, 0)
+    doc.saveas(tmp_path / "x.dxf")
+    tp11 = [f for f in audit_model(read_dxf(tmp_path / "x.dxf"), std).findings if f.rule_id == "TP-11"]
+    msgs = " | ".join(f.message for f in tp11)
+    assert len(tp11) == 2 and "lệch mép dưới" in msgs and "Tờ 3" in msgs and "không đều" in msgs and "Tờ 5" in msgs
+    assert all(f.severity == "I" for f in tp11)
+    frames[5].translate(-3000, 0, 0)  # tờ 6 chồng lên tờ 5
+    doc.saveas(tmp_path / "y.dxf")
+    tp11 = [f for f in audit_model(read_dxf(tmp_path / "y.dxf"), std).findings if f.rule_id == "TP-11"]
+    assert any("chồng" in f.message for f in tp11)

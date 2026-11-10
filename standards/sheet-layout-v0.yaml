@@ -110,12 +110,15 @@ rules:
   realtime_ok: false
 - id: TP-11
   title: Các tờ thẳng hàng, khoảng cách đều
-  reads: vị trí khung tờ
+  reads: vị trí khung tờ (khung trong Model), hàng tờ theo thứ tự đọc
   kind: deterministic
   severity: I
   false_positive_risk: medium
   source: 'mục 4.3 (mức thông tin)'
-  implemented: false
+  params:
+    align_tol: 0.01  # lệch mép dưới cho phép, theo chiều cao tờ thấp nhất của hàng
+    gap_tol: 0.02  # lệch khoảng cách giữa tờ cho phép, theo chiều rộng tờ hẹp nhất của hàng
+  implemented: true
   enabled: true
   realtime_ok: false
 - id: TP-12

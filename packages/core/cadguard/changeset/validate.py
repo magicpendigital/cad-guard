@@ -131,6 +131,10 @@ def tolerated_rules(ops: list[Any]) -> set[str]:
             out.add("VS-02")  # chuyển một phần: thêm kiểu chữ "<tên>-UNICODE"
         if o.op in ("set_texts", "add_texts") and o.style:
             out.add("VS-02")  # dịch sang Tiếng Trung: thêm kiểu chữ CJK
+        if o.op in ("set_sheet_scale", "fit_sheet"):
+            out.add("TP-11")  # đổi cỡ/vị trí khung có thể làm hàng tờ lệch/khe không đều (mức thông tin)
+        if o.op in ("set_sheet_scale", "fit_sheet"):
+            out.add("TP-11")  # đổi cỡ/vị trí khung có thể làm hàng tờ lệch/khe không đều (mức thông tin)
         if o.op == "replace_title_block":
             # khung cũ không được các luật theo khung template kiểm; sau khi thay, các luật này mới chạy được trên tờ đó
             # nên lỗi CÓ SẴN (vd. nội dung tràn khung) mới hiện ra: báo trong xem trước, không chặn
