@@ -61,3 +61,4 @@ Phạm vi kết nối AutoCAD đã duyệt:
 | `plans/cad-guard-3d.md` | Dựng 3D tất định và Studio |
 | `plans/cad-guard-platform.md` | Tệp nặng, nhiều định dạng, giao diện hợp nhất (đánh giá) |
 | `plans/cad-guard-vision-assessment.md` | Đánh giá hướng mở rộng dài hạn (chưa thành kế hoạch) |
+| `plans/cad-guard-sheets-presentation.md` | **Đề xuất chờ duyệt (10/11/2026):** mở rào chặn cho dùng nội bộ, sửa luật không tài khoản, chỉ mục tờ, chuyển chữ Unicode, template trình bày, dịch bản vẽ, đánh giá MCP AutoCAD; Đợt A–F |
