@@ -185,7 +185,8 @@
 ;; ---------- Đợt F: chạy cad-guard trên bản vẽ đang mở rồi áp vào chính bản đó (xem trước + xác nhận + undo) ----------
 ;; Tệp chạy cadguard-run.cmd do `cadguard autocad --copy-to <thư mục>` ghi cạnh tệp này.
 (defun cg:runner ( / r)
-  (setq r (getenv "CadGuardRunner"))
+  (if (and (boundp 'cg:*home*) cg:*home*) (setq r (findfile (strcat cg:*home* "cadguard-run.cmd"))))
+  (if (null r) (setq r (getenv "CadGuardRunner")))
   (if (or (null r) (not (findfile r))) (setq r (findfile "cadguard-run.cmd")))
   (if (null r)
     (progn
@@ -227,10 +228,38 @@
 (defun c:CGTRINHBAY () (cg:run "template" ""))
 (defun c:CGKIEM () (cg:run "check" ""))
 
+;; ---------- CADGUARD: MỘT lệnh cho cả quy trình ----------
+;; Thư mục làm việc <thư mục bản vẽ>\CADGuard (tự tạo) -> xuất DXF -> mở CAD Guard đúng bản vẽ này.
+;; Mọi việc tiếp theo (kiểm, chuyển Unicode, dịch, trình bày theo template) là nút bấm trong CAD Guard.
+(defun c:CADGUARD ( / dir r)
+  (cond
+    ((= (getvar "DWGTITLED") 0)
+     (alert "CAD Guard: hãy lưu bản vẽ (Save) một lần để có tên tệp, rồi gõ lại CADGUARD."))
+    (T
+     ;; DXFOUT xuất đúng trạng thái đang mở (kể cả phần chưa lưu); cad-guard không bao giờ tự lưu bản vẽ.
+     (setq dir (cg:winpath (strcat (getvar "DWGPREFIX") "CADGuard")))
+     (if (not (vl-file-directory-p dir)) (vl-mkdir dir))
+     (setq r (cg:runner))
+     (cond
+       ((not (vl-file-directory-p dir))
+        (alert (strcat "CAD Guard: không tạo được thư mục\n" dir "\nKiểm quyền ghi của thư mục bản vẽ.")))
+       ((null r)
+        (alert "CAD Guard chưa được cài vào AutoCAD.\nMở CAD Guard > Cài đặt > Gắn CAD Guard vào AutoCAD."))
+       (T
+        (setenv cg:*env* dir)
+        (c:CGXUAT)
+        (startapp "cmd.exe" (strcat "/c \"\"" r "\" open --workspace \"" dir "\" --drawing \"" (cg:base) "\"\""))
+        (princ "\n[cad-guard] Đang mở CAD Guard cho bản vẽ này trong trình duyệt. Sửa xong trong CAD Guard, quay lại AutoCAD.")))))
+  (princ)
+)
+
 ;; ---------- CGHELP: tra cứu lệnh ----------
 ;; Mỗi mục: (tên  mô-tả-ngắn  (dòng hướng dẫn chi tiết ...)). Giữ khớp docs/autocad.md.
 (setq cg:*help*
   (list
+    (list "CADGUARD" "MỘT lệnh cho cả quy trình: xuất bản sao, mở CAD Guard đúng bản vẽ này"
+      (list "Dùng khi: muốn kiểm hoặc sửa bản vẽ đang mở. Gõ CADGUARD; mọi việc tiếp theo là nút bấm trong CAD Guard."
+            "Thư mục làm việc tự đặt là <thư mục bản vẽ>\\CADGuard; bản DWG không bị đổi."))
     (list "CGTHUMUC" "Chọn thư mục làm việc của cad-guard"
       (list "Dùng khi: lần đầu, hoặc khi đổi sang thư mục dự án khác."
             "Cách dùng: gõ CGTHUMUC, dán đường dẫn thư mục (vd. D:\\CadGuardPhien\\phien-01), Enter."
@@ -284,15 +313,15 @@
 (defun c:CGHELP ( / name it)
   (princ "\n[cad-guard] Các lệnh:")
   (foreach it cg:*help* (cg:helpline it))
-  (princ "\n  Quy trình thường dùng: CGTHUMUC (một lần) -> CGXUAT -> CGBAOCAO hoặc cadguard app -> CGTOI/CGDEN.")
+  (princ "\n  Thường chỉ cần MỘT lệnh: CADGUARD. Các lệnh còn lại dành cho người dùng nâng cao.")
   (while (/= "" (setq name (strcase (getstring "\n[cad-guard] Gõ tên lệnh để xem chi tiết (Enter để thoát): "))))
     (if (setq it (assoc name cg:*help*))
       (progn
         (princ (strcat "\n" (car it) " — " (cadr it)))
         (foreach ln (caddr it) (princ (strcat "\n  - " ln))))
-      (princ (strcat "\n[cad-guard] Không có lệnh \"" name "\". Gõ một trong: CGTHUMUC CGXUAT CGBAOCAO CGTOI CGDEN CGKIEM CGUNICODE CGDICH CGTRINHBAY CGHELP CGBANG CGGHIM."))))
+      (princ (strcat "\n[cad-guard] Không có lệnh \"" name "\". Gõ một trong: CADGUARD CGTHUMUC CGXUAT CGBAOCAO CGTOI CGDEN CGKIEM CGUNICODE CGDICH CGTRINHBAY CGHELP CGBANG CGGHIM."))))
   (princ)
 )
 
-(princ "\n[cad-guard] Đã nạp: CGTHUMUC, CGXUAT, CGTOI, CGDEN, CGBAOCAO, CGKIEM, CGUNICODE, CGDICH, CGTRINHBAY, CGHELP. Gõ CGHELP để xem hướng dẫn.")
+(princ "\n[cad-guard] Đã nạp. Gõ CADGUARD để kiểm và sửa bản vẽ đang mở. Lệnh khác: CGTHUMUC, CGXUAT, CGTOI, CGDEN, CGBAOCAO, CGKIEM, CGUNICODE, CGDICH, CGTRINHBAY, CGHELP. Gõ CGHELP để xem hướng dẫn.")
 (princ)

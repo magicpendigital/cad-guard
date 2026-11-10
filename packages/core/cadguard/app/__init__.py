@@ -57,6 +57,12 @@ def run_from_args(args: argparse.Namespace) -> int:
         print(f"Không mở được cổng {args.port} trên 127.0.0.1 (đang bận?). Thử --port 0.", file=sys.stderr)
         return 2
     url = url_of(app)
+    from .launcher import clear_instance, write_instance
+
+    try:
+        write_instance(url, app.token, app.port)  # để lối tắt / lệnh CADGUARD dùng lại phiên đang chạy
+    except OSError:
+        pass
     print("cad-guard app đang chạy (chỉ máy này, 127.0.0.1). Mở địa chỉ sau trong trình duyệt:")
     print(f"  {url}")
     print("Mã phiên trong địa chỉ là mật khẩu của phiên này: đừng gửi cho người khác. Nhấn Ctrl+C để dừng.")
@@ -74,6 +80,7 @@ def run_from_args(args: argparse.Namespace) -> int:
         print("\nĐã dừng cad-guard app.")
     finally:
         srv.server_close()
+        clear_instance()
     return 0
 
 

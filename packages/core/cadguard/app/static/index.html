@@ -19,8 +19,9 @@
       <button role="tab" type="button" aria-selected="true" data-go="home"><span data-icon="home"></span>Việc của tôi <small>phòng của bạn</small></button>
       <button role="tab" type="button" aria-selected="false" data-go="work" tabindex="-1"><span data-icon="pen"></span>Bản vẽ <small>làm việc</small></button>
       <button role="tab" type="button" aria-selected="false" data-go="overview" tabindex="-1"><span data-icon="bars"></span>Tổng quan <small>trưởng phòng</small></button>
-      <button role="tab" type="button" aria-selected="false" data-go="rules" tabindex="-1"><span data-icon="list"></span>Luật áp dụng <small>chỉ đọc</small></button>
+      <button role="tab" type="button" aria-selected="false" data-go="rules" tabindex="-1"><span data-icon="list"></span>Luật áp dụng <small>bật/tắt, ngưỡng</small></button>
       <button role="tab" type="button" aria-selected="false" data-go="connect" tabindex="-1"><span data-icon="plug"></span>Kết nối AI <small>CLI · khoá API</small></button>
+      <button role="tab" type="button" aria-selected="false" data-go="setup" tabindex="-1"><span data-icon="gear"></span>Cài đặt <small>bấm là xong</small></button>
     </nav>
     <div class="spacer"></div>
     <span class="chip" id="dataChip" title="Mức dữ liệu gửi cho AI"><span data-icon="lock"></span>Dữ liệu: <b id="dataMode">Bậc 1</b></span>
@@ -208,6 +209,21 @@
   </div></div></main>
 
   <!-- ============ KẾT NỐI AI ============ -->
+  <main class="screen" id="s-setup"><div class="page"><div class="page-in">
+    <h1>Cài đặt</h1>
+    <p class="lead">Làm một lần trên mỗi máy. Bấm <b>Cài</b> ở từng mục; không cần gõ lệnh nào.</p>
+    <div id="setupList" class="setup-list"></div>
+    <div class="card setup-how">
+      <h2>Dùng hằng ngày</h2>
+      <ol>
+        <li>Mở bản vẽ trong AutoCAD, gõ <b>CADGUARD</b> rồi Enter.</li>
+        <li>CAD Guard mở trong trình duyệt và tự kiểm bản vẽ đó.</li>
+        <li>Bấm nút ngay trên màn hình: <b>Chuyển chữ sang Unicode</b>, <b>Dịch</b>, <b>Học template từ tờ này</b>, các thao tác sửa ở tab Thay đổi. Mỗi thao tác cho xem trước, bấm Áp dụng mới ghi ra tệp mới; tệp gốc giữ nguyên.</li>
+      </ol>
+      <p class="meta">Không có AutoCAD? Bấm đúp lối tắt <b>CAD Guard</b> trên màn hình, chọn thư mục có bản vẽ DXF/DWG.</p>
+    </div>
+  </div></div></main>
+
   <main class="screen" id="s-connect"><div class="page"><div class="page-in">
     <h1>Kết nối AI</h1>
     <p class="lead">Chọn cách trợ lý "nghĩ". cad-guard luôn dùng cùng một bộ công cụ kiểm bản vẽ, dù bạn dùng trợ lý nào.</p>

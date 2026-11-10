@@ -121,6 +121,8 @@
   // Bảng neo trong AutoCAD (plugin CadGuard.Acad, lệnh CGBANG): ?panel=1&dwg=<tên bản vẽ đang mở>
   if (qs.get("panel") === "1") sessionStorage.setItem("cg-panel", "1");
   if (qs.get("dwg")) sessionStorage.setItem("cg-dwg", qs.get("dwg").slice(0, 255));
+  // Lệnh AutoCAD CADGUARD: ?open=1&dwg=<tên bản vẽ> -> mở và quét ngay bản vẽ đó (không phải chế độ bảng neo)
+  const OPEN_DWG = qs.get("open") === "1";
   const PANEL = sessionStorage.getItem("cg-panel") === "1";
   if (qs.get("t")) {
     sessionStorage.setItem("cg-token", TOKEN);
@@ -255,6 +257,7 @@
     else if (name === "overview") loadOverview();
     else if (name === "rules") loadRules();
     else if (name === "connect") loadConnect();
+    else if (name === "setup") loadSetup();
     else if (name === "project") loadProjects();
     else if (name === "work") renderSheet();
   }
@@ -2563,6 +2566,31 @@
     renderCost(null);
   }
 
+  // ---------- CÀI ĐẶT (một lần mỗi máy) ----------
+  async function loadSetup() {
+    try { renderSetup((await api("/api/setup")).steps); } catch (e) { toast(e.message); }
+  }
+  function renderSetup(steps) {
+    S.setupSteps = steps;
+    fill($("setupList"), ...steps.map((s) => {
+      const res = el("span", {class: "meta"});
+      const run = async (remove, btn) => {
+        btn.disabled = true;
+        res.textContent = remove ? "Đang gỡ…" : "Đang cài…";
+        try { renderSetup((await api("/api/setup/run", {step: s.id, remove})).steps); toast(remove ? `Đã gỡ: ${s.title}` : `Xong: ${s.title}`); }
+        catch (e) { res.textContent = e.message; btn.disabled = false; }
+      };
+      const install = el("button", {class: "btn-p btn-sm", type: "button", disabled: s.available === false,
+        onclick: (e) => run(false, e.currentTarget)}, s.done ? "Cài lại" : "Cài");
+      const remove = el("button", {class: "btn-s btn-sm", type: "button", onclick: (e) => run(true, e.currentTarget)}, "Gỡ");
+      return el("div", {class: "card setup-row" + (s.done ? " done" : "")},
+        el("div", {class: "setup-ic"}, s.done ? pill("ok", "Đã xong", "check") : pill("warn", "Chưa", "alert")),
+        el("div", {class: "grow1"}, el("div", {class: "ttl", text: s.title}), el("div", {class: "meta", text: s.why}),
+          el("div", {class: "meta", text: s.detail}), res),
+        el("div", {class: "bar-act"}, install, s.done ? remove : null));
+    }));
+  }
+
   // ---------- hồ sơ công ty ----------
   function openProfileModal() {
     const p = S.session.profile;
@@ -2661,8 +2689,18 @@
     if (hasProject()) {
       await loadFiles();
       loadChangesets();
-      if (PANEL) await openPanel(); else go("home");
+      if (PANEL) await openPanel(); else if (OPEN_DWG) await openFromAutocad(); else go("home");
     } else go("project");
+  }
+
+  async function openFromAutocad() {
+    go("work");
+    const dwg = (sessionStorage.getItem("cg-dwg") || "").toLowerCase();
+    sessionStorage.removeItem("cg-dwg");
+    const stem = (p) => p.split("/").pop().replace(/\.dxf$/i, "").toLowerCase();
+    const hit = dwg ? S.files.find((f) => stem(f.path) === dwg && !f.is_output) : null;
+    if (hit) await openFile(hit.path, {scan: true});
+    else { go("home"); toast("Chưa thấy bản DXF của bản vẽ này. Trong AutoCAD gõ lại CADGUARD."); }
   }
 
   // Chế độ bảng neo trong AutoCAD: chỉ cột phải (Lỗi, Trợ lý, Hướng dẫn), tự mở DXF trùng tên bản vẽ đang mở.

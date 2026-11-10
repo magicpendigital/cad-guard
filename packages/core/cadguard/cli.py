@@ -502,6 +502,36 @@ def _pause(args, rc: int) -> int:
     return rc
 
 
+def cmd_open(args: argparse.Namespace) -> int:
+    """Mở CAD Guard (dùng lại phiên đang chạy), chuyển tới dự án/bản vẽ. Dùng cho lối tắt và lệnh AutoCAD CADGUARD."""
+    from .app.launcher import open_app
+
+    try:
+        url = open_app(Path(args.workspace) if args.workspace else None, args.drawing)
+    except RuntimeError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    print(f"Đã mở CAD Guard: {url.split('?')[0]}")
+    return 0
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Cài đặt một lần: phông Be Vietnam Pro, gắn vào AutoCAD, lối tắt màn hình. Không tham số: in tình trạng."""
+    from . import setup
+
+    steps = ["font", "autocad", "shortcut"] if args.all else [s for s in (args.step or [])]
+    try:
+        for s in steps:
+            setup.run(s, remove=args.remove)
+            print(("Đã gỡ: " if args.remove else "Đã cài: ") + s)
+    except setup.SetupError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    for st in setup.status():
+        print(f"[{'x' if st['done'] else ' '}] {st['title']}: {st['detail']}")
+    return 0
+
+
 def cmd_profile(args: argparse.Namespace) -> int:
     """Hồ sơ số liệu cho bản vẽ thật: chỉ số tổng hợp, khoá là mã băm, không tên tệp/layer/nội dung."""
     from .profile import profile_dxf, profile_dxf_stream
@@ -1048,6 +1078,17 @@ def main(argv: list[str] | None = None) -> int:
     ar.add_argument("--yes", action="store_true")
     ar.add_argument("--pause", action="store_true", help="giữ cửa sổ sau khi xong (khi chạy từ AutoCAD)")
     ar.set_defaults(fn=cmd_autocad_run)
+
+    op = sub.add_parser("open", help="mở CAD Guard (dùng lại phiên đang chạy); dùng cho lối tắt và lệnh AutoCAD CADGUARD")
+    op.add_argument("--workspace", default=None, help="thư mục dự án")
+    op.add_argument("--drawing", default=None, help="tên bản vẽ (không đuôi) để mở và quét ngay")
+    op.set_defaults(fn=cmd_open)
+
+    se = sub.add_parser("setup", help="cài đặt một lần: phông Be Vietnam Pro, gắn vào AutoCAD, lối tắt màn hình")
+    se.add_argument("step", nargs="*", help="font | autocad | shortcut (bỏ trống: chỉ xem tình trạng)")
+    se.add_argument("--all", action="store_true", help="cài mọi bước")
+    se.add_argument("--remove", action="store_true", help="gỡ các bước đã chọn")
+    se.set_defaults(fn=cmd_setup)
 
     ll = sub.add_parser("learn-layers", help="học quy ước tên layer của công ty từ một bản vẽ (giảm nhiễu LY-01)")
     ll.add_argument("path")

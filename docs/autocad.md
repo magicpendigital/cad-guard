@@ -1,4 +1,28 @@
-# Chạy thử cad-guard với AutoCAD (M1 + M2 duyệt 07/11/2026; M3 + hướng D mở cổng 09/11/2026)
+# CAD Guard trong AutoCAD
+
+## Bắt đầu nhanh (người dùng thiết kế, không cần biết lệnh)
+
+**Cài một lần trên mỗi máy**
+
+1. Bấm đúp lối tắt **CAD Guard** trên màn hình (lần đầu do người phụ trách IT chạy `cadguard setup --all` hoặc mở
+   CAD Guard rồi vào màn **Cài đặt**).
+2. Trong CAD Guard, màn **Cài đặt**: bấm **Cài** ở ba mục: *Phông Be Vietnam Pro*, *Gắn CAD Guard vào AutoCAD*,
+   *Lối tắt CAD Guard trên màn hình*.
+3. Mở lại AutoCAD. Lần đầu AutoCAD có thể hỏi có nạp `cadguard.lsp` không: bấm **Always load**.
+
+**Dùng hằng ngày: một lệnh**
+
+- Mở bản vẽ, gõ **`CADGUARD`** rồi Enter. CAD Guard tự xuất bản sao DXF (kể cả phần chưa lưu; bản vẽ không bị lưu hay đổi) vào thư mục
+  `CADGuard` cạnh bản vẽ, mở trình duyệt và kiểm ngay bản vẽ đó. Bản DWG không bị đổi.
+- Mọi việc tiếp theo là **nút bấm** trong CAD Guard: xem lỗi theo tờ, *Tới trong AutoCAD*, *Chuyển chữ sang Unicode*,
+  *Dịch* (Tiếng Anh / Tiếng Trung), *Học template từ tờ này*, các thao tác sửa ở tab **Thay đổi** (xem trước → Áp dụng →
+  tệp mới, Hoàn tác được).
+
+Các mục dưới đây dành cho người dùng nâng cao và người phụ trách kỹ thuật.
+
+---
+
+## Nâng cao: kiến trúc theo tệp (M1 + M2 duyệt 07/11/2026; M3 + hướng D mở cổng 09/11/2026)
 
 Phạm vi đã duyệt (xem `PLAN.md` mục 3): **theo tệp**; ngoài ra M3 chỉ để **điều hướng** (đưa AutoCAD tới đối tượng lỗi qua COM, mục 6), không sửa bản vẽ.
 

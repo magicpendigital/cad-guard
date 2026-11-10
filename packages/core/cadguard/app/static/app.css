@@ -629,3 +629,11 @@ body.acad-panel .tabs{overflow-x:auto}
 .re-grid label.prm:first-child{flex-direction:row;align-items:center;gap:6px}
 .re-grid input[type=number],.re-grid input[type=text],.re-grid textarea,.re-grid select{font:13px var(--mono);padding:4px 6px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg);color:var(--text)}
 .f-top .link.sm{font-size:12px;margin-left:6px}
+
+.setup-list{display:grid;gap:10px;max-width:900px;margin-bottom:18px}
+.setup-row{display:flex;gap:14px;align-items:flex-start}
+.setup-row .ttl{font-weight:600;margin-bottom:2px}
+.setup-row.done{opacity:.92}
+.setup-how{max-width:900px}
+.setup-how ol{margin:8px 0 8px 20px;padding:0;line-height:1.6}
+@media (max-width:640px){.setup-row{flex-wrap:wrap}}

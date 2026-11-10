@@ -216,6 +216,24 @@ class CadGuardApp:
         cs = api.list_changesets(data)["changesets"]
         return history.overview(data.history.read(), data.departments["departments"], titles.get, realtime.get, cs)
 
+    def setup_status(self) -> dict:
+        from .. import setup
+
+        return {"steps": setup.status()}
+
+    def setup_run(self, step: Any, remove: bool) -> dict:
+        from .. import setup
+
+        if not isinstance(step, str):
+            raise ApiError("Chưa chọn bước cài đặt.")
+        try:
+            setup.run(step, remove=remove)
+        except setup.SetupError as exc:
+            raise ApiError(str(exc)) from None
+        except OSError as exc:
+            raise ApiError(f"Không ghi được tệp ({type(exc).__name__}).", 500) from None
+        return {"steps": setup.status()}
+
     def _anon(self) -> bool:
         return self.data.anonymize if self.data is not None else privacy_effective(None, self.config.anonymize)
 
@@ -335,6 +353,8 @@ class CadGuardApp:
             ("POST", "/api/rules/learn_layers"): lambda q, b: api.learn_layers(d(), b.get("file"), b.get("standard"),
                                                                               b.get("scope", "project")),
             ("GET", "/api/template"): lambda q, b: api.template_info(d()),
+            ("GET", "/api/setup"): lambda q, b: self.setup_status(),
+            ("POST", "/api/setup/run"): lambda q, b: self.setup_run(b.get("step"), b.get("remove") is True),
             ("POST", "/api/translate"): lambda q, b: api.translate_drawing(d(), b.get("file"), b.get("to"), b.get("sheet"),
                                                                           self.translate_backend),
             ("POST", "/api/template/learn"): lambda q, b: api.template_learn(d(), b.get("file"), b.get("sheet"),
