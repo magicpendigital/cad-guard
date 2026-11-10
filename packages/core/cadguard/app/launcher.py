@@ -1,5 +1,7 @@
 """`cadguard open`: một cú bấm (lối tắt màn hình) hoặc một lệnh AutoCAD (CADGUARD) là vào thẳng ứng dụng.
 
+- Phiên đang chạy từ mã CŨ (mã trong thư mục đã đổi sau khi phiên khởi động, vd. vừa cập nhật/gộp nhánh) thì
+  không dùng lại: bảo phiên cũ tự tắt rồi khởi động phiên mới, để giao diện và máy chủ luôn cùng một phiên bản mã.
 - Ứng dụng đang chạy thì dùng lại (đọc `<thư mục cấu hình>/app-instance.json`: địa chỉ, mã phiên, pid); chưa chạy thì
   khởi động ngầm (`pythonw -m cadguard app --no-browser`) và chờ nó sẵn sàng.
 - Có `--workspace` thì chuyển ứng dụng sang thư mục dự án đó; có `--drawing` thì mở và quét bản vẽ trùng tên.
@@ -7,6 +9,7 @@
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -28,13 +31,42 @@ def instance_path() -> Path:
 def write_instance(url: str, token: str, port: int) -> None:
     p = instance_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"url": url, "token": token, "port": port, "pid": os.getpid(), "pkg": _pkg()}),
-                 encoding="utf-8")
+    p.write_text(json.dumps({"url": url, "token": token, "port": port, "pid": os.getpid(), "pkg": _pkg(),
+                             "code": code_stamp()}), encoding="utf-8")
 
 
 def _pkg() -> str:
     """Thư mục mã đang chạy: phiên của bản cũ/thư mục khác thì không dùng lại (tránh giao diện cũ)."""
     return str(Path(__file__).resolve().parents[2])
+
+
+_STAMP: str | None = None
+
+
+def _stamp_now() -> str:
+    """Dấu vân tay mã: tên + thời điểm sửa + cỡ của mọi tệp .py/.js/.css/.html/.yaml trong gói và thư mục chuẩn."""
+    root = Path(__file__).resolve().parents[1]
+    h = hashlib.sha256()
+    dirs = [root, root.parents[2] / "standards"]
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for f in sorted(d.rglob("*")):
+            if f.suffix in {".py", ".js", ".css", ".html", ".yaml", ".lsp"} and "__pycache__" not in f.parts:
+                try:
+                    st = f.stat()
+                except OSError:
+                    continue
+                h.update(f"{f.relative_to(d)}|{st.st_mtime_ns}|{st.st_size};".encode("utf-8"))
+    return h.hexdigest()[:16]
+
+
+def code_stamp() -> str:
+    """Dấu vân tay mã lúc tiến trình này khởi động (ghi vào tệp phiên) hoặc của mã hiện tại trên đĩa."""
+    global _STAMP
+    if _STAMP is None:
+        _STAMP = _stamp_now()
+    return _STAMP
 
 
 def clear_instance() -> None:
@@ -65,9 +97,19 @@ def running() -> dict | None:
         if inst.get("pkg") != _pkg():
             return None
         _call(inst, "/api/session")
+        if inst.get("code") != _stamp_now():
+            _quit(inst)  # phiên chạy mã cũ: tắt để mở phiên mới đúng mã hiện tại
+            return None
         return inst
     except Exception:  # noqa: BLE001 - không có, đã tắt, hay hỏng: coi như chưa chạy
         return None
+
+
+def _quit(inst: dict) -> None:
+    try:
+        _call(inst, "/api/app/quit", {})
+    except Exception:  # noqa: BLE001 - bản rất cũ không có lệnh tắt: phiên mới vẫn mở ở cổng khác
+        pass
 
 
 def _spawn(workspace: Path | None) -> None:

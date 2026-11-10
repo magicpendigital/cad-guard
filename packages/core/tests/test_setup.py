@@ -84,6 +84,30 @@ def test_open_reuses_running_app_and_switches_project(tmp_path, monkeypatch):
         srv.server_close()
 
 
+def test_open_replaces_app_running_old_code(tmp_path, monkeypatch):
+    monkeypatch.setenv("CADGUARD_CONFIG_DIR", str(tmp_path / "cfg"))
+    from cadguard.app import AppConfig, CadGuardApp
+    from cadguard.app import launcher
+    from cadguard.app.server import start_in_thread, url_of
+
+    app = CadGuardApp(AppConfig(workspace=tmp_path), cli_detect=lambda name: {"installed": None})
+    srv, _t = start_in_thread(app)
+    stopped = []
+    app.on_quit = lambda: stopped.append(True)
+    try:
+        launcher.write_instance(url_of(app), app.token, app.port)
+        assert launcher.running() is not None  # cùng mã: dùng lại
+        monkeypatch.setattr(launcher, "_stamp_now", lambda: "ma-moi")
+        assert launcher.running() is None  # mã đã đổi: không dùng lại, bảo phiên cũ tắt
+        import time
+
+        time.sleep(0.6)
+        assert stopped == [True]
+    finally:
+        srv.shutdown()
+        srv.server_close()
+
+
 def test_setup_api(home):
     from cadguard.app import AppConfig, CadGuardApp
 

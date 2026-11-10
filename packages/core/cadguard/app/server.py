@@ -72,6 +72,7 @@ class CadGuardApp:
         self.standards_dir = Path(config.standards_dir or find_standards_dir(Path(__file__).resolve())).resolve()
         self.departments = load_departments(config.departments_path or DEPARTMENTS_FILE, self.standard_names())
         self.data: AppData | None = None
+        self.on_quit: Callable[[], None] | None = None  # `cadguard app` gán: dừng máy chủ (phiên cũ nhường phiên mới)
         self.profile_note: str | None = None
         self._switch = threading.Lock()
         self.assistant = Assistant(None, config=config, ai_settings=self.settings.ai, **assistant_kwargs)
@@ -250,6 +251,13 @@ class CadGuardApp:
         data.anonymize = value
         return {"anonymize": value, "session": self.session()}
 
+    def quit(self) -> dict:
+        """Tắt phiên (lối tắt gọi khi phiên đang chạy mã cũ). Chỉ khi chạy bằng `cadguard app`."""
+        if self.on_quit is None:
+            raise ApiError("Phiên này không tắt từ xa được.", 409)
+        threading.Timer(0.3, self.on_quit).start()
+        return {"quitting": True}
+
     def session(self) -> dict:
         data = self.data
         prof = data.profile if data else None
@@ -318,6 +326,7 @@ class CadGuardApp:
             ("GET", "/api/review/state"): lambda q, b: d().reviews().state(LOCAL),
             ("POST", "/api/review/action"): lambda q, b: d().reviews().call(LOCAL, b.get("action", ""), {k: v for k, v in b.items() if k != "action"}),
             ("GET", "/api/session"): lambda q, b: self.session(),
+            ("POST", "/api/app/quit"): lambda q, b: self.quit(),
             ("GET", "/api/projects"): lambda q, b: {"current": self.session()["project"], "recent": self.settings.recent(),
                                                     "dialog_available": self.dialog_ok},
             ("POST", "/api/project/pick"): lambda q, b: self.pick("folder"),

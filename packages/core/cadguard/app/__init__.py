@@ -57,7 +57,12 @@ def run_from_args(args: argparse.Namespace) -> int:
         print(f"Không mở được cổng {args.port} trên 127.0.0.1 (đang bận?). Thử --port 0.", file=sys.stderr)
         return 2
     url = url_of(app)
-    from .launcher import clear_instance, write_instance
+    import threading
+
+    from .launcher import clear_instance, code_stamp, write_instance
+
+    code_stamp()  # chốt dấu vân tay mã lúc khởi động
+    app.on_quit = lambda: threading.Thread(target=srv.shutdown, daemon=True).start()
 
     try:
         write_instance(url, app.token, app.port)  # để lối tắt / lệnh CADGUARD dùng lại phiên đang chạy
