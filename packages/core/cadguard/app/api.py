@@ -459,6 +459,18 @@ def update_rule(app: AppData, standard: Any, rule_id: Any, changes: Any, scope: 
     return {**out, "table": rules_table(app, std)}
 
 
+def learn_layers(app: AppData, rel: Any, standard: Any, scope: Any = "project") -> dict:
+    """Học quy ước layer của công ty từ bản vẽ đang mở; LY-01 coi các layer này là đúng quy ước."""
+    std = app.check_standard(standard)
+    model = app.model(app.resolve(rel))
+    try:
+        out = rule_config.learn_layers(std, [la.name for la in model.layers], scope=scope if isinstance(scope, str) else "",
+                                       workspace=app.ws.root, standards_dir=app.standards_dir)
+    except rule_config.RuleSettingsError as exc:
+        raise ApiError(str(exc)) from None
+    return {**out, "table": rules_table(app, std)}
+
+
 def reset_rule(app: AppData, standard: Any, rule_id: Any, scope: Any = "project") -> dict:
     std = app.check_standard(standard)
     if not isinstance(rule_id, str) or not re.fullmatch(r"[A-Za-z0-9.\-]{1,32}", rule_id):

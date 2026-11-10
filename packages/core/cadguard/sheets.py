@@ -53,6 +53,11 @@ class Sheet:
     frame_handle: str | None = None
     handles: list[str] = field(default_factory=list)
     content_hash: str = ""
+    factor: float | None = None  # hệ số phóng thật của khung (vd. 19,77); `scale` là tỉ lệ chuẩn gần nhất
+    uniform: bool = True  # khung phóng đều X = Y
+    block: str | None = None  # tên khối khung tên (tờ trong Model)
+    confidence: float = 1.0  # 0–1: độ tin cậy nhận diện tờ (FR-06)
+    confidence_notes: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         w = self.windows
@@ -62,7 +67,8 @@ class Sheet:
         return {"id": self.id, "kind": self.kind, "name": self.name, "title": self.title, "title_source": self.title_source,
                 "paper": self.paper, "scale": self.scale, "scale_label": self.scale_label, "frame_handle": self.frame_handle,
                 "window": box, "windows": [list(b) for b in w], "entity_count": len(self.handles),
-                "content_hash": self.content_hash}
+                "content_hash": self.content_hash, "factor": self.factor, "uniform": self.uniform, "block": self.block,
+                "confidence": self.confidence, "confidence_notes": self.confidence_notes}
 
 
 @dataclass
@@ -220,8 +226,14 @@ def _frame_candidates(model: DrawingModel, ents: list[EntityRec], span: float) -
         big, small = max(w, h), min(w, h)
         if small <= 0 or abs(big / small - RATIO) / RATIO > RATIO_TOL:
             continue
+        factor = None
+        if paper is not None:
+            factor = round(max(w, h) / max(PAPERS[paper]), 4)
+        elif e.type == "INSERT":
+            factor = round(abs(e.xscale or 1.0), 4)
         out.append({"box": box, "handle": e.handle, "insert": e if e.type == "INSERT" else None, "named": named,
-                    "paper": paper, "scale": scale, "exact": exact, "w": w, "h": h})
+                    "paper": paper, "scale": scale, "exact": exact, "w": w, "h": h, "factor": factor,
+                    "uniform": e.type != "INSERT" or abs(abs(e.xscale or 1.0) - abs(e.yscale or 1.0)) <= 1e-6 * max(1.0, abs(e.xscale or 1.0))})
     return out
 
 
@@ -288,6 +300,37 @@ def _title_for(frame: dict, ents_by_handle: dict[str, EntityRec], inside: list[s
     if best is None:
         return None, None, scale_label
     return best[1][:120], "text-decoded" if best[2] else "text", scale_label
+
+
+def _confidence(f: dict, frames: list[dict]) -> tuple[float, list[str]]:
+    """Độ tin cậy 0–1 của một khung tờ: khối khung tên có thuộc tính dùng nhiều lần, khớp khổ giấy, tên khối giống khung
+    làm tăng; khung chồng lên khung khác, phóng không đều làm giảm."""
+    score, notes = 0.55, []
+    ins = f.get("insert")
+    if ins is not None and ins.attribs and f.get("peers", 0) >= 3:
+        score += 0.25
+        notes.append("khối khung tên có thuộc tính, dùng cho nhiều tờ")
+    if f.get("exact"):
+        score += 0.1
+        notes.append(f"khớp khổ {f['paper']} × 1:{f['scale']:g}")
+    if f.get("named"):
+        score += 0.1
+        notes.append("tên khối giống khung tên")
+    if not f.get("uniform", True):
+        score -= 0.2
+        notes.append("khung phóng không đều X ≠ Y")
+    b = f["box"]
+    for g in frames:
+        if g is f:
+            continue
+        o = g["box"]
+        ix = min(b[2], o[2]) - max(b[0], o[0])
+        iy = min(b[3], o[3]) - max(b[1], o[1])
+        if ix > 0 and iy > 0 and ix * iy > 0.05 * _area(b):
+            score -= 0.3
+            notes.append("chồng lên một khung khác")
+            break
+    return round(max(0.0, min(1.0, score)), 2), notes
 
 
 def _order_frames(frames: list[dict]) -> list[dict]:
@@ -384,9 +427,14 @@ def build_structure(model: DrawingModel) -> Structure:
     for i, f in enumerate(frames, 1):
         inside = grid.inside(f["box"])
         title, src, scale_label = _title_for(f, by_handle, inside, enc, guess)
+        conf, notes = _confidence(f, frames)
+        ins = f.get("insert")
+        if ins is not None and ins.insert is not None and f["paper"] is not None:
+            f["factor"] = round(abs(ins.xscale or 1.0), 4)  # khối khung tên: hệ số đúng là hệ số chèn
         sheets.append(Sheet(id="F:" + f["handle"], kind="frame", name=f"Tờ {i}", windows=[f["box"]], paper=f["paper"],
                             scale=f["scale"], title=title, title_source=src, scale_label=scale_label,
-                            frame_handle=f["handle"]))
+                            frame_handle=f["handle"], factor=f.get("factor"), uniform=f.get("uniform", True),
+                            block=ins.block if ins is not None else None, confidence=conf, confidence_notes=notes))
     sheets += layout_sheets
 
     # 3) gán đối tượng vào tờ (tờ nhỏ nhất chứa tâm)
@@ -396,6 +444,9 @@ def build_structure(model: DrawingModel) -> Structure:
         for w in s.windows:
             for h in grid.inside(w):
                 sheet_of.setdefault(h, s.id)
+    for s in sheets:  # khung tên luôn thuộc chính tờ của nó (điểm chèn ở góc có thể nằm trên mép tờ kề bên)
+        if s.frame_handle:
+            sheet_of[s.frame_handle] = s.id
     layout_ids = {s.id for s in sheets if s.kind == "layout"}
     for e in model.entities:  # đối tượng trên giấy thuộc tờ layout của nó
         if e.space != "Model" and "L:" + e.space in layout_ids:

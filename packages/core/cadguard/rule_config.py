@@ -123,8 +123,18 @@ def layers_for(workspace: Path | None) -> list[tuple[str, dict]]:
     return out
 
 
+# Tham số chung (globals) được phép ghi từ cài đặt: danh sách mẫu layer học từ bản vẽ của công ty.
+EDITABLE_GLOBALS = ("layer_extra_patterns", "allowed_layer_patterns", "exempt_layer_patterns")
+
+
 def apply_settings(std: Standard, data: dict, where: str = "cài đặt luật") -> Standard:
     """Áp cài đặt của MỘT phạm vi lên chuẩn (sửa tại chỗ trên bản sao của người gọi). Luật lạ thì bỏ qua."""
+    glob = (data.get("globals") or {}).get(std.name) or {}
+    if isinstance(glob, dict):
+        for key, value in glob.items():
+            if key in EDITABLE_GLOBALS and key in std.globals and isinstance(value, list):
+                std.globals[key] = list(std.globals.get(key) or []) + [str(v) for v in value
+                                                                       if str(v) not in (std.globals.get(key) or [])]
     rules = (data.get("standards") or {}).get(std.name) or {}
     if not isinstance(rules, dict):
         return std
@@ -156,7 +166,7 @@ def effective_standard(name: str, standards_dir: Path | None = None, profile: Co
     std = std.model_copy(deep=True)
     applied = []
     for scope, data in layers_for(workspace):
-        if (data.get("standards") or {}).get(name):
+        if (data.get("standards") or {}).get(name) or (data.get("globals") or {}).get(name):
             apply_settings(std, data, scope)
             applied.append(scope)
     if applied:
@@ -164,6 +174,47 @@ def effective_standard(name: str, standards_dir: Path | None = None, profile: Co
         base["rule_settings"] = "+".join(applied)
         std.profile = base
     return std
+
+
+def learn_layer_patterns(layer_names, min_group: int = 3) -> list[str]:
+    """Mẫu regex mô tả quy ước layer CÓ SẴN của công ty: nhóm theo tiền tố (trước dấu - _ . hoặc khoảng trắng) đủ
+    `min_group` layer -> `^TIỀN_TỐ[-_. ]`; còn lại khớp đúng tên. Bỏ layer hệ thống và layer phụ thuộc xref."""
+    import re
+
+    names = sorted({n for n in layer_names if n and n.upper() not in ("0", "DEFPOINTS") and "|" not in n})
+    groups: dict[str, list[str]] = {}
+    for n in names:
+        m = re.match(r"^([^-_. ]+)[-_. ]", n)
+        if m:
+            groups.setdefault(m.group(1), []).append(n)
+    pats, covered = [], set()
+    for prefix, members in sorted(groups.items()):
+        if len(members) >= min_group:
+            pats.append("^" + re.escape(prefix) + r"[-_. ]")
+            covered.update(members)
+    pats += ["^" + re.escape(n) + "$" for n in names if n not in covered]
+    return pats
+
+
+def learn_layers(standard: str, layer_names, *, scope: str = "project", workspace: Path | None = None,
+                 standards_dir: Path | None = None, key: str = "layer_extra_patterns") -> dict:
+    """Ghi mẫu layer học được vào cài đặt (globals của chuẩn); LY-01 coi các layer này là đúng quy ước công ty."""
+    base = load_standard(standard, standards_dir)
+    if key not in EDITABLE_GLOBALS or key not in base.globals:
+        raise RuleSettingsError(f"Chuẩn '{standard}' không dùng mẫu layer '{key}'.")
+    pats = learn_layer_patterns(layer_names)
+    path = settings_path(scope, workspace)
+    data = _read(path)
+    glob = data.setdefault("globals", {}) if isinstance(data.get("globals"), dict) else data.setdefault("globals", {})
+    cur = dict(glob.get(standard) or {})
+    old = list(cur.get(key) or [])
+    cur[key] = sorted(set(old) | set(pats))
+    glob[standard] = cur
+    _write(path, data)
+    entry = {"at": datetime.now().astimezone().isoformat(timespec="seconds"), "scope": scope, "standard": standard,
+             "rule": "globals." + key, "old": {"count": len(old)}, "new": {"count": len(cur[key]), "learned": len(pats)}}
+    _log(path, entry)
+    return {"patterns": pats, "total": len(cur[key]), "log": entry}
 
 
 def _check_value(std: Standard, rule_id: str, key: str, value: Any) -> Any:
@@ -258,5 +309,5 @@ def scope_settings(standard: str, scope: str, workspace: Path | None) -> dict:
     return dict((data.get("standards") or {}).get(standard) or {})
 
 
-__all__ = ["SCHEMA", "RuleSettingsError", "effective_standard", "find_workspace", "read_log", "reset_rule",
+__all__ = ["EDITABLE_GLOBALS", "learn_layer_patterns", "learn_layers", "SCHEMA", "RuleSettingsError", "effective_standard", "find_workspace", "read_log", "reset_rule",
            "scope_settings", "update_rule"]

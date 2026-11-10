@@ -131,6 +131,67 @@ def cmd_rules(args: argparse.Namespace) -> int:
     return 0
 
 
+def _parse_value(raw: str):
+    import json
+
+    try:
+        return json.loads(raw)
+    except ValueError:
+        return raw
+
+
+def cmd_rule_set(args: argparse.Namespace) -> int:
+    """Sửa một luật không cần tài khoản: bật/tắt, mức độ, tham số (phạm vi dự án hoặc máy)."""
+    from .rule_config import RuleSettingsError, reset_rule, update_rule
+
+    std_dir = Path(args.standards_dir) if args.standards_dir else None
+    ws = Path(args.workspace)
+    try:
+        if args.reset:
+            res = reset_rule(args.standard or DEFAULT_STANDARD, args.rule, scope=args.scope, workspace=ws,
+                             standards_dir=std_dir)
+        else:
+            changes: dict = {}
+            if args.enable or args.disable:
+                changes["enabled"] = bool(args.enable)
+            if args.severity:
+                changes["severity"] = args.severity
+            params = {}
+            for kv in args.param or []:
+                if "=" not in kv:
+                    print(f"--param cần dạng tên=giá_trị (gặp '{kv}').", file=sys.stderr)
+                    return 2
+                k, v = kv.split("=", 1)
+                params[k.strip()] = _parse_value(v)
+            if params:
+                changes["params"] = params
+            res = update_rule(args.standard or DEFAULT_STANDARD, args.rule, changes, scope=args.scope, workspace=ws,
+                              standards_dir=std_dir)
+    except RuleSettingsError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(f"Đã lưu {args.rule} ({'dự án' if args.scope == 'project' else 'máy'}): {res['rule'] or 'mặc định'}")
+    return 0
+
+
+def cmd_learn_layers(args: argparse.Namespace) -> int:
+    """Học quy ước tên layer có sẵn của công ty từ một bản vẽ; LY-01 coi các layer đó là đúng quy ước."""
+    from .reader_select import choose_reader, read_with
+    from .rule_config import RuleSettingsError, learn_layers
+
+    path = Path(args.path)
+    model = read_with(path, choose_reader(path).reader)
+    ws = Path(args.workspace) if args.workspace else path.resolve().parent
+    try:
+        res = learn_layers(args.standard or DEFAULT_STANDARD, [la.name for la in model.layers], scope=args.scope,
+                           workspace=ws, standards_dir=Path(args.standards_dir) if args.standards_dir else None)
+    except RuleSettingsError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(f"Đã học {len(res['patterns'])} mẫu layer ({res['total']} mẫu trong cài đặt). Quét lại để thấy LY-01 mới.")
+    return 0
+
+
 def cmd_profile(args: argparse.Namespace) -> int:
     """Hồ sơ số liệu cho bản vẽ thật: chỉ số tổng hợp, khoá là mã băm, không tên tệp/layer/nội dung."""
     from .profile import profile_dxf, profile_dxf_stream
@@ -592,6 +653,29 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("rules", help="liệt kê luật và tình trạng cài đặt")
     common(r)
     r.set_defaults(fn=cmd_rules)
+
+    rs = sub.add_parser("rule-set", help="sửa một luật không cần tài khoản: --enable/--disable, --severity, --param")
+    rs.add_argument("rule", help="mã luật, vd. LY-01")
+    rs.add_argument("--standard", default=None)
+    rs.add_argument("--standards-dir", default=None)
+    rs.add_argument("--workspace", default=".", help="thư mục dự án (mặc định thư mục hiện tại)")
+    rs.add_argument("--scope", choices=["project", "machine"], default="project",
+                    help="project = dự án này; machine = mọi dự án trên máy")
+    g = rs.add_mutually_exclusive_group()
+    g.add_argument("--enable", action="store_true")
+    g.add_argument("--disable", action="store_true")
+    rs.add_argument("--severity", choices=["E", "W", "I"])
+    rs.add_argument("--param", action="append", metavar="TÊN=GIÁ_TRỊ", help="giá trị JSON hoặc chuỗi; lặp được")
+    rs.add_argument("--reset", action="store_true", help="về mặc định (xoá mọi cài đặt của luật trong phạm vi)")
+    rs.set_defaults(fn=cmd_rule_set)
+
+    ll = sub.add_parser("learn-layers", help="học quy ước tên layer của công ty từ một bản vẽ (giảm nhiễu LY-01)")
+    ll.add_argument("path")
+    ll.add_argument("--standard", default=None)
+    ll.add_argument("--standards-dir", default=None)
+    ll.add_argument("--workspace", default=None, help="thư mục dự án (mặc định thư mục chứa bản vẽ)")
+    ll.add_argument("--scope", choices=["project", "machine"], default="project")
+    ll.set_defaults(fn=cmd_learn_layers)
 
     pr = sub.add_parser("profile", help="hồ sơ số liệu của DXF (chỉ số tổng hợp, ẩn danh)")
     pr.add_argument("paths", nargs="+")

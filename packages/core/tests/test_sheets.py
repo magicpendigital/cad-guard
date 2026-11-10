@@ -187,3 +187,41 @@ def test_lock_flow_blocks_acks_and_goes_stale(app):
     t1 = next(s for s in sheets_info(app, "s.dxf")["sheets"] if s["id"] == ids["Tờ 1"])
     assert t1["status"] == "open" and t1["stale"] is True
     assert unlock_sheet(app, "s.dxf", ids["Tờ 1"])["status"] == "open"
+
+
+# ---------- bộ nhiều tờ trong Model kiểu công ty (Đợt B) ----------
+
+@pytest.fixture(scope="module")
+def model_sheets(tmp_path_factory) -> Path:
+    p = tmp_path_factory.mktemp("msheets") / "model_sheets.dxf"
+    fixtures.make_model_sheets(p)
+    return p
+
+
+@pytest.mark.parametrize("reader", [read_dxf, read_dxf_stream])
+def test_model_sheets_counts_blank_and_factor(model_sheets, reader):
+    st = build_structure(reader(model_sheets))
+    frames = [s for s in st.sheets if s.kind == "frame"]
+    assert len(frames) == len(fixtures.CO_SHEETS)  # khung kề nhau, khác tỉ lệ, kể cả tờ trống
+    assert [s.factor for s in frames] == [k for k, *_ in fixtures.CO_SHEETS]
+    assert [s.scale for s in frames] == [15, 15, 20, 20, 10, 15]  # 19,77 -> tỉ lệ chuẩn gần nhất 1:20
+    assert all(s.block == fixtures.CO_FRAME and s.confidence >= 0.9 for s in frames)
+    blank = frames[-1]
+    assert blank.handles == [blank.frame_handle]  # tờ trống vẫn là tờ, khung thuộc chính nó
+    assert len(st.outside) == 1  # khối ngoài mọi tờ
+    assert [s.title for s in frames][:2] == ["MẶT BẰNG BỐ TRÍ", "MẶT BẰNG TRẦN"]
+
+
+def test_learn_layers_silences_ly01(model_sheets, tmp_path):
+    from cadguard import rule_config
+    from cadguard.runner import audit_model
+
+    m = read_dxf(model_sheets)
+    before = [f for f in audit_model(m, rule_config.effective_standard("furniture-v0", STDS, workspace=tmp_path)).findings
+              if f.rule_id == "LY-01"]
+    assert before
+    rule_config.learn_layers("furniture-v0", [la.name for la in m.layers], workspace=tmp_path, standards_dir=STDS)
+    after = [f for f in audit_model(m, rule_config.effective_standard("furniture-v0", STDS, workspace=tmp_path)).findings
+             if f.rule_id == "LY-01"]
+    assert after == []
+    assert rule_config.learn_layer_patterns(["A-1", "A-2", "A-3", "B", "0", "x|y"]) == [r"^A[-_. ]", "^B$"]

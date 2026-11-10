@@ -331,6 +331,8 @@ class CadGuardApp:
             ("GET", "/api/rules"): lambda q, b: api.rules_table(d(), q1(q, "standard")),
             ("POST", "/api/rules/update"): lambda q, b: api.update_rule(d(), b.get("standard"), b.get("rule_id"),
                                                                        b.get("changes"), b.get("scope", "project")),
+            ("POST", "/api/rules/learn_layers"): lambda q, b: api.learn_layers(d(), b.get("file"), b.get("standard"),
+                                                                              b.get("scope", "project")),
             ("POST", "/api/rules/reset"): lambda q, b: api.reset_rule(d(), b.get("standard"), b.get("rule_id"),
                                                                      b.get("scope", "project")),
             ("POST", "/api/changeset/suggest"): lambda q, b: api.suggest_ops(d(), b.get("file"), b.get("standard")),

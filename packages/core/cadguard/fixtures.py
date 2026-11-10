@@ -520,8 +520,88 @@ def make_sheet_set(path: Path) -> None:
     _finish(doc, path)
 
 
+# ---- Bộ nhiều tờ trong Model theo kiểu công ty nội thất (mô phỏng CẤU TRÚC tệp phiên thử, không phải bản vẽ thật):
+# một khối khung tên A3 của công ty có thuộc tính, chèn nhiều lần, tỉ lệ khác nhau, khung kề nhau, có tờ trống.
+CO_FRAME = "SYN-KHUNG-CTY"
+CO_TAGS = ["DU_AN", "TEN_BAN_VE", "SO_BAN_VE", "TI_LE", "NGAY"]
+CO_BAND_X = 370.0  # dải khung tên dọc bên phải: x 370..410 (đơn vị khối, 1:1 = mm)
+
+
+def _company_frame(doc) -> None:
+    for name in ("SYN-KHUNG", "SYN-LOGO"):
+        if not doc.layers.has_entry(name):
+            doc.layers.add(name)
+    if not doc.styles.has_entry("STD"):
+        doc.styles.add("STD", font="arial.ttf")
+    b = doc.blocks.new(CO_FRAME)
+    b.add_lwpolyline([(0, 0), (420, 0), (420, 297), (0, 297)], close=True, dxfattribs={"layer": "SYN-KHUNG"})
+    b.add_lwpolyline([(20, 10), (410, 10), (410, 287), (20, 287)], close=True, dxfattribs={"layer": "SYN-KHUNG"})
+    b.add_line((CO_BAND_X, 10), (CO_BAND_X, 287), dxfattribs={"layer": "SYN-KHUNG"})
+    # logo: hình vẽ (polyline + hatch) ở đầu dải khung tên
+    b.add_lwpolyline([(375, 262), (405, 262), (405, 282), (375, 282)], close=True, dxfattribs={"layer": "SYN-LOGO"})
+    h = b.add_hatch(color=1, dxfattribs={"layer": "SYN-LOGO"})
+    h.paths.add_polyline_path([(380, 266), (400, 266), (390, 278)], is_closed=True)
+    b.add_text("CÔNG TY NỘI THẤT SYN", height=2.5, dxfattribs={"layer": "SYN-KHUNG", "style": "STD", "insert": (372, 255)})
+    labels = ["DỰ ÁN", "TÊN BẢN VẼ", "SỐ BẢN VẼ", "TỈ LỆ", "NGÀY"]
+    for i, (tag, lab) in enumerate(zip(CO_TAGS, labels)):
+        y = 200 - i * 40
+        b.add_text(lab, height=2.0, dxfattribs={"layer": "SYN-KHUNG", "style": "STD", "insert": (372, y + 12)})
+        b.add_line((CO_BAND_X, y), (410, y), dxfattribs={"layer": "SYN-KHUNG"})
+        b.add_attdef(tag, (372, y + 4), dxfattribs={"height": 3.0, "layer": "SYN-KHUNG", "style": "STD"})
+
+
+# (hệ số, giá trị thuộc tính, có nội dung, cỡ chữ ghi chú khi in (mm))
+CO_SHEETS = [
+    (15, {"DU_AN": "CĂN HỘ SYN", "TEN_BAN_VE": "MẶT BẰNG BỐ TRÍ", "SO_BAN_VE": "NT-01", "TI_LE": "1/15", "NGAY": "10/11/2026"}, True, 2.5),
+    (15, {"DU_AN": "CĂN HỘ SYN", "TEN_BAN_VE": "MẶT BẰNG TRẦN", "SO_BAN_VE": "NT-02", "TI_LE": "1/15", "NGAY": "10/11/2026"}, True, 2.5),
+    (20, {"DU_AN": "CĂN HỘ SYN", "TEN_BAN_VE": "MẶT ĐỨNG TỦ BẾP", "SO_BAN_VE": "NT-03", "TI_LE": "1/25", "NGAY": "10/11/2026"}, True, 2.5),
+    (19.77, {"DU_AN": "CĂN HỘ SYN", "TEN_BAN_VE": "CHI TIẾT TỦ ÁO", "SO_BAN_VE": "NT-04", "TI_LE": "1/20", "NGAY": "10/11/2026"}, True, 2.5),
+    (10, {"DU_AN": "CĂN HỘ SYN", "TEN_BAN_VE": "CHI TIẾT NẸP", "SO_BAN_VE": "", "TI_LE": "1/10", "NGAY": "10/11/2026"}, True, 0.6),
+    (15, {"DU_AN": "CĂN HỘ SYN", "TEN_BAN_VE": "TỜ DỰ PHÒNG", "SO_BAN_VE": "NT-02", "TI_LE": "1/15", "NGAY": "10/11/2026"}, False, 2.5),
+]
+# chữ ghi chú TCVN3 (phông .VnArial) và Unicode: dùng cho chuyển mã và dịch
+CO_NOTES_TCVN3 = ["tñ bÕp trªn", "c¸nh tñ MDF chèng Èm 18mm", "nÑp chØ nh«m"]
+CO_NOTES_UNICODE = ["Tủ áo cánh mở", "Kính cường lực 8mm", "Sơn PU màu trắng"]
+
+
+def make_model_sheets(path: Path, sheets: list | None = None) -> None:
+    """Sáu tờ A3 trong Model (khối khung tên công ty có thuộc tính), khung kề nhau, tỉ lệ 15/15/20/19,77/10/15; tờ 6
+    trống. Cố ý: tỉ lệ ghi trong khung khác hệ số (tờ 3), hệ số lạ 19,77 (tờ 4), thiếu số bản vẽ và chữ in quá nhỏ
+    (tờ 5), số bản vẽ trùng (tờ 6 = tờ 2), một đối tượng tràn khung (tờ 2), một khối nằm ngoài mọi tờ. Chữ ghi chú có
+    TCVN3 (phông .VnArial) và Unicode, một kích thước ghi đè chữ."""
+    doc = ezdxf.new("R2018", setup=True)
+    doc.header["$INSUNITS"] = 4
+    for name in HYG_LAYERS:
+        doc.layers.add(name)
+    doc.styles.add("VN-ARIAL", font=".VnArial")
+    _company_frame(doc)
+    marker = doc.blocks.new("SYN-KY-HIEU")
+    marker.add_circle((0, 0), 50, dxfattribs={"layer": "SYN-NOI-THAT"})
+    msp = doc.modelspace()
+    x = 0.0
+    for i, (k, values, content, note_mm) in enumerate(sheets or CO_SHEETS):
+        ref = msp.add_blockref(CO_FRAME, (x, 0), dxfattribs={"layer": "SYN-KHUNG", "xscale": k, "yscale": k})
+        ref.add_auto_attribs(values)
+        if content:
+            for j in range(8):
+                msp.add_line((x + 40 * k + j * 25 * k, 60 * k), (x + 40 * k + j * 25 * k, 220 * k), dxfattribs={"layer": "SYN-NOI-THAT"})
+            msp.add_circle((x + 200 * k, 150 * k), 30 * k, dxfattribs={"layer": "SYN-NOI-THAT"})
+            msp.add_text(CO_NOTES_TCVN3[i % 3], height=note_mm * k,
+                         dxfattribs={"layer": "SYN-CHU", "style": "VN-ARIAL", "insert": (x + 40 * k, 240 * k)})
+            msp.add_mtext(CO_NOTES_UNICODE[i % 3], dxfattribs={"layer": "SYN-CHU", "style": "STD", "char_height": 2.5 * k,
+                                                                 "insert": (x + 40 * k, 40 * k)})
+            msp.add_linear_dim(base=(x + 60 * k, 50 * k), p1=(x + 60 * k, 45 * k), p2=(x + 160 * k, 45 * k),
+                               dxfattribs={"layer": "SYN-KICH-THUOC"}).render()
+        if i == 1:  # tràn khung: đường kéo ra ngoài mép phải vùng vẽ, đè dải khung tên
+            msp.add_line((x + 300 * k, 120 * k), (x + 400 * k, 120 * k), dxfattribs={"layer": "SYN-NOI-THAT"})
+        x += 420 * k  # kề nhau, không khe hở
+    msp.add_blockref("SYN-KY-HIEU", (x + 5000, -8000), dxfattribs={"layer": "SYN-NOI-THAT"})  # ngoài mọi tờ
+    _finish(doc, path)
+
+
 SHEET_FIXTURES = {
     "sheet_set.dxf": make_sheet_set,
+    "model_sheets.dxf": make_model_sheets,
 }
 
 

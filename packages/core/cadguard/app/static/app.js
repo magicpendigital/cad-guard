@@ -1303,6 +1303,8 @@
         S.sheets && S.sheets.sheets.length && findingWide(f) ? pill("neu sm", "cả bản vẽ") : null,
         el("span", {class: "std"}, pill("neu sm", f.std)),
         el("button", {class: "link sm", type: "button", title: "Tắt luật này cho dự án (quét lại để thấy kết quả)", onclick: (e) => { e.stopPropagation(); disableRule(f.rule_id, f.std); }}, "Tắt luật"),
+        f.rule_id === "LY-01" && S.file ? el("button", {class: "link sm", type: "button", title: "Coi các layer có sẵn của bản vẽ này là quy ước của công ty (LY-01)",
+          onclick: async (e) => { e.stopPropagation(); try { const r = await api("/api/rules/learn_layers", {file: S.file, standard: f.std}); S.rules = null; toast(`Đã học ${r.patterns.length} mẫu layer. Quét lại để thấy kết quả.`); } catch (err) { toast(err.message); } }}, "Học quy ước layer") : null,
         el("button", {class: "link sm", type: "button", title: "Sửa ngưỡng, mức độ của luật", onclick: async (e) => { e.stopPropagation(); await loadRulesQuiet(); showExplain(f.rule_id, f.std); }}, "Sửa ngưỡng")),
       el("div", {class: "f-title", text: f.title}),
       el("div", {class: "f-d"}, el("ul", {}, inSheet.slice(0, 3).map((it) => el("li", {text: it.message}))),
