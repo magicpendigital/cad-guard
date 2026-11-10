@@ -1174,14 +1174,15 @@
   }
 
   // ---------- 3D (phòng Thiết kế 3D, chỉ xem) ----------
-  async function load3d(path) {
+  async function load3d(path, item) {
     const sheet = $("sheet");
     $("viewTag").textContent = "3D · chỉ xem";
     $("viewTag").hidden = false;
     fill(sheet, emptyBox("Đang dựng 3D…", "Dựng tất định từ bản vẽ (hộp đúng kích thước), không dùng AI."));
     let r;
-    try { r = await api("/api/scene", {file: path}); } catch (e) { fill(sheet, emptyBox("Không dựng được 3D", e.message)); return; }
+    try { r = await api("/api/scene", item ? {file: path, item} : {file: path}); } catch (e) { fill(sheet, emptyBox("Không dựng được 3D", e.message)); return; }
     if (S.file !== path) return;
+    if (r.schema === "cg.scene/2") { render3d2(path, r); return; }
     const c = r.counts;
     $("cvInfo").textContent = `${c.walls} đoạn tường · ${c.modules} mô-đun · ${c.panels} tấm · ${c.gaps} phần thiếu`;
     if (!r.boxes.length) {
@@ -1193,6 +1194,55 @@
     fill(sheet, cv, el("div", {class: "sheet-note", text: "Kéo để xoay, cuộn để phóng to. Ảnh minh hoạ từ bản vẽ, không dùng để đo." + (r.truncated ? " Đã cắt bớt hộp." : "")}));
     S.v3d = makeViewer(cv);
     S.v3d.set(r.boxes);
+    S.findings = [];
+    renderFinds();
+  }
+
+  // cg.scene/2: một hạng mục dựng từ mặt bằng + mặt đứng; số đo kèm nguồn; phần thiếu nhập tay; đề xuất AI chờ xác nhận.
+  function render3d2(path, r) {
+    const sheet = $("sheet");
+    const fmt = v => (Math.round(v * 10) / 10).toString();
+    $("cvInfo").textContent = `Hạng mục ${r.item} · ${r.counts.modules} khối · ${r.counts.fronts} cánh/ngăn kéo · ${r.counts.gaps} phần thiếu · mã cảnh ${r.scene_hash}`;
+    const sel = el("select", {"aria-label": "Chọn hạng mục"},
+      r.items.map(it => el("option", {value: it.id, text: `${it.id} · ${it.plans} mặt bằng, ${it.elevations} mặt đứng`})));
+    sel.value = r.item;
+    sel.addEventListener("change", () => load3d(path, sel.value));
+    const ceil = el("input", {type: "checkbox", "aria-label": "Hiện trần"});
+    const dl = el("button", {type: "button", class: "btn", text: "Tải GLB", onclick: async () => {
+      try {
+        const g = await api("/api/scene/glb", {file: path, item: r.item});
+        const bin = Uint8Array.from(atob(g.b64), c => c.charCodeAt(0));
+        const a = el("a", {href: URL.createObjectURL(new Blob([bin], {type: "model/gltf-binary"})), download: g.name});
+        a.click();
+      } catch (e) { toast(e.message); }
+    }});
+    const save = async (key, value) => {
+      try { render3d2(path, await api("/api/scene/set", {file: path, item: r.item, key, value})); } catch (e) { toast(e.message); }
+    };
+    const cv = el("canvas", {"aria-label": "Mô hình 3D dựng từ bản vẽ, kéo chuột để xoay, cuộn để phóng to", role: "img"});
+    const head = el("tr", {}, ["Khối", "Loại", "Rộng", "Sâu", "Cao", "Cao độ chân", "Cánh/ngăn kéo", "Đợt"].map(t => el("th", {text: t})));
+    const rows = r.modules.map(m => el("tr", {}, el("td", {text: m.id}), el("td", {text: m.label || m.kind}),
+      ["w", "d", "h", "z0"].map(k => el("td", {text: `${fmt(m[k].value)} · ${m[k].src}`})),
+      el("td", {text: String(m.fronts)}), el("td", {text: String(m.shelves)})));
+    const gaps = r.gaps.map(g => el("div", {class: "gap3d"}, el("div", {text: g.message}), g.fields.map(f => {
+      const inp = f.kind === "choice" ? el("select", {}, el("option", {value: "", text: "— chọn —"}), f.options.map(o => el("option", {value: o, text: o})))
+                                      : el("input", {type: "number", min: "0", step: "any", "aria-label": f.label});
+      return el("label", {}, `${f.label}${f.kind === "choice" ? "" : " (mm)"} `, inp,
+        el("button", {type: "button", class: "btn", text: "Lưu", onclick: () => inp.value && save(f.key, inp.value)}));
+    })));
+    const props = r.proposals.map(p => el("div", {class: "gap3d"}, el("small", {text: "AI đề xuất · chưa xác nhận"}), " ",
+      el("span", {text: `${p.key} = ${p.value}${p.reason ? " — " + p.reason : ""}`}), " ",
+      el("button", {type: "button", class: "btn", text: "Xác nhận", onclick: () => save(p.key, p.value)})));
+    const room = r.room.ceiling ? `Cao sàn–trần ${fmt(r.room.ceiling)} · ${r.room.src}` : "Chưa có cao sàn–trần";
+    fill(sheet,
+      el("div", {class: "sheet-note"}, "Hạng mục ", sel, " ", el("label", {}, ceil, " hiện trần"), " ", dl, " ", el("small", {text: `mã cảnh ${r.scene_hash}`})),
+      cv,
+      el("div", {class: "sheet-note"}, el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), gaps, props,
+        r.notes.map(n => el("small", {text: n}))));
+    S.v3d = makeViewer(cv);
+    const show = () => S.v3d.set(r.boxes.filter(b => ceil.checked || b.k !== "ceiling"));
+    ceil.addEventListener("change", show);
+    show();
     S.findings = [];
     renderFinds();
   }
@@ -1235,7 +1285,7 @@
         cx.beginPath();
         f.p.forEach((p, i) => (i ? cx.lineTo(p[0], p[1]) : cx.moveTo(p[0], p[1])));
         cx.closePath();
-        cx.globalAlpha = (f.k === "wall" && f.n[2] === 0) ? 0.22 : 1;
+        cx.globalAlpha = ((f.k === "wall" && f.n[2] === 0) || f.k === "ceiling") ? 0.22 : 1;
         cx.fillStyle = "rgb(" + f.c.map((v) => Math.round(v * 255 * Math.min(1, f.l))).join(",") + ")";
         cx.fill();
         cx.strokeStyle = cx.fillStyle; cx.lineWidth = 0.7; cx.stroke();

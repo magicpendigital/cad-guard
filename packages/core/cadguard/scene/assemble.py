@@ -66,6 +66,7 @@ class Module2(BaseModel):
     src: dict[str, Src] = Field(default_factory=dict)
     fronts: list[Front] = Field(default_factory=list)
     shelves: int = 0
+    label: str = ""  # nhãn người xác nhận (tủ bếp dưới, tủ cao…); trống = chưa gán
     refs: list[str] = Field(default_factory=list)
 
 
@@ -258,6 +259,7 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
         m.fronts.append(Front(id=f"{mid}.F{j}", kind=kindf, x0=round(b[0] + ox - origin[0], 3), x1=round(b[2] + ox - origin[0], 3),
                               z0=round(b[1] - floor, 3), z1=round(b[3] - floor, 3), refs=[hf]))
     m.shelves = sum(1 for sx0, sx1, sz in shelf_rects if sx0 >= x0p - 1 and sx1 <= x1p + 1 and z0 < sz < z1)
+    m.label = str(supp.get(f"label:{mid}", ""))[:60]
     sc.modules.append(m)
 
 
