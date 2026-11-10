@@ -387,7 +387,89 @@ def _purge_unused(doc, op, prot):
     return {"affected": sum(len(v) for v in removed.values()), "details": {"removed": removed}}
 
 
+def _convert_unicode(doc, op, prot):
+    from ..unicode_convert import convert_doc
+
+    rep = convert_doc(doc, font_file=op.font, family=op.family, handles=set(op.handles) if op.handles else None,
+                      include_blocks=op.include_blocks, is_protected=prot.is_protected)
+    return rep.to_dict()
+
+
+def _entity(doc, handle: str, what: str):
+    e = doc.entitydb.get(handle)
+    if e is None or not e.is_alive:
+        raise OpError(f"{what}: không có đối tượng handle {handle}.")
+    return e
+
+
+def _text_of(e) -> str:
+    t = e.dxftype()
+    if t == "MTEXT":
+        return e.text
+    if t == "MULTILEADER":
+        m = e.context.mtext
+        return m.default_content if m is not None else ""
+    return str(e.dxf.get("text", "") or "")
+
+
+def _set_texts(doc, op, prot):
+    n, skipped, dims = 0, 0, []
+    for it in op.items:
+        e = _entity(doc, it.handle, "set_texts")
+        t = e.dxftype()
+        if t not in ("TEXT", "MTEXT", "ATTRIB", "ATTDEF", "DIMENSION", "MULTILEADER"):
+            raise OpError(f"set_texts: handle {it.handle} là {t}, không phải chữ.")
+        if prot.is_protected(str(e.dxf.get("layer", "0"))):
+            skipped += 1
+            continue
+        cur = _text_of(e)
+        if it.expect is not None and cur != it.expect:
+            raise OpError(f"set_texts: chữ của handle {it.handle} đã khác lúc đề xuất; hãy đề xuất lại.")
+        if cur == it.text:
+            continue
+        if t == "MTEXT":
+            e.text = it.text
+        elif t == "MULTILEADER":
+            if e.context.mtext is None:
+                raise OpError(f"set_texts: chú thích handle {it.handle} không có chữ.")
+            e.context.mtext.default_content = it.text
+        else:
+            e.dxf.text = it.text
+        if t == "DIMENSION":
+            dims.append(e)
+        n += 1
+    if op.rerender and dims:
+        _rerender(doc, dims)
+    return {"affected": n, "matched": len(op.items), "skipped_protected": skipped}
+
+
+def _set_attribs(doc, op, prot):
+    n, skipped, missing = 0, 0, []
+    for it in op.items:
+        ins = _entity(doc, it.insert, "set_attribs")
+        if ins.dxftype() != "INSERT":
+            raise OpError(f"set_attribs: handle {it.insert} không phải khối chèn (INSERT).")
+        by_tag = {str(a.dxf.tag).upper(): a for a in ins.attribs}
+        for tag, value in it.values.items():
+            a = by_tag.get(tag.upper())
+            if a is None:
+                missing.append(f"{it.insert}:{tag}")
+                continue
+            if prot.is_protected(str(a.dxf.get("layer", "0"))):
+                skipped += 1
+                continue
+            if str(a.dxf.get("text", "") or "") != value:
+                a.dxf.text = value
+                n += 1
+    if missing:
+        raise OpError("set_attribs: khối không có thẻ " + ", ".join(missing[:10]) + ("…" if len(missing) > 10 else "") + ".")
+    return {"affected": n, "matched": len(op.items), "skipped_protected": skipped}
+
+
 HANDLERS = {
+    "convert_unicode": _convert_unicode,
+    "set_texts": _set_texts,
+    "set_attribs": _set_attribs,
     "rename_layer": _rename_layer,
     "merge_layers": _merge_layers,
     "move_to_layer": _move_to_layer,

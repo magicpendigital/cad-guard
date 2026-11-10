@@ -103,9 +103,47 @@ class ClearDimTextOverride(_Base):
     rerender: bool = True
 
 
+Handle = Annotated[str, Field(min_length=1, max_length=16, pattern=r"^[0-9A-Fa-f]+$")]
+TextValue = Annotated[str, Field(max_length=4000)]
+MAX_TEXT_ITEMS = 20000
+
+
+class ConvertUnicode(_Base):
+    """Chuyển chữ TCVN3/VNI sang Unicode (unicode_convert.py); trỏ kiểu chữ phông cũ sang phông Unicode."""
+    op: Literal["convert_unicode"]
+    font: Name = "BeVietnamPro-Regular.ttf"
+    family: Name = "Be Vietnam Pro"
+    handles: Annotated[list[Handle], Field(min_length=1, max_length=200000)] | None = None  # None = cả bản vẽ
+    include_blocks: bool = True
+
+
+class TextItem(_Base):
+    handle: Handle
+    text: TextValue
+    expect: TextValue | None = None  # chữ hiện tại lúc đề xuất: khác thì từ chối (bản vẽ đã đổi)
+
+
+class SetTexts(_Base):
+    """Đặt nội dung chữ theo handle (TEXT, MTEXT, ATTRIB, ATTDEF, chữ ghi đè DIMENSION): dùng cho dịch."""
+    op: Literal["set_texts"]
+    items: Annotated[list[TextItem], Field(min_length=1, max_length=MAX_TEXT_ITEMS)]
+    rerender: bool = True
+
+
+class AttribItem(_Base):
+    insert: Handle
+    values: dict[Annotated[str, Field(min_length=1, max_length=64)], TextValue]
+
+
+class SetAttribs(_Base):
+    """Điền giá trị thuộc tính của khối (khung tên) theo tên thẻ: dùng cho template, đánh số tờ."""
+    op: Literal["set_attribs"]
+    items: Annotated[list[AttribItem], Field(min_length=1, max_length=5000)]
+
+
 Op = Annotated[
     Union[RenameLayer, MergeLayers, MoveToLayer, SetByLayer, ReplaceTextStyle, ReplaceDimStyle, PurgeUnused,
-          SetTextHeight, ClearDimTextOverride],
+          SetTextHeight, ClearDimTextOverride, ConvertUnicode, SetTexts, SetAttribs],
     Field(discriminator="op"),
 ]
 OP_TYPES: dict[str, type[_Base]] = {
@@ -118,6 +156,9 @@ OP_TYPES: dict[str, type[_Base]] = {
     "purge_unused": PurgeUnused,
     "set_text_height": SetTextHeight,
     "clear_dim_text_override": ClearDimTextOverride,
+    "convert_unicode": ConvertUnicode,
+    "set_texts": SetTexts,
+    "set_attribs": SetAttribs,
 }
 _ADAPTER = TypeAdapter(list[Op])
 
@@ -143,6 +184,9 @@ ALLOWED_ATTRS: dict[str, set[str]] = {
     "purge_unused": set(),
     "set_text_height": {"height", "char_height"},
     "clear_dim_text_override": {"text"} | _DIM_RENDER,
+    "convert_unicode": {"text", "style"},
+    "set_texts": {"text"} | _DIM_RENDER,
+    "set_attribs": {"text"},
 }
 
 # Mô tả ngắn (tiếng Việt) cho tài liệu, CLI và MCP.
@@ -156,6 +200,9 @@ OP_HELP: dict[str, str] = {
     "purge_unused": "xoá ĐỊNH NGHĨA không dùng {kinds[], names[]}: layers/text_styles/dim_styles/blocks; VS-01, VS-02",
     "set_text_height": "đổi chiều cao chữ TEXT/MTEXT {filter, from_height, to}",
     "clear_dim_text_override": "trả chữ kích thước về số đo tự động '<>' {filter, rerender}; VS-06",
+    "convert_unicode": "chuyển chữ TCVN3/VNI sang Unicode, trỏ kiểu chữ phông cũ sang phông Unicode {font, family, handles[]}; VS-07",
+    "set_texts": "đặt nội dung chữ theo handle {items[{handle, text, expect}]} (dịch)",
+    "set_attribs": "điền thuộc tính khung tên {items[{insert, values{THẺ: giá trị}}]}; TP-04, TP-10",
 }
 
 
@@ -249,6 +296,18 @@ def map_names(op: Any, fn: Callable[[str, str], str]) -> Any:
     elif name == "purge_unused" and "names" in data:
         data["names"] = lst("any", data["names"])
     return OP_TYPES[name].model_validate(data)
+
+
+# Loại đối tượng mà nội dung chữ nằm ngoài thuộc tính DXF có tên (MULTILEADER: chữ trong context): thao tác chữ được
+# phép đổi phần "data" của đúng loại này.
+DATA_TYPES: dict[str, set[str]] = {"convert_unicode": {"MULTILEADER"}, "set_texts": {"MULTILEADER"}}
+
+
+def allowed_data_types(ops: list[Any]) -> set[str]:
+    out: set[str] = set()
+    for o in ops:
+        out |= DATA_TYPES.get(o.op, set())
+    return out
 
 
 def allowed_attrs(ops: list[Any]) -> set[str]:

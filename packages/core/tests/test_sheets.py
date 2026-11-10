@@ -225,3 +225,14 @@ def test_learn_layers_silences_ly01(model_sheets, tmp_path):
              if f.rule_id == "LY-01"]
     assert after == []
     assert rule_config.learn_layer_patterns(["A-1", "A-2", "A-3", "B", "0", "x|y"]) == [r"^A[-_. ]", "^B$"]
+
+
+def test_render_sheets_svg(model_sheets, tmp_path):
+    from cadguard.cli import main
+
+    out = tmp_path / "to"
+    assert main(["sheets", str(model_sheets), "--render", str(out), "--pick", "1,6"]) == 0
+    assert sorted(p.name for p in out.iterdir()) == ["index.html", "to-01.svg", "to-06.svg"]
+    svg = (out / "to-01.svg").read_text(encoding="utf-8")
+    assert svg.startswith("<?xml") and "<path" in svg
+    assert main(["sheets", str(model_sheets), "--render", str(out), "--pick", "9"]) == 2

@@ -422,7 +422,7 @@ class _Parser:
         self.insunits = 0
         # bảng: khoá chữ thường -> bản ghi (giữ vị trí đầu, giá trị cuối như ezdxf)
         self.layers: dict[str, LayerRec] = {}
-        self.styles: dict[str, tuple[str, int, str, str]] = {}
+        self.styles: dict[str, tuple[str, int, str, str, str]] = {}
         self.dimstyles: dict[str, str] = {}
         self.block_records: dict[str, str] = {}  # khoá -> tên
         self.br_handles: dict[str, str] = {}  # handle -> khoá
@@ -535,7 +535,14 @@ class _Parser:
             flags = _int(d.get(70, "0")) or 0
             if name == "" and flags & 1:  # tệp hình SHX không tên: ezdxf không liệt kê
                 return
-            self.styles[key] = (name, flags, d.get(3, "") or "", d.get(4, "") or "")
+            family = ""
+            for i, (code, val) in enumerate(tags):
+                if code == 1001 and val == "ACAD":
+                    nxt = tags[i + 1] if i + 1 < len(tags) else None
+                    if nxt is not None and nxt[0] == 1000:
+                        family = nxt[1]
+                    break
+            self.styles[key] = (name, flags, d.get(3, "") or "", d.get(4, "") or "", family)
         elif rtype == "DIMSTYLE":
             self.dimstyles[key] = name
         elif rtype == "BLOCK_RECORD":
@@ -738,12 +745,12 @@ class _Parser:
 
         styles = dict(self.styles)
         if "standard" not in styles:
-            styles["standard"] = ("Standard", 0, "", "")
-        for name, flags, font, bigfont in styles.values():
+            styles["standard"] = ("Standard", 0, "", "", "")
+        for name, flags, font, bigfont, family in styles.values():
             if flags & 1:
                 stats.shape_styles += 1
                 continue
-            m.styles.append(StyleRec(name=name, font=font, bigfont=bigfont, font_kind=_font_kind(font)))
+            m.styles.append(StyleRec(name=name, font=font, bigfont=bigfont, font_kind=_font_kind(font), family=family))
         dimstyles = dict(self.dimstyles)
         if "standard" not in dimstyles:
             dimstyles["standard"] = "Standard"

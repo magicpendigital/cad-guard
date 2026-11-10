@@ -46,7 +46,12 @@ def _collect(paths: list[str]) -> list[Path]:
 
 
 def _read_model(f: Path, reader: str, threshold_mb: float):
-    """Chọn đường đọc: ezdxf (nạp trọn) hoặc theo dòng; `auto` = theo dòng khi tệp >= ngưỡng MB."""
+    """Chọn đường đọc: ezdxf (nạp trọn) hoặc theo dòng; `auto` = theo dòng khi tệp >= ngưỡng MB. DWG: chuyển qua
+    accoreconsole của AutoCAD đã cài (dwg.py)."""
+    if f.suffix.lower() == ".dwg":
+        from .dwg import dwg_to_dxf
+
+        f = dwg_to_dxf(f)
     from .dxf_stream import DXFStreamError
     from .reader_select import choose_reader, read_with
 
@@ -190,6 +195,100 @@ def cmd_learn_layers(args: argparse.Namespace) -> int:
         return 2
     print(f"Đã học {len(res['patterns'])} mẫu layer ({res['total']} mẫu trong cài đặt). Quét lại để thấy LY-01 mới.")
     return 0
+
+
+def parse_sheet_list(spec: str | None, count: int) -> list[int] | None:
+    """'1,3-5' -> [1, 3, 4, 5] (đánh số từ 1 như tên 'Tờ n'). None/'' -> None (mọi tờ)."""
+    if not spec:
+        return None
+    out: list[int] = []
+    for part in spec.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        a, _, b = part.partition("-")
+        lo, hi = int(a), int(b or a)
+        if lo < 1 or hi > count or lo > hi:
+            raise ValueError(f"Tờ '{part}' ngoài khoảng 1–{count}.")
+        out.extend(range(lo, hi + 1))
+    return sorted(set(out))
+
+
+def sheet_handles(model, picks: list[int] | None) -> set[str] | None:
+    """Handle của các tờ chọn (gồm khung tên và mọi đối tượng thuộc tờ)."""
+    if picks is None:
+        return None
+    from .sheets import build_structure
+
+    st = build_structure(model)
+    out: set[str] = set()
+    for i in picks:
+        out.update(st.sheets[i - 1].handles)
+    return out
+
+
+def run_edit(path: Path, ops_data, *, yes: bool, standard: str = "design-hygiene-v0", dwg: bool = False,
+             label: str = "") -> int:
+    """Đề xuất changeset trên tệp (thư mục chứa tệp là thư mục làm việc), in xem trước; `yes` thì áp ra tệp MỚI."""
+    from .agent.workspace import Workspace
+    from .changeset import ChangesetError, OpError, apply, propose
+
+    ws = Workspace(path.resolve().parent)
+    try:
+        cs, pv = propose(ws, path.name, ops_data, standard=standard, created_by="user")
+    except (OpError, ChangesetError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    _print_preview(pv)
+    if not pv["ok"]:
+        print("Kiểm KHÔNG ĐẠT: không áp dụng.", file=sys.stderr)
+        return 1
+    if not yes:
+        if not (_interactive() and _confirm(f"Áp dụng {label or 'thay đổi'} ra tệp MỚI? [c/k] ")):
+            print(f"Chưa áp dụng. Áp dụng sau: cadguard apply {cs.id} --workspace \"{ws.root}\" --yes")
+            return 0
+    try:
+        res = apply(ws, cs.id, confirm=True)
+    except ChangesetError as exc:
+        print(str(exc), file=sys.stderr)
+        return 1
+    out = ws.root / res["output"]["path"]
+    print(f"Đã ghi tệp mới: {out.name} (hoàn tác: cadguard undo {cs.id} --workspace \"{ws.root}\" --yes)")
+    if dwg:
+        from .dwg import DwgError, dxf_to_dwg
+
+        try:
+            print(f"Đã ghi DWG: {dxf_to_dwg(out, out.with_suffix('.dwg')).name}")
+        except DwgError as exc:
+            print(f"Không ghi được DWG: {exc}", file=sys.stderr)
+    return 0
+
+
+def cmd_unicode(args: argparse.Namespace) -> int:
+    """Chuyển chữ TCVN3/VNI sang Unicode (phông Be Vietnam Pro), ra tệp MỚI; chỉ chạy khi người dùng gọi."""
+    from .dwg import DwgError, ensure_dxf
+    from .reader_select import read_with
+
+    try:
+        path = ensure_dxf(Path(args.path))
+    except DwgError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    op: dict = {"op": "convert_unicode", "font": args.font_file, "family": args.font}
+    if args.sheets:
+        from .sheets import build_structure
+
+        model = read_with(path, "ezdxf")
+        try:
+            picks = parse_sheet_list(args.sheets, len(build_structure(model).sheets))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        op["handles"] = sorted(sheet_handles(model, picks) or [])
+        if not op["handles"]:
+            print("Các tờ đã chọn không có đối tượng.", file=sys.stderr)
+            return 2
+    return run_edit(path, [op], yes=args.yes, dwg=args.dwg, label="chuyển Unicode")
 
 
 def cmd_profile(args: argparse.Namespace) -> int:
@@ -500,7 +599,22 @@ def cmd_sheets(args: argparse.Namespace) -> int:
     from .reader_select import choose_reader, read_with
     from .sheets import build_structure
 
-    path = Path(args.path)
+    from .dwg import ensure_dxf
+
+    path = ensure_dxf(Path(args.path))
+    if getattr(args, "render", None):
+        from .sheet_render import render_sheets
+
+        model = read_with(path, "ezdxf")
+        try:
+            picks = parse_sheet_list(args.pick, len(build_structure(model).sheets))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        res = render_sheets(path, Path(args.render), picks, fmt=args.format)
+        print(f"Đã dựng {len(res['sheets'])}/{res['count']} tờ trong {res['seconds']} giây: "
+              f"{Path(args.render) / 'index.html'}")
+        return 0
     model = read_with(path, choose_reader(path).reader)
     d = build_structure(model).to_dict(include_map=args.map)
     if args.json:
@@ -669,6 +783,15 @@ def main(argv: list[str] | None = None) -> int:
     rs.add_argument("--reset", action="store_true", help="về mặc định (xoá mọi cài đặt của luật trong phạm vi)")
     rs.set_defaults(fn=cmd_rule_set)
 
+    un = sub.add_parser("unicode", help="chuyển chữ TCVN3/VNI sang Unicode (phông Be Vietnam Pro), ra tệp mới")
+    un.add_argument("path", help="tệp .dxf (hoặc .dwg khi máy có AutoCAD bản đầy đủ)")
+    un.add_argument("--sheets", default=None, help="chỉ các tờ này, vd. 1,3-5 (mặc định cả bản vẽ)")
+    un.add_argument("--font", default="Be Vietnam Pro", help="tên họ phông Unicode (mặc định Be Vietnam Pro)")
+    un.add_argument("--font-file", default="BeVietnamPro-Regular.ttf", help="tệp phông TTF ghi vào kiểu chữ")
+    un.add_argument("--yes", action="store_true", help="áp dụng ngay sau khi xem trước đạt (không hỏi)")
+    un.add_argument("--dwg", action="store_true", help="ghi thêm bản DWG của tệp mới (cần accoreconsole)")
+    un.set_defaults(fn=cmd_unicode)
+
     ll = sub.add_parser("learn-layers", help="học quy ước tên layer của công ty từ một bản vẽ (giảm nhiễu LY-01)")
     ll.add_argument("path")
     ll.add_argument("--standard", default=None)
@@ -811,6 +934,10 @@ def main(argv: list[str] | None = None) -> int:
     sh.add_argument("path", help="tệp DXF")
     sh.add_argument("--json", action="store_true", help="in JSON cg.structure/1")
     sh.add_argument("--map", action="store_true", help="kèm bảng handle -> tờ trong JSON")
+    sh.add_argument("--render", default=None, metavar="THƯ_MỤC",
+                    help="dựng hình từng tờ (SVG + index.html; chữ mã cũ hiện đúng) vào thư mục này")
+    sh.add_argument("--pick", default=None, help="chỉ dựng các tờ này, vd. 1,3-5")
+    sh.add_argument("--format", choices=["svg", "png", "pdf"], default="svg", help="png/pdf cần matplotlib")
     sh.set_defaults(fn=cmd_sheets)
 
     ac = sub.add_parser("autocad", help="đường dẫn và cách nạp cadguard.lsp (CGXUAT, CGTOI, CGDEN, CGBAOCAO, CGHELP) cho AutoCAD")

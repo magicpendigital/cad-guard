@@ -278,8 +278,13 @@ def build_model(doc, file_hash: str = "") -> DrawingModel:
                 m.stats.shape_styles += 1
                 continue
             font = str(style.dxf.get("font", "") or "")
+            try:
+                family = str(style.get_extended_font_data()[0] or "")
+            except Exception:  # noqa: BLE001
+                family = ""
             m.styles.append(StyleRec(name=str(style.dxf.name), font=font,
-                                     bigfont=str(style.dxf.get("bigfont", "") or ""), font_kind=_font_kind(font)))
+                                     bigfont=str(style.dxf.get("bigfont", "") or ""), font_kind=_font_kind(font),
+                                     family=family))
         except Exception:  # noqa: BLE001
             continue
     for style in doc.dimstyles:

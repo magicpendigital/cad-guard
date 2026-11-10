@@ -67,6 +67,7 @@ class StyleRec(BaseModel):
     font: str = ""
     bigfont: str = ""
     font_kind: Literal["shx", "ttf", "other", "none"] = "none"
+    family: str = ""  # tên họ phông TrueType trong XDATA "ACAD" (kiểu chữ để trống `font`, vd. ".VnAvantH")
 
 
 class BlockRec(BaseModel):

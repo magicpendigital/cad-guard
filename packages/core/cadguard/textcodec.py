@@ -160,7 +160,7 @@ def style_encodings(model) -> dict[str, str]:
     """{tên kiểu chữ (chữ thường): mã} cho các kiểu dùng phông TCVN3/VNI trong mô hình."""
     out: dict[str, str] = {}
     for st in getattr(model, "styles", []) or []:
-        enc = font_encoding(st.font) or font_encoding(st.name)
+        enc = font_encoding(st.font) or font_encoding(getattr(st, "family", "") or "") or font_encoding(st.name)
         if enc:
             out[st.name.lower()] = enc
     return out

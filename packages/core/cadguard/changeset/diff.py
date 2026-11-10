@@ -48,7 +48,12 @@ def _tags(e, version) -> list:
         e.export_dxf(tc)
     except Exception:  # noqa: BLE001 - đối tượng lạ: so bằng thuộc tính
         return []
-    return [(t.code, t.value) for t in tc.tags]
+    tags = [(t.code, t.value) for t in tc.tags]
+    if e.dxftype() == "INSERT":  # ATTRIB/SEQEND theo sau INSERT được so riêng theo handle của chúng
+        for i, (code, _v) in enumerate(tags[1:], 1):
+            if code == 0:
+                return tags[:i]
+    return tags
 
 
 def _attrs(e) -> dict[str, Any]:

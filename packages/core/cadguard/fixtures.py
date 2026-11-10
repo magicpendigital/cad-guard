@@ -8,6 +8,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import ezdxf
+import ezdxf.render.mleader
+from ezdxf.math import Vec2
 
 GOOD_LAYERS = [
     "FN-PART-OUTL",
@@ -592,6 +594,11 @@ def make_model_sheets(path: Path, sheets: list | None = None) -> None:
                                                                  "insert": (x + 40 * k, 40 * k)})
             msp.add_linear_dim(base=(x + 60 * k, 50 * k), p1=(x + 60 * k, 45 * k), p2=(x + 160 * k, 45 * k),
                                dxfattribs={"layer": "SYN-KICH-THUOC"}).render()
+        if i == 0:  # chú thích có đường dẫn (MULTILEADER), chữ TCVN3 theo kiểu chữ .VnArial
+            ml = msp.add_multileader_mtext("Standard")
+            ml.set_content("®Ìn h¾t trÇn", char_height=2.5 * k, style="VN-ARIAL")
+            ml.add_leader_line(ezdxf.render.mleader.ConnectionSide.left, [Vec2(x + 120 * k, 200 * k)])
+            ml.build(insert=Vec2(x + 150 * k, 210 * k))
         if i == 1:  # tràn khung: đường kéo ra ngoài mép phải vùng vẽ, đè dải khung tên
             msp.add_line((x + 300 * k, 120 * k), (x + 400 * k, 120 * k), dxfattribs={"layer": "SYN-NOI-THAT"})
         x += 420 * k  # kề nhau, không khe hở

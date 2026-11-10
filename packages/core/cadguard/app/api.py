@@ -588,6 +588,11 @@ def suggest_ops(app: AppData, rel: Any, standard: Any) -> dict:
             "Xoá kiểu chữ và kiểu kích thước không dùng",
             "Chỉ xoá định nghĩa không được tham chiếu; không xoá đối tượng hình học. Đặt cuối để dọn cả kiểu vừa được "
             "giải phóng bởi thao tác đổi kiểu chữ.")
+    enc = app.structure(model).encoding
+    if enc.get("styles") or enc.get("guessed_tcvn3"):
+        add("VS-07", {"op": "convert_unicode"}, "Chuyển chữ TCVN3/VNI sang Unicode (phông Be Vietnam Pro)",
+            "Chữ tiếng Việt mã cũ được đổi sang Unicode, kiểu chữ phông cũ trỏ sang Be Vietnam Pro; chuỗi không chắc "
+            "bảng mã giữ nguyên và được liệt kê. Chỉ chạy khi bạn chọn; ra tệp mới, hoàn tác được.", checked=False)
     for rid in sorted(rule_ids):
         if rid in NO_FIX_NOTE:
             notes.append({"rule_id": rid, "message": NO_FIX_NOTE[rid]})

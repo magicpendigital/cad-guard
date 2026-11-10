@@ -19,7 +19,7 @@ from ..runner import audit_model
 from ..standard import Standard
 from .diff import changed_attrs, diff_snapshots, sha256_file, snapshot, summary_vi
 from .engine import Protection, read_doc
-from .ops import PURGE_KINDS, allowed_attrs
+from .ops import PURGE_KINDS, allowed_attrs, allowed_data_types
 
 MAX_LISTED = 20
 
@@ -43,13 +43,17 @@ def compare_rules(before: dict[str, int], after: dict[str, int]) -> dict:
 
 def _allowed_defs(ops: list[Any]) -> dict[str, dict[str, set[str] | bool]]:
     """Định nghĩa được phép thêm/xoá theo thao tác: tên cụ thể, hoặc True = mọi tên (purge không giới hạn tên)."""
-    allow: dict[str, dict[str, Any]] = {k: {"added": set(), "removed": set()} for k in PURGE_KINDS}
+    allow: dict[str, dict[str, Any]] = {k: {"added": set(), "removed": set(), "changed": set()} for k in PURGE_KINDS}
     for o in ops:
         if o.op == "rename_layer":
             allow["layers"]["removed"].add(o.from_.casefold())
             allow["layers"]["added"].add(o.to.casefold())
         elif o.op == "merge_layers":
             allow["layers"]["removed"].update(x.casefold() for x in o.sources)
+        elif o.op == "convert_unicode":
+            # kiểu chữ phông cũ được trỏ sang phông Unicode (đổi) hoặc thêm kiểu "<tên>-UNICODE" khi chuyển một phần
+            allow["text_styles"]["changed"] = True
+            allow["text_styles"]["added"] = True
         elif o.op == "purge_unused":
             for kind in o.kinds:
                 if o.names is None:
@@ -57,6 +61,15 @@ def _allowed_defs(ops: list[Any]) -> dict[str, dict[str, set[str] | bool]]:
                 elif allow[kind]["removed"] is not True:
                     allow[kind]["removed"].update(x.casefold() for x in o.names)
     return allow
+
+
+def tolerated_rules(ops: list[Any]) -> set[str]:
+    """Luật được phép tăng vì là tác dụng phụ đã biết, ghi rõ trong xem trước."""
+    out: set[str] = set()
+    for o in ops:
+        if o.op == "convert_unicode" and o.handles:
+            out.add("VS-02")  # chuyển một phần: thêm kiểu chữ "<tên>-UNICODE"
+    return out
 
 
 def _check(cid: str, ok: bool, msg_ok: str, msg_bad: str) -> dict:
@@ -91,12 +104,15 @@ def evaluate(doc_a, doc_b, ops: list[Any], prot: Protection, std: Standard, sour
         f"({sum(by_type_a.values())} → {sum(by_type_b.values())} trong không gian mô hình/giấy)."))
 
     allowed = allowed_attrs(ops)
+    data_types = allowed_data_types(ops)
     bad_attrs: Counter = Counter()
     bad_handles: list[str] = []
     touched_protected: list[str] = []
     for item in d["entities"]["changed"]:
         attrs = set(item["attrs"])
         extra = attrs - allowed
+        if extra == {"data"} and item["type"] in data_types:
+            extra = set()
         if extra or item.get("type_after"):
             bad_attrs.update(extra or {"type"})
             bad_handles.append(item["handle"])
@@ -131,6 +147,9 @@ def evaluate(doc_a, doc_b, ops: list[Any], prot: Protection, std: Standard, sour
                     continue
                 bad_defs.append(f"{kind}.{key}:{name}")
         for name in d["definitions"][kind]["changed"]:
+            rule = allow[kind]["changed"]
+            if rule is True or name.casefold() in rule:
+                continue
             bad_defs.append(f"{kind}.changed:{name}")
     checks.append(_check("definitions", not bad_defs, "Định nghĩa chỉ thêm/xoá đúng theo thao tác.",
                          "Định nghĩa đổi ngoài phạm vi thao tác: " + ", ".join(bad_defs[:MAX_LISTED]) + "."))
@@ -138,9 +157,15 @@ def evaluate(doc_a, doc_b, ops: list[Any], prot: Protection, std: Standard, sour
     before, findings_a = rule_counts(build_model(doc_a), std)
     after, findings_b = rule_counts(build_model(doc_b), std)
     rules = compare_rules(before, after)
+    tolerated = sorted(set(rules["regressed"]) & tolerated_rules(ops))
+    if tolerated:  # tác dụng phụ đã biết của thao tác (vd. thêm kiểu chữ "-UNICODE" làm VS-02 tăng): báo, không chặn
+        rules["regressed"] = [r for r in rules["regressed"] if r not in tolerated]
+        rules["rules_regressed"] = len(rules["regressed"])
+        rules["tolerated"] = tolerated
     checks.append(_check(
         "rules", rules["rules_regressed"] == 0,
-        f"Không luật nào xuất hiện mới hoặc tăng (chuẩn {std.name} {std.version}); hết: {', '.join(rules['resolved']) or 'không'}.",
+        f"Không luật nào xuất hiện mới hoặc tăng (chuẩn {std.name} {std.version}); hết: {', '.join(rules['resolved']) or 'không'}."
+        + (f" Chấp nhận tăng theo thao tác: {', '.join(tolerated)}." if tolerated else ""),
         f"{rules['rules_regressed']} luật xuất hiện mới hoặc tăng: {', '.join(rules['regressed'])}."))
 
     ok = all(c["ok"] for c in checks)
