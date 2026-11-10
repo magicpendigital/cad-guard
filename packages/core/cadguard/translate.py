@@ -8,7 +8,10 @@ Chuỗi xử lý (dịch là CÔNG CỤ có lệnh riêng; chat chỉ là một 
 5. LLM dịch phần còn lại theo lô (chỉ ĐỀ XUẤT); thiếu LLM thì chỉ dùng bảng thuật ngữ + bộ nhớ dịch.
 6. Kiểm tất định: ký hiệu giữ chỗ đủ (số/đơn vị/mã không đổi), thuật ngữ khớp bảng, chuỗi chưa dịch, chữ có thể tràn
    khung, phông đích có ký tự (Trung: kiểu chữ CJK riêng).
-7. Changeset `convert_unicode` + `set_texts` → xem trước → áp dụng ra `<tên>.<ngôn ngữ>.dxf` → hoàn tác.
+7. Changeset → xem trước → áp dụng ra tệp mới → hoàn tác. Hai chế độ:
+   - `copy` (mặc định): `convert_unicode` + `set_texts`, chữ thay tại chỗ, ra `<tên>.<ngôn ngữ>.dxf`;
+   - `layer`: chữ gốc GIỮ NGUYÊN (kể cả mã cũ), `add_texts` thêm chữ dịch trên layer `CG-DICH-EN`/`CG-DICH-ZH`, đặt
+     ngay dưới chữ gốc; bật/tắt layer để xem một hoặc hai ngôn ngữ; ra `<tên>.<ngôn ngữ>layer.dxf`.
 
 Dịch gửi NỘI DUNG chữ cho LLM: được phép mặc định (công cụ nội bộ); dự án bật ẩn danh (NDA) thì bị khoá.
 """
@@ -27,10 +30,15 @@ TARGETS = {"en": "Tiếng Anh", "zh": "Tiếng Trung"}
 LANG_NAMES = {"vi": "Tiếng Việt", "en": "Tiếng Anh", "zh": "Tiếng Trung"}
 CJK_FONT = ("msyh.ttc", "Microsoft YaHei")  # có sẵn trên Windows; Be Vietnam Pro không có chữ Hán
 CJK_STYLE = "CG-ZH"
+LAYER_FONT = ("BeVietnamPro-Regular.ttf", "Be Vietnam Pro")  # phông Unicode công ty (như convert_unicode)
+LAYER_STYLE = "CG-DICH"
 BATCH = 60
 MAX_ITEMS = 20000
 GLOSSARY_FILE = Path(".cadguard") / "glossary.yaml"
 TM_FILE = Path(".cadguard") / "translation-memory.json"
+MODES = ("copy", "layer")
+LAYER_PREFIX = "CG-DICH-"
+LINE_GAP = 1.4  # khoảng dời chữ dịch xuống dưới chữ gốc, theo số lần chiều cao chữ (một dòng)
 
 _CJK = re.compile(r"[㐀-鿿豈-﫿]")
 _VI_MARK = re.compile(r"[ăâđêôơưĂÂĐÊÔƠƯàáảãạằắẳẵặầấẩẫậèéẻẽẹềếểễệìíỉĩịòóỏõọồốổỗộờớởỡợùúủũụừứửữựỳýỷỹỵ"
@@ -291,15 +299,45 @@ def _width(s: str, lang: str) -> float:
 
 # ---------- ghép thành changeset ----------
 
+def layer_name(target: str) -> str:
+    return LAYER_PREFIX + target.upper()
+
+
+def _below(e, raw: str) -> tuple[float, float]:
+    """Độ dời (WCS) để đặt chữ dịch ngay dưới chữ gốc: một khối chữ cao + khoảng cách, theo hướng xoay của chữ."""
+    import math
+
+    t = e.dxftype()
+    if t == "MULTILEADER":
+        h = float(e.context.char_height or 2.5)
+        lines, rot = raw.count("\\P") + 1, 0.0
+    elif t == "MTEXT":
+        h = float(e.dxf.get("char_height", 2.5) or 2.5)
+        lines = raw.count("\\P") + 1
+        rot = float(e.dxf.get("rotation", 0.0) or 0.0)
+        if e.dxf.hasattr("text_direction"):
+            d = e.dxf.text_direction
+            rot = math.degrees(math.atan2(d.y, d.x))
+    else:
+        h = float(e.dxf.get("height", 2.5) or 2.5)
+        lines, rot = 1, float(e.dxf.get("rotation", 0.0) or 0.0)
+    dist = (lines - 1) * 1.67 * h + LINE_GAP * h
+    a = math.radians(rot)
+    return (round(math.sin(a) * dist, 9), round(-math.cos(a) * dist, 9))
+
+
 def build(path: Path, target: str, *, workspace: Path, handles: set[str] | None = None, backend=None,
-          update_tm: bool = True, overrides: dict[str, str] | None = None) -> dict:
+          update_tm: bool = True, overrides: dict[str, str] | None = None, mode: str = "copy") -> dict:
     """Đọc bản vẽ, dịch, trả {"ops", "report"}. Không ghi bản vẽ (ghi bộ nhớ dịch nếu `update_tm`)."""
     from . import privacy
     from .changeset.engine import read_doc
 
     if privacy.effective(workspace):
         raise TranslateError("Dự án đang bật ẩn danh (NDA): chức năng dịch bị khoá vì phải gửi nội dung chữ cho LLM.")
+    if mode not in MODES:
+        raise TranslateError("Chế độ dịch phải là 'copy' (thay tại chỗ) hoặc 'layer' (thêm chữ dịch trên layer riêng).")
     doc = read_doc(path)
+    original = {str(e.dxf.get("handle", "")): (raw_text(e), e) for e in iter_text_entities(doc, include_blocks=False)}
     conv = convert_doc(doc)  # cùng kết quả với thao tác convert_unicode đứng trước trong changeset
     items = collect(doc, handles)
     if len(items) > MAX_ITEMS:
@@ -323,20 +361,39 @@ def build(path: Path, target: str, *, workspace: Path, handles: set[str] | None 
         save_tm(workspace, tm)
     done = [it for it in items if it.target is not None and it.source != "same" and it.target != it.raw]
     ops: list[dict] = []
-    if conv.converted:
-        ops.append({"op": "convert_unicode"})
-    if done:
-        op = {"op": "set_texts", "items": [{"handle": it.handle, "text": it.target, "expect": it.raw} for it in done]}
-        if target == "zh":
-            op.update({"style": CJK_STYLE, "style_font": CJK_FONT[0], "style_family": CJK_FONT[1]})
-        ops.append(op)
+    skipped_layer = []
+    if mode == "layer":
+        new_items = []
+        for it in done:
+            raw0, e = original.get(it.handle, (None, None))
+            if e is None or e.dxftype() not in ("TEXT", "MTEXT", "ATTRIB", "MULTILEADER"):
+                skipped_layer.append(it.handle)  # chữ ghi đè kích thước: không thêm chữ rời, giữ nguyên
+                continue
+            dx, dy = _below(e, it.raw)
+            new_items.append({"source": it.handle, "text": it.target, "offset": [dx, dy], "expect": raw0})
+        if new_items:
+            # chữ dịch dùng kiểu chữ Unicode riêng (chữ gốc có thể dùng phông TCVN3/VNI): Anh -> Be Vietnam Pro, Trung -> CJK
+            font = CJK_FONT if target == "zh" else LAYER_FONT
+            op = {"op": "add_texts", "layer": layer_name(target), "items": new_items,
+                  "style": CJK_STYLE if target == "zh" else LAYER_STYLE, "style_font": font[0], "style_family": font[1]}
+            ops.append(op)
+    else:
+        if conv.converted:
+            ops.append({"op": "convert_unicode"})
+        if done:
+            op = {"op": "set_texts", "items": [{"handle": it.handle, "text": it.target, "expect": it.raw} for it in done]}
+            if target == "zh":
+                op.update({"style": CJK_STYLE, "style_font": CJK_FONT[0], "style_family": CJK_FONT[1]})
+            ops.append(op)
     pending = [it for it in items if it.target is None and it.source != "same"]
     report = {
         "source_language": det, "target": target, "target_name": TARGETS[target], "strings": len(items),
         "translated": len(done), "by_source": _count(it.source for it in done),
         "untranslated": len(pending), "untranslated_handles": [it.handle for it in pending][:200],
         "issues": [{"handle": it.handle, "issues": it.issues} for it in items if it.issues][:200],
-        "issue_count": sum(1 for it in items if it.issues), "legacy_converted": conv.converted,
+        "issue_count": sum(1 for it in items if it.issues), "legacy_converted": conv.converted if mode == "copy" else 0,
+        "mode": mode, "layer": layer_name(target) if mode == "layer" else None,
+        "layer_skipped": len(skipped_layer), "layer_skipped_handles": skipped_layer[:200],
         "llm": getattr(backend, "name", None), "llm_calls": stats["llm_calls"],
         "rows": [{"handle": it.handle, "type": it.type, "source": it.plain[:200], "target": (it.target or "")[:200],
                   "from": it.source, "masked": it.masked} for it in items][:MAX_ITEMS],
@@ -382,5 +439,5 @@ def import_review(src: Path) -> dict[str, str]:
         return {r["handle"]: r["target"] for r in csv.DictReader(f) if r.get("handle") and r.get("target")}
 
 
-__all__ = ["TARGETS", "TranslateError", "build", "detect_drawing_language", "detect_language", "export_review",
+__all__ = ["MODES", "TARGETS", "layer_name", "TranslateError", "build", "detect_drawing_language", "detect_language", "export_review",
            "import_review", "load_glossary", "placeholders_ok", "protect", "restore", "translate_items"]

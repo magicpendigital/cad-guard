@@ -2592,12 +2592,12 @@
     try { showPreview(await api("/api/changeset/propose", {file: S.file, standard: "design-hygiene-v0", ops: [{op: "convert_unicode"}]})); }
     catch (e) { toast(e.message); }
   }
-  async function toolTranslate(lang, btn) {
+  async function toolTranslate(lang, btn, mode) {
     if (!S.file) { toast("Mở một bản vẽ trước."); return; }
     if (btn) btn.disabled = true;
     toast("Đang dịch… (AI đề xuất, CAD Guard kiểm số/đơn vị/mã). Bản vẽ lớn có thể mất vài phút.");
     try {
-      const r = await api("/api/translate", {file: S.file, to: lang, sheet: S.sheetSel || null});
+      const r = await api("/api/translate", {file: S.file, to: lang, sheet: S.sheetSel || null, mode: mode || "copy"});
       const rp = r.report;
       toast(`Ngôn ngữ gốc: ${rp.source_language.language_name}. Có bản dịch ${rp.translated}/${rp.strings} chuỗi, chưa dịch ${rp.untranslated}, cần xem ${rp.issue_count}${rp.llm ? "" : " (chưa có AI: chỉ dùng bảng thuật ngữ)"}.`);
       if (r.preview) showPreview(r.preview);
@@ -2734,7 +2734,7 @@
     $("closeDiscussion").addEventListener("click",()=>{document.body.classList.remove("show-discussion");document.body.classList.add("hide-discussion");syncPanels();});
     syncPanels();
     $("toolUnicode").addEventListener("click", toolUnicode);
-    $("toolTranslate").addEventListener("click", (e) => toolTranslate($("toolLang").value, e.currentTarget));
+    $("toolTranslate").addEventListener("click", (e) => toolTranslate($("toolLang").value, e.currentTarget, $("toolMode") ? $("toolMode").value : "copy"));
     $("toolTemplate").addEventListener("click", toolTemplate);
     $("zoomIn").addEventListener("click", () => (S.v3d ? S.v3d.zoom(1.25) : zoomButton(0.8)));
     $("zoomOut").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0.8) : zoomButton(1.25)));

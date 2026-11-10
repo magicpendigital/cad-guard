@@ -143,6 +143,11 @@ def test_app_translate_endpoint(ws, monkeypatch, tmp_path):
     assert r["report"]["source_language"]["language"] == "vi" and r["preview"]["ok"]
     with pytest.raises(app_api.ApiError):
         app_api.translate_drawing(app.d(), "m.dxf", "fr", None, app.translate_backend)
+    r2 = app_api.translate_drawing(app.d(), "m.dxf", "en", None, app.translate_backend, "layer")
+    assert r2["report"]["mode"] == "layer" and r2["preview"]["ok"]
+    assert [o["op"] for o in r2["preview"]["ops_input"]] == ["add_texts"]
+    with pytest.raises(app_api.ApiError):
+        app_api.translate_drawing(app.d(), "m.dxf", "en", None, app.translate_backend, "xyz")
 
 
 def test_assistant_tool_two_steps(ws):
@@ -158,3 +163,71 @@ def test_assistant_tool_two_steps(ws):
     anon = tools.ToolContext(Workspace(ws), Anonymizer(enabled=True))
     with pytest.raises(tools.ToolError, match="ẩn danh"):
         tools.propose_translation(anon, "m.dxf", "en")
+
+
+def _snap_existing(path):
+    from cadguard.changeset.diff import snapshot
+    from cadguard.changeset.engine import read_doc
+
+    return {h: (s.type, s.layer, s.attrs) for h, s in snapshot(read_doc(path))["entities"].items()}
+
+
+@pytest.mark.parametrize("lang", ["en", "zh"])
+def test_layer_mode_keeps_source_adds_layer(ws, lang):
+    res = translate.build(ws / "m.dxf", lang, workspace=ws, backend=FakeLlm(lang), mode="layer")
+    rep = res["report"]
+    assert rep["mode"] == "layer" and rep["layer"] == f"CG-DICH-{lang.upper()}"
+    assert [o["op"] for o in res["ops"]] == ["add_texts"]  # không chuyển Unicode, không sửa chữ gốc
+    op = res["ops"][0]
+    assert len(op["items"]) == rep["translated"] - rep["layer_skipped"] > 0
+    w = Workspace(ws)
+    cs, pv = propose(w, "m.dxf", res["ops"], output_tag=lang + "layer")
+    assert pv["ok"], [c for c in pv["checks"] if not c["ok"]]
+    out = apply(w, cs.id, confirm=True)
+    dst = ws / out["output"]["path"]
+    assert dst.name == f"m.{lang}layer.dxf"
+    before, after = _snap_existing(ws / "m.dxf"), _snap_existing(dst)
+    assert all(after[h] == v for h, v in before.items() if not v[0].startswith("ACAD"))  # chữ gốc nguyên vẹn
+    new = [after[h] for h in set(after) - set(before)]
+    assert len(new) == len(op["items"]) and {t for t, _l, _a in new} <= {"TEXT", "MTEXT"}
+    assert {la for _t, la, _a in new} == {f"CG-DICH-{lang.upper()}"}
+    doc = ezdxf.readfile(dst)
+    assert doc.layers.has_entry(f"CG-DICH-{lang.upper()}")
+    prefix = "EN " if lang == "en" else "中文 "
+    tr = [e for e in doc.modelspace().query(f'TEXT MTEXT[layer=="CG-DICH-{lang.upper()}"]')]
+    assert tr and all((e.dxf.text if e.dxftype() == "TEXT" else e.text).startswith(prefix) or "{" in
+                      (e.dxf.text if e.dxftype() == "TEXT" else e.text) for e in tr)
+    src = {e.dxf.handle: e for e in ezdxf.readfile(ws / "m.dxf").modelspace().query("TEXT")}
+    it = next(i for i in op["items"] if i["source"] in src)
+    s = src[it["source"]]
+    assert it["offset"][1] < 0 and abs(it["offset"][1]) == pytest.approx(translate.LINE_GAP * s.dxf.height)
+    if lang == "zh":
+        assert all(e.dxf.style == translate.CJK_STYLE for e in tr)
+
+
+def test_layer_mode_validate_rejects_extra_entity(ws):
+    """Thêm chữ ngoài layer của thao tác (hoặc nhiều hơn số mục) thì bước kiểm không đạt."""
+    from cadguard.changeset.engine import Protection, read_doc, run_ops
+    from cadguard.changeset.ops import parse_ops
+    from cadguard.changeset.validate import evaluate
+    from cadguard.standard import load_standard
+    from conftest import REPO
+
+    res = translate.build(ws / "m.dxf", "en", workspace=ws, backend=FakeLlm("en"), mode="layer")
+    ops = parse_ops(res["ops"])
+    a, b = read_doc(ws / "m.dxf"), read_doc(ws / "m.dxf")
+    run_ops(b, ops, Protection())
+    std = load_standard("design-hygiene-v0", REPO / "standards")
+    assert evaluate(a, b, ops, Protection(), std)["ok"]
+    b.modelspace().add_text("lạ", dxfattribs={"layer": "SYN-CHU"})
+    bad = evaluate(a, b, ops, Protection(), std)
+    assert not next(c for c in bad["checks"] if c["id"] == "entity_count")["ok"]
+
+
+def test_cli_translate_layer(ws, capsys):
+    (ws / ".cadguard").mkdir()
+    (ws / ".cadguard" / "glossary.yaml").write_text(
+        "terms:" + chr(10) + "- {vi: CĂN HỘ SYN, en: SYN APARTMENT, zh: SYN公寓}" + chr(10), encoding="utf-8")
+    assert main(["translate", str(ws / "m.dxf"), "--to", "en", "--engine", "none", "--mode", "layer", "--yes"]) == 0
+    out = capsys.readouterr().out
+    assert "CG-DICH-EN" in out and (ws / "m.enlayer.dxf").is_file()

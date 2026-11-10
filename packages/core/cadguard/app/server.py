@@ -356,7 +356,7 @@ class CadGuardApp:
             ("GET", "/api/setup"): lambda q, b: self.setup_status(),
             ("POST", "/api/setup/run"): lambda q, b: self.setup_run(b.get("step"), b.get("remove") is True),
             ("POST", "/api/translate"): lambda q, b: api.translate_drawing(d(), b.get("file"), b.get("to"), b.get("sheet"),
-                                                                          self.translate_backend),
+                                                                          self.translate_backend, b.get("mode") or "copy"),
             ("POST", "/api/template/learn"): lambda q, b: api.template_learn(d(), b.get("file"), b.get("sheet"),
                                                                             b.get("logo"), b.get("name")),
             ("POST", "/api/rules/reset"): lambda q, b: api.reset_rule(d(), b.get("standard"), b.get("rule_id"),

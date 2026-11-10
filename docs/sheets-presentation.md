@@ -64,7 +64,14 @@ Tệp phiên thử: **40 tờ** (25 tờ 1:15, 10 tờ 1:20, 1 tờ 1:10, 4 tờ
 
 ## E. Dịch sang Tiếng Anh / Tiếng Trung
 
-`cadguard translate <bản vẽ> --to en|zh [--sheets …] [--engine auto|anthropic|claude-cli|none] [--yes]`
+`cadguard translate <bản vẽ> --to en|zh [--sheets …] [--mode copy|layer] [--engine auto|anthropic|claude-cli|none] [--yes]`
+
+- Hai chế độ: `copy` (mặc định) thay chữ tại chỗ, ra `<tên>.en.dxf`; `layer` (song ngữ) **giữ nguyên chữ gốc** (kể cả
+  mã TCVN3), thao tác `add_texts` thêm chữ dịch (TEXT/MTEXT) trên layer `CG-DICH-EN`/`CG-DICH-ZH`, đặt ngay dưới chữ
+  gốc (1,4 lần chiều cao chữ, theo hướng xoay), kiểu chữ Unicode riêng `CG-DICH` (Be Vietnam Pro) hoặc `CG-ZH`; ra
+  `<tên>.enlayer.dxf`. Tắt layer `CG-DICH-…` là về bản gốc. Thuộc tính khung tên thành TEXT tại cùng vị trí; chữ ghi
+  đè kích thước không thêm được (báo số lượng). Bước kiểm chỉ cho phép thêm TEXT/MTEXT trên đúng layer đó, không quá
+  số mục, mọi đối tượng có sẵn không đổi. App: chọn *Song ngữ (layer)* cạnh nút Dịch.
 
 - Ngôn ngữ nguồn tự nhận theo nội dung (Việt / Trung / Anh). Số, đơn vị, mã vật liệu, mã định dạng MTEXT được giữ
   bằng ký hiệu ⟦n⟧ và kiểm lại sau khi dịch; thiếu ký hiệu thì bản dịch bị loại.
@@ -86,7 +93,6 @@ Tệp phiên thử: **40 tờ** (25 tờ 1:15, 10 tờ 1:20, 1 tờ 1:10, 4 tờ
 
 ## Chưa làm / giới hạn
 
-- Chế độ dịch `layer` (giữ chữ gốc, thêm chữ dịch trên layer riêng) chưa làm.
 - In PDF hàng loạt theo tờ qua AutoCAD, gộp Studio vào App, TP-11 chưa làm.
 - Bộ thực thi AutoCAD mới thử với COM giả trong test; cần kiểm tay trên AutoCAD 2027 (danh sách ở `docs/autocad.md`).
 - Phông Be Vietnam Pro chưa cài trên máy thử: AutoCAD sẽ thay phông cho tới khi cài (Google Fonts, giấy phép OFL).

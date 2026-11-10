@@ -190,10 +190,29 @@ class FitSheet(_Base):
     items: Annotated[list[FitItem], Field(min_length=1, max_length=2000)]
 
 
+class NewTextItem(_Base):
+    source: Handle  # chữ gốc (TEXT, MTEXT, ATTRIB, MULTILEADER) — giữ nguyên
+    text: TextValue
+    offset: Point2 = Field(default_factory=lambda: [0.0, 0.0])  # dời so với chữ gốc (WCS)
+    expect: TextValue | None = None  # chữ gốc lúc đề xuất: khác thì từ chối
+
+
+class AddTexts(_Base):
+    """Thêm chữ MỚI (TEXT/MTEXT) trên một layer riêng, chép vị trí/cỡ/kiểu từ chữ gốc; chữ gốc giữ nguyên.
+    Dùng cho dịch chế độ `layer` (bật/tắt layer để xem hai ngôn ngữ)."""
+    op: Literal["add_texts"]
+    layer: Annotated[str, Field(min_length=1, max_length=64, pattern=r"^CG-[A-Za-z0-9_-]+$")]
+    color: Annotated[int, Field(ge=1, le=255)] = 3
+    items: Annotated[list[NewTextItem], Field(min_length=1, max_length=MAX_TEXT_ITEMS)]
+    style: Name | None = None
+    style_font: Name | None = None
+    style_family: Name | None = None
+
+
 Op = Annotated[
     Union[RenameLayer, MergeLayers, MoveToLayer, SetByLayer, ReplaceTextStyle, ReplaceDimStyle, PurgeUnused,
           SetTextHeight, ClearDimTextOverride, ConvertUnicode, SetTexts, SetAttribs, ReplaceTitleBlock,
-          SetSheetScale, FitSheet],
+          SetSheetScale, FitSheet, AddTexts],
     Field(discriminator="op"),
 ]
 OP_TYPES: dict[str, type[_Base]] = {
@@ -212,6 +231,7 @@ OP_TYPES: dict[str, type[_Base]] = {
     "replace_title_block": ReplaceTitleBlock,
     "set_sheet_scale": SetSheetScale,
     "fit_sheet": FitSheet,
+    "add_texts": AddTexts,
 }
 _ADAPTER = TypeAdapter(list[Op])
 
@@ -244,6 +264,7 @@ ALLOWED_ATTRS: dict[str, set[str]] = {
     "replace_title_block": set(),
     "set_sheet_scale": set(),
     "fit_sheet": set(),
+    "add_texts": set(),  # chỉ THÊM đối tượng (validate kiểm loại, layer, số lượng); không đổi đối tượng có sẵn
 }
 
 # Thuộc tính được đổi trên đúng INSERT khung tên (và ATTRIB của nó) mà thao tác khung nêu handle.
@@ -271,6 +292,8 @@ OP_HELP: dict[str, str] = {
                            "source_sha256, items[{insert, values, at}]}; TP-01",
     "set_sheet_scale": "đưa hệ số khung về tỉ lệ cho phép, chỉ khung + thuộc tính {items[{insert, scale, at}]}; TP-05, TP-06",
     "fit_sheet": "dời khung (không dời nội dung) để nội dung vào giữa vùng vẽ {items[{insert, offset}]}; TP-07",
+    "add_texts": "thêm chữ mới trên layer riêng CG-…, chép vị trí/cỡ/kiểu từ chữ gốc, chữ gốc giữ nguyên "
+                 "{layer, items[{source, text, offset, expect}], style} (dịch chế độ layer)",
 }
 
 

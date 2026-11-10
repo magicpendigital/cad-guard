@@ -397,7 +397,7 @@ def cmd_translate(args: argparse.Namespace) -> int:
         handles = sheet_handles(model, picks)
     overrides = import_review(Path(args.from_review)) if args.from_review else None
     try:
-        res = build(path, args.to, workspace=ws, handles=handles, backend=backend, overrides=overrides)
+        res = build(path, args.to, workspace=ws, handles=handles, backend=backend, overrides=overrides, mode=args.mode)
     except TranslateError as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -414,8 +414,11 @@ def cmd_translate(args: argparse.Namespace) -> int:
     if not res["ops"]:
         print("Không có gì để áp dụng.")
         return 0
+    if rep.get("mode") == "layer":
+        print(f"Chế độ layer: chữ gốc giữ nguyên; chữ dịch thêm trên layer {rep['layer']} (bật/tắt để xem hai ngôn ngữ)"
+              + (f"; {rep['layer_skipped']} chữ ghi đè kích thước không thêm được." if rep["layer_skipped"] else "."))
     return run_edit(path, res["ops"], yes=args.yes, dwg=args.dwg, label=f"bản dịch {rep['target_name']}",
-                    output_tag=args.to)
+                    output_tag=args.to + ("layer" if args.mode == "layer" else ""))
 
 
 def cmd_autocad_run(args: argparse.Namespace) -> int:
@@ -1064,6 +1067,9 @@ def main(argv: list[str] | None = None) -> int:
     tr.add_argument("path", help="tệp .dxf (hoặc .dwg khi có AutoCAD bản đầy đủ)")
     tr.add_argument("--to", choices=["en", "zh"], required=True, help="ngôn ngữ đích: en (Tiếng Anh), zh (Tiếng Trung)")
     tr.add_argument("--sheets", default=None, help="chỉ các tờ này, vd. 1,3-5")
+    tr.add_argument("--mode", choices=["copy", "layer"], default="copy",
+                    help="copy: thay chữ tại chỗ (<tên>.en.dxf); layer: giữ chữ gốc, thêm chữ dịch trên layer CG-DICH-EN/ZH "
+                         "(<tên>.enlayer.dxf)")
     tr.add_argument("--engine", choices=["auto", "anthropic", "claude-cli", "none"], default="auto",
                     help="LLM đề xuất bản dịch (none = chỉ bảng thuật ngữ + bộ nhớ dịch)")
     tr.add_argument("--export-review", default=None, metavar="CSV", help="ghi bảng duyệt bản dịch (mở bằng Excel)")

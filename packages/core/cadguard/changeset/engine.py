@@ -591,7 +591,72 @@ def _fit_sheet(doc, op, prot):
     return {"affected": n, "matched": len(op.items)}
 
 
+# ---------- thêm chữ trên layer riêng (dịch chế độ layer) ----------
+
+ADD_TEXT_SOURCES = ("TEXT", "MTEXT", "ATTRIB", "MULTILEADER")
+
+
+def _owner_layout(doc, e):
+    owner = str(e.dxf.get("owner", ""))
+    if e.dxftype() == "ATTRIB":  # ATTRIB thuộc INSERT; INSERT thuộc layout
+        ins = doc.entitydb.get(owner)
+        owner = str(ins.dxf.get("owner", "")) if ins is not None else ""
+    for layout in doc.layouts:
+        if str(layout.layout_key) == owner:
+            return layout
+    raise OpError(f"add_texts: chữ handle {e.dxf.handle} không nằm trực tiếp trong không gian mô hình/giấy.")
+
+
+def _add_texts(doc, op, prot):
+    if prot.is_protected(op.layer):
+        raise OpError(f"add_texts: layer '{op.layer}' được bảo vệ.")
+    if not doc.layers.has_entry(op.layer):
+        doc.layers.add(op.layer, color=op.color)
+    style = _ensure_style(doc, op.style, op.style_font, op.style_family) if op.style else None
+    added = []
+    for it in op.items:
+        e = _entity(doc, it.source, "add_texts")
+        t = e.dxftype()
+        if t not in ADD_TEXT_SOURCES:
+            raise OpError(f"add_texts: handle {it.source} là {t}, không phải chữ (nhận TEXT, MTEXT, ATTRIB, MULTILEADER).")
+        if it.expect is not None and _text_of(e) != it.expect:
+            raise OpError(f"add_texts: chữ của handle {it.source} đã khác lúc đề xuất; hãy đề xuất lại.")
+        layout = _owner_layout(doc, e)
+        dx, dy = float(it.offset[0]), float(it.offset[1])
+        if t in ("TEXT", "MTEXT"):
+            new = e.copy()  # bản sao chưa có handle; add_entity cấp handle mới
+            layout.add_entity(new)
+            if t == "MTEXT":
+                new.text = it.text
+            else:
+                new.dxf.text = it.text
+        elif t == "ATTRIB":
+            attribs = {k: e.dxf.get(k) for k in ("height", "rotation", "style", "width", "oblique", "halign", "valign",
+                                                  "insert", "align_point", "text_generation_flag") if e.dxf.hasattr(k)}
+            new = layout.add_text(it.text, dxfattribs=attribs)
+        else:  # MULTILEADER: chữ của chú thích thành MTEXT tại cùng vị trí
+            m = e.context.mtext
+            if m is None:
+                raise OpError(f"add_texts: chú thích handle {it.source} không có chữ.")
+            st = doc.entitydb.get(str(getattr(m, "style_handle", "") or ""))
+            new = layout.add_mtext(it.text, dxfattribs={
+                "insert": m.insert, "char_height": float(e.context.char_height or 2.5),
+                "attachment_point": int(getattr(m, "alignment", 1) or 1),
+                "style": str(st.dxf.name) if st is not None and st.dxftype() == "STYLE" else "Standard"})
+        new.dxf.layer = op.layer
+        for attr in ("color", "true_color", "color_name", "transparency"):
+            if new.dxf.hasattr(attr):
+                new.dxf.discard(attr)
+        if style and new.dxf.is_supported("style"):
+            new.dxf.style = style
+        if dx or dy:
+            new.translate(dx, dy, 0)
+        added.append(str(new.dxf.handle))
+    return {"affected": len(added), "matched": len(op.items), "details": {"layer": op.layer, "added": len(added)}}
+
+
 HANDLERS = {
+    "add_texts": _add_texts,
     "replace_title_block": _replace_title_block,
     "set_sheet_scale": _set_sheet_scale,
     "fit_sheet": _fit_sheet,

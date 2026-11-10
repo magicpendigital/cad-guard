@@ -54,6 +54,10 @@ def _allowed_defs(ops: list[Any]) -> dict[str, dict[str, set[str] | bool]]:
             # kiểu chữ phông cũ được trỏ sang phông Unicode (đổi) hoặc thêm kiểu "<tên>-UNICODE" khi chuyển một phần
             allow["text_styles"]["changed"] = True
             allow["text_styles"]["added"] = True
+        elif o.op == "add_texts":
+            allow["layers"]["added"].add(o.layer.casefold())
+            if o.style and allow["text_styles"]["added"] is not True:
+                allow["text_styles"]["added"].add(o.style.casefold())
         elif o.op == "set_texts" and o.style:
             allow["text_styles"]["added"] = True if allow["text_styles"]["added"] is True else (
                 allow["text_styles"]["added"] | {o.style.casefold()})
@@ -125,7 +129,7 @@ def tolerated_rules(ops: list[Any]) -> set[str]:
     for o in ops:
         if o.op == "convert_unicode" and o.handles:
             out.add("VS-02")  # chuyển một phần: thêm kiểu chữ "<tên>-UNICODE"
-        if o.op == "set_texts" and o.style:
+        if o.op in ("set_texts", "add_texts") and o.style:
             out.add("VS-02")  # dịch sang Tiếng Trung: thêm kiểu chữ CJK
         if o.op == "replace_title_block":
             # khung cũ không được các luật theo khung template kiểm; sau khi thay, các luật này mới chạy được trên tờ đó
@@ -158,15 +162,29 @@ def evaluate(doc_a, doc_b, ops: list[Any], prot: Protection, std: Standard, sour
     removed = [e for e in d["entities"]["removed"] if not (e["space"].startswith("block:") and e["space"][6:].casefold() in purged_blocks)
                and not frames.removed_ok(e)]
     added = [e for e in d["entities"]["added"] if not frames.added_ok(e)]
+    # add_texts: chỉ TEXT/MTEXT mới, trên đúng layer của thao tác, trong không gian mô hình/giấy, không quá số mục
+    add_layers = {o.layer.casefold() for o in ops if o.op == "add_texts"}
+    budget = sum(len(o.items) for o in ops if o.op == "add_texts")
+    new_texts = [e for e in added if e["type"] in ("TEXT", "MTEXT") and e["layer"].casefold() in add_layers
+                 and not e["space"].startswith("block:")]
+    if new_texts and len(new_texts) <= budget:
+        keep = {id(e) for e in new_texts}
+        added = [e for e in added if id(e) not in keep]
+    else:
+        new_texts = []
     by_type_a = Counter(s.type for s in sa["entities"].values() if not s.space.startswith("block:"))
     by_type_b = Counter(s.type for s in sb["entities"].values() if not s.space.startswith("block:"))
+    by_type_b.subtract(Counter(e["type"] for e in new_texts))
+    by_type_b = +by_type_b
     if frames.owners:  # số ATTRIB đổi theo khung tên mới: so phần còn lại
         by_type_a.pop("ATTRIB", None)
         by_type_b.pop("ATTRIB", None)
     count_ok = not removed and not added and by_type_a == by_type_b
     checks.append(_check(
         "entity_count", count_ok,
-        f"Tổng đối tượng hình học không đổi ({sum(by_type_a.values())} trong không gian mô hình/giấy).",
+        f"Tổng đối tượng hình học không đổi ({sum(by_type_a.values())} trong không gian mô hình/giấy)"
+        + (f"; thêm đúng {len(new_texts)} chữ trên layer {', '.join(sorted(o.layer for o in ops if o.op == 'add_texts'))}."
+           if new_texts else "."),
         f"Số đối tượng thay đổi: {len(added)} thêm, {len(removed)} xoá "
         f"({sum(by_type_a.values())} → {sum(by_type_b.values())} trong không gian mô hình/giấy)."))
 
