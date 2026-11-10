@@ -1458,6 +1458,20 @@
             toast(`Đã học template '${r.template.name}' từ ${sh.sheets[cur].name}. Quét với chuẩn sheet-layout-v0 để kiểm trình bày.`);
           } catch (e) { toast(e.message); }
         }}, el("span", {class: "sh-n", text: "Học template từ tờ này"}), el("span", {class: "sh-sub", text: "khung tên chuẩn công ty"})));
+    const lang = el("select", {"aria-label": "Ngôn ngữ đích", class: "sh-sel"}, el("option", {value: "en", text: "Tiếng Anh"}), el("option", {value: "zh", text: "Tiếng Trung"}));
+    kids.push(el("span", {class: "sh-chip"}, lang, el("button", {type: "button", class: "btn-s btn-sm",
+      title: "Dịch chữ " + (S.sheetSel ? "tờ đang chọn" : "cả bản vẽ") + "; ngôn ngữ nguồn tự nhận theo nội dung. Xem trước ở tab Thay đổi, ra tệp mới <tên>.<ngôn ngữ>.dxf",
+      onclick: async (ev) => {
+        ev.target.disabled = true;
+        toast("Đang dịch… (LLM đề xuất, code kiểm số/đơn vị/mã)");
+        try {
+          const r = await api("/api/translate", {file: S.file, to: lang.value, sheet: S.sheetSel || null});
+          const rp = r.report;
+          toast(`Nguồn: ${rp.source_language.language_name}. ${rp.translated}/${rp.strings} chuỗi có bản dịch, ${rp.untranslated} chưa dịch, ${rp.issue_count} cần xem.`);
+          if (r.preview) { S.preview = r.preview; renderChg(); loadChangesets(); }
+        } catch (e) { toast(e.message); }
+        ev.target.disabled = false;
+      }}, "Dịch")));
     fill(bar, el("span", {class: "sh-lbl", text: "Tờ"}), ...kids);
   }
 

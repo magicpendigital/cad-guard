@@ -471,6 +471,38 @@ def learn_layers(app: AppData, rel: Any, standard: Any, scope: Any = "project") 
     return {**out, "table": rules_table(app, std)}
 
 
+def translate_drawing(app: AppData, rel: Any, to: Any, sheet: Any = None, backend: Any = "auto") -> dict:
+    """Dịch bản vẽ (hoặc một tờ) sang Tiếng Anh/Tiếng Trung: đề xuất changeset, trả xem trước + báo cáo dịch."""
+    from ..studio.llm import auto_backend
+    from ..translate import TARGETS, TranslateError, build
+
+    path = app.resolve(rel)
+    if to not in TARGETS:
+        raise ApiError("Chọn ngôn ngữ đích: en (Tiếng Anh) hoặc zh (Tiếng Trung).")
+    handles = None
+    if sheet is not None:
+        st = app.structure(app.model(path))
+        s = next((x for x in st.sheets if x.id == sheet), None)
+        if s is None:
+            raise ApiError("Không có tờ này.")
+        handles = set(s.handles)
+    be = backend if backend is not None and not isinstance(backend, str) else (auto_backend() if backend != "none" else None)
+    try:
+        res = build(path, to, workspace=app.ws.root, handles=handles, backend=be)
+    except TranslateError as exc:
+        raise ApiError(str(exc)) from None
+    rep = {k: v for k, v in res["report"].items() if k != "rows"}
+    rep["rows"] = res["report"]["rows"][:300]
+    if not res["ops"]:
+        return {"report": rep, "preview": None}
+    try:
+        cs, pv = propose(app.ws, app.rel(path), None, ops=parse_ops(res["ops"]), standard="design-hygiene-v0",
+                         standards_dir=app.standards_dir, profile=app.profile, created_by="user", output_tag=to)
+    except _cs_errors() as exc:
+        raise ApiError(str(exc)) from None
+    return {"report": rep, "preview": {**pv, "created_by": cs.created_by, "created_at": cs.created_at, "ops_input": cs.ops}}
+
+
 def template_info(app: AppData) -> dict:
     from ..template import TemplateError, find_template, load_template
 

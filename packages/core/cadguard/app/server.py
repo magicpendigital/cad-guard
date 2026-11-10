@@ -62,12 +62,13 @@ class CadGuardApp:
     def __init__(self, config: AppConfig, *, token: str | None = None, settings: Settings | None = None,
                  settings_path: Path | None = None, dialog: Callable[[str], dict] | None = None,
                  popen: Callable[..., Any] | None = None, which: Callable[[str], str | None] | None = None,
-                 key_opener: Callable[..., Any] | None = None, **assistant_kwargs):
+                 key_opener: Callable[..., Any] | None = None, translate_backend: Any = "auto", **assistant_kwargs):
         self.config = config
         self.settings = settings or Settings(settings_path)
         self.dialog = dialog or run_dialog
         self.dialog_ok = dialog is not None or dialog_available()
         self.popen, self.which, self.key_opener = popen, which, key_opener
+        self.translate_backend = translate_backend  # "auto" | "none" | đối tượng có complete() (test)
         self.standards_dir = Path(config.standards_dir or find_standards_dir(Path(__file__).resolve())).resolve()
         self.departments = load_departments(config.departments_path or DEPARTMENTS_FILE, self.standard_names())
         self.data: AppData | None = None
@@ -334,6 +335,8 @@ class CadGuardApp:
             ("POST", "/api/rules/learn_layers"): lambda q, b: api.learn_layers(d(), b.get("file"), b.get("standard"),
                                                                               b.get("scope", "project")),
             ("GET", "/api/template"): lambda q, b: api.template_info(d()),
+            ("POST", "/api/translate"): lambda q, b: api.translate_drawing(d(), b.get("file"), b.get("to"), b.get("sheet"),
+                                                                          self.translate_backend),
             ("POST", "/api/template/learn"): lambda q, b: api.template_learn(d(), b.get("file"), b.get("sheet"),
                                                                             b.get("logo"), b.get("name")),
             ("POST", "/api/rules/reset"): lambda q, b: api.reset_rule(d(), b.get("standard"), b.get("rule_id"),

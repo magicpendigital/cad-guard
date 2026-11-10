@@ -605,7 +605,7 @@ def test_allow_propose_tools_tokens_and_diff(hyg_env):
 
     r, err = _session(hyg_env, body, args=["--allow-propose"], errlog_name="server_propose.err")
     names = {t.name for t in r["tools"]}
-    assert names == TOOL_NAMES | {"propose_changeset"} and "apply_changeset" not in names
+    assert names == TOOL_NAMES | {"propose_changeset", "propose_translation"} and "apply_changeset" not in names
     ann = {t.name: t.annotations for t in r["tools"]}
     assert ann["propose_changeset"].readOnlyHint is False and ann["propose_changeset"].destructiveHint is False
     assert ann["diff"].readOnlyHint is True

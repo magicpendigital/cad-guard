@@ -412,8 +412,20 @@ def _text_of(e) -> str:
     return str(e.dxf.get("text", "") or "")
 
 
+def _ensure_style(doc, name: str, font: str | None, family: str | None):
+    if not doc.styles.has_entry(name):
+        st = doc.styles.new(name, dxfattribs={"font": font or "arial.ttf"})
+        if family:
+            try:
+                st.set_extended_font_data(family=family, italic=False, bold=False)
+            except Exception:  # noqa: BLE001
+                pass
+    return str(doc.styles.get(name).dxf.name)
+
+
 def _set_texts(doc, op, prot):
     n, skipped, dims = 0, 0, []
+    style = _ensure_style(doc, op.style, op.style_font, op.style_family) if op.style else None
     for it in op.items:
         e = _entity(doc, it.handle, "set_texts")
         t = e.dxftype()
@@ -432,9 +444,12 @@ def _set_texts(doc, op, prot):
         elif t == "MULTILEADER":
             if e.context.mtext is None:
                 raise OpError(f"set_texts: chú thích handle {it.handle} không có chữ.")
-            e.context.mtext.default_content = it.text
+            fam = op.style_family if style else None
+            e.context.mtext.default_content = ("{\\f" + fam + "|b0|i0|c0|p0;" + it.text + "}") if fam else it.text
         else:
             e.dxf.text = it.text
+        if style and t in ("TEXT", "MTEXT", "ATTRIB", "ATTDEF"):
+            e.dxf.style = style
         if t == "DIMENSION":
             dims.append(e)
         n += 1

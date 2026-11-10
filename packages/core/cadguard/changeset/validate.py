@@ -54,6 +54,9 @@ def _allowed_defs(ops: list[Any]) -> dict[str, dict[str, set[str] | bool]]:
             # kiểu chữ phông cũ được trỏ sang phông Unicode (đổi) hoặc thêm kiểu "<tên>-UNICODE" khi chuyển một phần
             allow["text_styles"]["changed"] = True
             allow["text_styles"]["added"] = True
+        elif o.op == "set_texts" and o.style:
+            allow["text_styles"]["added"] = True if allow["text_styles"]["added"] is True else (
+                allow["text_styles"]["added"] | {o.style.casefold()})
         elif o.op == "purge_unused":
             for kind in o.kinds:
                 if o.names is None:
@@ -69,6 +72,8 @@ def tolerated_rules(ops: list[Any]) -> set[str]:
     for o in ops:
         if o.op == "convert_unicode" and o.handles:
             out.add("VS-02")  # chuyển một phần: thêm kiểu chữ "<tên>-UNICODE"
+        if o.op == "set_texts" and o.style:
+            out.add("VS-02")  # dịch sang Tiếng Trung: thêm kiểu chữ CJK
     return out
 
 

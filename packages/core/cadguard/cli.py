@@ -228,14 +228,14 @@ def sheet_handles(model, picks: list[int] | None) -> set[str] | None:
 
 
 def run_edit(path: Path, ops_data, *, yes: bool, standard: str = "design-hygiene-v0", dwg: bool = False,
-             label: str = "") -> int:
+             label: str = "", output_tag: str | None = None) -> int:
     """Đề xuất changeset trên tệp (thư mục chứa tệp là thư mục làm việc), in xem trước; `yes` thì áp ra tệp MỚI."""
     from .agent.workspace import Workspace
     from .changeset import ChangesetError, OpError, apply, propose
 
     ws = Workspace(path.resolve().parent)
     try:
-        cs, pv = propose(ws, path.name, ops_data, standard=standard, created_by="user")
+        cs, pv = propose(ws, path.name, ops_data, standard=standard, created_by="user", output_tag=output_tag)
     except (OpError, ChangesetError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -354,6 +354,67 @@ def cmd_template(args: argparse.Namespace) -> int:
         print("Khung tên đã khớp template, không có gì để áp dụng.")
         return 0
     return run_edit(path, ops, yes=args.yes, standard="sheet-layout-v0", dwg=args.dwg, label="template")
+
+
+def translate_backend(name: str):
+    """'auto' (khoá API Anthropic, rồi CLI claude) | 'anthropic' | 'claude-cli' | 'none' (chỉ bảng thuật ngữ + bộ nhớ dịch)."""
+    from .studio.llm import AnthropicBackend, ClaudeCliBackend, LlmError, auto_backend
+
+    if name == "none":
+        return None
+    if name == "auto":
+        return auto_backend()
+    try:
+        return AnthropicBackend() if name == "anthropic" else ClaudeCliBackend()
+    except LlmError as exc:
+        raise ValueError(str(exc)) from None
+
+
+def cmd_translate(args: argparse.Namespace) -> int:
+    """Dịch chữ bản vẽ sang Tiếng Anh / Tiếng Trung, ra tệp MỚI `<tên>.<ngôn ngữ>.dxf` (xem trước, hoàn tác được)."""
+    from .dwg import DwgError, ensure_dxf
+    from .reader_select import read_with
+    from .translate import TranslateError, build, export_review, import_review
+
+    try:
+        path = ensure_dxf(Path(args.path))
+        backend = translate_backend(args.engine)
+    except (DwgError, ValueError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    ws = path.resolve().parent
+    handles = None
+    if args.sheets:
+        from .sheets import build_structure
+
+        model = read_with(path, "ezdxf")
+        try:
+            picks = parse_sheet_list(args.sheets, len(build_structure(model).sheets))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        handles = sheet_handles(model, picks)
+    overrides = import_review(Path(args.from_review)) if args.from_review else None
+    try:
+        res = build(path, args.to, workspace=ws, handles=handles, backend=backend, overrides=overrides)
+    except TranslateError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    rep = res["report"]
+    det = rep["source_language"]
+    print(f"Ngôn ngữ bản vẽ (tự nhận theo nội dung): {det['language_name']} {det['counts']}; dịch sang {rep['target_name']}.")
+    print(f"{rep['strings']} chuỗi chữ; đã có bản dịch {rep['translated']} {rep['by_source']}; chưa dịch {rep['untranslated']}; "
+          f"cần xem {rep['issue_count']}; LLM: {rep['llm'] or 'không dùng'} ({rep['llm_calls']} lượt).")
+    for x in rep["issues"][:15]:
+        print(f"  handle {x['handle']}: {'; '.join(x['issues'])}")
+    if args.export_review:
+        export_review(rep["rows"], Path(args.export_review))
+        print(f"Bảng duyệt bản dịch: {args.export_review} (sửa cột target rồi chạy lại với --from-review).")
+    if not res["ops"]:
+        print("Không có gì để áp dụng.")
+        return 0
+    return run_edit(path, res["ops"], yes=args.yes, dwg=args.dwg, label=f"bản dịch {rep['target_name']}",
+                    output_tag=args.to)
 
 
 def cmd_profile(args: argparse.Namespace) -> int:
@@ -872,6 +933,18 @@ def main(argv: list[str] | None = None) -> int:
     tp.add_argument("--yes", action="store_true", help="apply: áp dụng ngay khi xem trước đạt")
     tp.add_argument("--dwg", action="store_true", help="apply: ghi thêm DWG (cần accoreconsole)")
     tp.set_defaults(fn=cmd_template)
+
+    tr = sub.add_parser("translate", help="dịch chữ bản vẽ sang Tiếng Anh/Tiếng Trung, ra tệp mới <tên>.<ngôn ngữ>.dxf")
+    tr.add_argument("path", help="tệp .dxf (hoặc .dwg khi có AutoCAD bản đầy đủ)")
+    tr.add_argument("--to", choices=["en", "zh"], required=True, help="ngôn ngữ đích: en (Tiếng Anh), zh (Tiếng Trung)")
+    tr.add_argument("--sheets", default=None, help="chỉ các tờ này, vd. 1,3-5")
+    tr.add_argument("--engine", choices=["auto", "anthropic", "claude-cli", "none"], default="auto",
+                    help="LLM đề xuất bản dịch (none = chỉ bảng thuật ngữ + bộ nhớ dịch)")
+    tr.add_argument("--export-review", default=None, metavar="CSV", help="ghi bảng duyệt bản dịch (mở bằng Excel)")
+    tr.add_argument("--from-review", default=None, metavar="CSV", help="dùng bản dịch đã duyệt/sửa trong bảng CSV")
+    tr.add_argument("--yes", action="store_true", help="áp dụng ngay khi xem trước đạt")
+    tr.add_argument("--dwg", action="store_true", help="ghi thêm DWG (cần accoreconsole)")
+    tr.set_defaults(fn=cmd_translate)
 
     ll = sub.add_parser("learn-layers", help="học quy ước tên layer của công ty từ một bản vẽ (giảm nhiễu LY-01)")
     ll.add_argument("path")

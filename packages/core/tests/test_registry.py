@@ -24,7 +24,7 @@ def test_never_any_apply_tool_and_fixed_order(propose, compare):
     assert not registry.FORBIDDEN_TOOLS & set(names)
     for s in specs(o):
         assert s["schema"]["type"] == "object" and s["schema"]["additionalProperties"] is False
-        assert s["read_only"] is (s["name"] != registry.PROPOSE_TOOL)
+        assert s["read_only"] is (s["name"] not in (registry.PROPOSE_TOOL, registry.TRANSLATE_TOOL))
         json.dumps(s, ensure_ascii=False)  # tuần tự hoá được cho mọi giao thức
 
 

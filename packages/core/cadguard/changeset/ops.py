@@ -128,6 +128,10 @@ class SetTexts(_Base):
     op: Literal["set_texts"]
     items: Annotated[list[TextItem], Field(min_length=1, max_length=MAX_TEXT_ITEMS)]
     rerender: bool = True
+    # kiểu chữ gán cho chữ đã đổi (vd. "CG-ZH" phông CJK khi dịch sang Tiếng Trung); chưa có thì tạo với phông này
+    style: Name | None = None
+    style_font: Name | None = None
+    style_family: Name | None = None
 
 
 class AttribItem(_Base):
@@ -185,7 +189,7 @@ ALLOWED_ATTRS: dict[str, set[str]] = {
     "set_text_height": {"height", "char_height"},
     "clear_dim_text_override": {"text"} | _DIM_RENDER,
     "convert_unicode": {"text", "style"},
-    "set_texts": {"text"} | _DIM_RENDER,
+    "set_texts": {"text", "style"} | _DIM_RENDER,
     "set_attribs": {"text"},
 }
 

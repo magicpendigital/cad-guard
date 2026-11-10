@@ -27,6 +27,7 @@ MAX_PROPOSE_OPS = 50
 
 READ_TOOLS = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff")
 PROPOSE_TOOL = "propose_changeset"
+TRANSLATE_TOOL = "propose_translation"  # cùng cờ allow_propose; không có khi ẩn danh (dự án NDA)
 AUTOCAD_TOOL = "show_in_autocad"  # M3: chỉ khi allow_autocad; điều hướng AutoCAD, không sửa bản vẽ
 BASELINE_TOOL = "audit_khong_ho_so"
 FORBIDDEN_TOOLS = frozenset({"apply_changeset", "apply", "undo", "undo_changeset"})
@@ -224,6 +225,24 @@ def _propose() -> ToolDef:
     )
 
 
+def _translate() -> ToolDef:
+    return ToolDef(
+        TRANSLATE_TOOL, "propose",
+        lambda o: ("DỊCH bản vẽ sang Tiếng Anh ('en') hoặc Tiếng Trung ('zh'); ngôn ngữ nguồn tự nhận theo nội dung. Bạn là "
+                   "người dịch, code kiểm. Bước 1: gọi không có 'translations' để nhận các chuỗi cần dịch (số, đơn vị, mã, "
+                   "mã định dạng đã thay bằng ⟦n⟧) và gợi ý thuật ngữ. Bước 2: gọi lại với translations = [{source, text}]: "
+                   "giữ nguyên mọi ⟦n⟧, dùng đúng thuật ngữ, ngắn như nhãn bản vẽ. Kết quả là changeset ĐỀ XUẤT (không áp "
+                   "dụng); người dùng tự áp, ra tệp mới <tên>.<ngôn ngữ>.dxf. Dự án ẩn danh thì bị khoá."),
+        lambda o: _obj({
+            "file": _FILE,
+            "to": {"type": "string", "enum": ["en", "zh"], "description": "Ngôn ngữ đích."},
+            "translations": {"anyOf": [{"type": "array", "maxItems": 5000, "items": {"type": "object"}}, {"type": "null"}],
+                             "description": "Bước 2: [{source: chuỗi nguồn y nguyên bước 1, text: bản dịch}]."},
+        }, ["file", "to"]),
+        lambda ctx, a, o: _tools().propose_translation(ctx, a["file"], a["to"], a.get("translations")),
+    )
+
+
 def _show_in_autocad() -> ToolDef:
     return ToolDef(
         AUTOCAD_TOOL, "navigate",
@@ -251,6 +270,7 @@ def tool_defs(o: SpecOptions) -> list[ToolDef]:
         out.append(_baseline())
     if o.allow_propose:
         out.append(_propose())
+        out.append(_translate())
     if o.allow_autocad:
         out.append(_show_in_autocad())
     assert not FORBIDDEN_TOOLS & {d.name for d in out}  # bất biến: không bao giờ có apply

@@ -336,6 +336,56 @@ def _anon_report(anon, rep: dict) -> dict:
 
 
 @_safe
+def propose_translation(ctx: ToolContext, file: str, to: str, translations: list | None = None) -> dict:
+    """Dịch bản vẽ do TRỢ LÝ làm người dịch, code kiểm. Bước 1 (không `translations`): trả chuỗi cần dịch (có ký hiệu
+    giữ chỗ ⟦n⟧ cho số/đơn vị/mã) + gợi ý thuật ngữ. Bước 2: nhận [{source, text}], kiểm giữ chỗ/thuật ngữ, đề xuất
+    changeset (không áp dụng). Bị khoá khi dự án bật ẩn danh."""
+    from ..changeset.apply import ChangesetError, propose
+    from ..changeset.ops import OpError, parse_ops
+    from ..translate import TARGETS, DictBackend, TranslateError, build, glossary_hits, load_glossary
+
+    if ctx.anonymizer.enabled:
+        raise ToolError("Dự án đang bật ẩn danh (NDA): chức năng dịch bị khoá.")
+    if to not in TARGETS:
+        raise ToolError("Ngôn ngữ đích phải là 'en' hoặc 'zh'.")
+    path = _path(ctx, file)
+    try:
+        if not translations:
+            res = build(path, to, workspace=ctx.workspace.root, backend=None, update_tm=False)
+            rep = res["report"]
+            src = rep["source_language"]["language"] or "vi"
+            glossary = load_glossary(ctx.workspace.root)
+            pending = {}
+            for r in rep["rows"]:
+                if r["from"] == "" and r["masked"] and r["masked"] not in pending:
+                    pending[r["masked"]] = sorted({f"{g[src]} = {g[to]}" for g in glossary_hits(r["source"], glossary, src)
+                                                   if g.get(to)})
+            items = [{"source": k, "glossary": v} for k, v in list(pending.items())[:300]]
+            return {"step": 1, "source_language": rep["source_language"], "target": to, "strings": rep["strings"],
+                    "already": rep["translated"], "to_translate": len(pending), "items": items,
+                    "truncated": len(pending) > 300,
+                    "next": "Gọi lại propose_translation với translations = [{source, text}] (giữ nguyên mọi ⟦n⟧)."}
+        if not isinstance(translations, list) or not all(isinstance(x, dict) and isinstance(x.get("source"), str)
+                                                          and isinstance(x.get("text"), str) for x in translations):
+            raise ToolError("translations phải là danh sách {source, text}.")
+        backend = DictBackend({x["source"]: x["text"] for x in translations})
+        res = build(path, to, workspace=ctx.workspace.root, backend=backend)
+        rep = res["report"]
+        if not res["ops"]:
+            return {"step": 2, "changeset_id": None, "report": {k: rep[k] for k in ("translated", "untranslated", "issue_count")}}
+        cs, pv = propose(ctx.workspace, path.relative_to(ctx.workspace.root).as_posix(), None, ops=parse_ops(res["ops"]),
+                         standard="design-hygiene-v0", standards_dir=Path(ctx.standards_dir), profile=ctx.profile,
+                         created_by="agent", output_tag=to)
+    except (TranslateError, OpError, ChangesetError) as exc:
+        raise ToolError(str(exc)) from None
+    return {"step": 2, "changeset_id": cs.id, "ok": pv["ok"], "summary_vi": pv["summary_vi"],
+            "report": {k: rep[k] for k in ("source_language", "strings", "translated", "untranslated", "issue_count", "by_source")},
+            "issues": rep["issues"][:50],
+            "apply": f"Trợ lý KHÔNG áp dụng được. Người dùng xem trước rồi chạy: cadguard apply {cs.id} --workspace <thư mục>; "
+                     f"ra tệp mới <tên>.{to}.dxf."}
+
+
+@_safe
 def propose_changeset(ctx: ToolContext, file: str, ops, standard: str = "design-hygiene-v0",
                       protected_layers: list | None = None) -> dict:
     """Chạy khô các thao tác (từ vựng cố định) và lưu changeset vào thư mục phiên; KHÔNG ghi DXF.

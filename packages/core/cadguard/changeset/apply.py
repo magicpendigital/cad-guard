@@ -63,6 +63,7 @@ class Changeset(BaseModel):
     created_by: Literal["agent", "user"]
     created_at: str
     preview: dict[str, Any] | None = None
+    output_tag: str | None = None  # tệp ra "<tên>.<tag>.dxf" (vd. ngôn ngữ dịch "en"); None = "<tên>.cg-<mã>.dxf"
 
     def dump(self) -> dict:
         return self.model_dump(by_alias=True, mode="json")
@@ -135,7 +136,8 @@ def preview_of(cs: Changeset, reports: list[dict], ev: dict) -> dict:
 
 def propose(ws: Workspace, file: str, ops_data: Any, *, standard: str = DEFAULT_STANDARD,
             standards_dir: Path | None = None, profile: CompanyProfile | None = None,
-            protected_layers: list[str] | None = None, created_by: str = "user", ops: list | None = None) -> tuple[Changeset, dict]:
+            protected_layers: list[str] | None = None, created_by: str = "user", ops: list | None = None,
+            output_tag: str | None = None) -> tuple[Changeset, dict]:
     """Chạy khô và lưu changeset. `ops` (đã kiểm) dùng thay `ops_data` khi người gọi đã tự kiểm/giải mã."""
     path = ws.resolve(file)
     ops = ops if ops is not None else parse_ops(ops_data)
@@ -149,7 +151,7 @@ def propose(ws: Workspace, file: str, ops_data: Any, *, standard: str = DEFAULT_
     cs = Changeset(id=cid, source=SourceRef(path=_rel(ws, path), sha256=sha), standard=std.name,
                    standard_version=std.version, profile=std.profile,
                    protection=ProtectionRef(**prot.to_dict()), ops=dump_ops(ops), created_by=created_by,
-                   created_at=_now())
+                   created_at=_now(), output_tag=output_tag if output_tag and re.fullmatch(r"[a-z]{2,8}", output_tag) else None)
     preview = preview_of(cs, reports, ev)
     cs.preview = preview
     _write_json_new(store_dir(ws) / f"{cid}.json", cs.dump())
@@ -201,6 +203,8 @@ def output_path(ws: Workspace, cs: Changeset, src: Path, out_dir: str | None) ->
             raise ChangesetError("Thư mục đầu ra phải là thư mục tương đối, đã tồn tại, trong thư mục làm việc.") from None
         if not base.is_dir():
             raise ChangesetError("Thư mục đầu ra phải là thư mục.")
+    if cs.output_tag:
+        return base / f"{src.stem}.{cs.output_tag}.dxf"
     return base / f"{src.stem}.cg-{short_id(cs.id)}.dxf"
 
 

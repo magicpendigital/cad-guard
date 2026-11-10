@@ -176,7 +176,7 @@ def test_mcp_config_outputs(ws, tmp_path):
         assert code.index("cad-guard") < code.index(" -e ")
     toml, _ = render("codex", ws, python="C:/Py/python.exe", allow_propose=True)
     tools = json.loads(re.search(r"enabled_tools = (\[.*\])", toml).group(1))
-    assert tools == [*registry.READ_TOOLS, registry.PROPOSE_TOOL]
+    assert tools == [*registry.READ_TOOLS, registry.PROPOSE_TOOL, registry.TRANSLATE_TOOL]
     assert "--allow-propose" in toml
     with pytest.raises(ValueError):
         server_entry(tmp_path / "khong-co")
