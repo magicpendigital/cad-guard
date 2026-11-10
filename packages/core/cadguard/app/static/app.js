@@ -1305,6 +1305,8 @@
         tierPill(f), f.count > 1 ? pill("neu sm", S.sheetSel && !findingWide(f) ? `${fmt(countItems(inSheet))} chỗ trong tờ` : `${fmt(f.count)} chỗ`) : null,
         S.sheets && S.sheets.sheets.length && findingWide(f) ? pill("neu sm", "cả bản vẽ") : null,
         el("span", {class: "std"}, pill("neu sm", f.std)),
+        el("button", {class: "link sm", type: "button", title: "Nhờ trợ lý AI giải thích tầm quan trọng, hậu quả và cách sửa của lỗi này trên bản vẽ đang mở",
+          onclick: (e) => { e.stopPropagation(); askAI(explainPrompt(f.rule_id, f.title, f.std, (f.items || []).slice(0, 3).map((it) => it.message).join("; "))); }}, "Giải thích sâu (AI)"),
         el("button", {class: "link sm", type: "button", title: "Tắt luật này cho dự án (quét lại để thấy kết quả)", onclick: (e) => { e.stopPropagation(); disableRule(f.rule_id, f.std); }}, "Tắt luật"),
         f.rule_id === "LY-01" && S.file ? el("button", {class: "link sm", type: "button", title: "Coi các layer có sẵn của bản vẽ này là quy ước của công ty (LY-01)",
           onclick: async (e) => { e.stopPropagation(); try { const r = await api("/api/rules/learn_layers", {file: S.file, standard: f.std}); S.rules = null; toast(`Đã học ${r.patterns.length} mẫu layer. Quét lại để thấy kết quả.`); } catch (err) { toast(err.message); } }}, "Học quy ước layer") : null,
@@ -2054,8 +2056,18 @@
     for (const g of S.groups) {
       items.push(el("div", {class: "grp", text: g.title}));
       for (const x of S.engines.filter((y) => y.mode === g.mode)) {
-        items.push(menuItem(e && x.name === e.name, x.title, x.available ? (x.status || "dùng được") + (x.model ? ` · ${x.model}` : "") : x.reason,
-          () => { S.engine = x; sessionStorage.setItem("cg-engine", x.name); renderEngineMenu(); }, !x.available));
+        const exp = !x.available && x.installed === true && /Thử nghiệm/.test(x.reason || "");
+        items.push(menuItem(e && x.name === e.name, x.title, x.available ? (x.status || "dùng được") + (x.model ? ` · ${x.model}` : "")
+          : exp ? "Bấm để bật (đang ở chế độ thử nghiệm)" : x.reason,
+          async () => {
+            if (exp) {
+              try { await api("/api/ai/settings", {codex_experimental: true}); await loadEngines(false); }
+              catch (err) { toast(err.message); return; }
+              x = S.engines.find((y) => y.name === x.name) || x;
+              if (!x.available) { toast(x.reason || "Chưa dùng được."); return; }
+            }
+            S.engine = x; sessionStorage.setItem("cg-engine", x.name); renderEngineMenu(); toast("Trợ lý: " + x.title);
+          }, !x.available && !exp));
       }
     }
     items.push(menuItem(false, "Cấu hình kết nối AI…", "Đăng nhập CLI, nhập khoá API, chọn trợ lý mặc định", () => go("connect")));
@@ -2293,6 +2305,8 @@
         el("h2", {id: "drTitle", text: r.title})), close),
       el("div", {class: "dr-b"},
         el("h3", {text: "Luật nói gì"}), el("p", {text: why}),
+        el("p", {}, el("button", {class: "btn-p btn-sm", type: "button", onclick: () => askAI(explainPrompt(r.id, r.title, std, ""))}, "Giải thích chuyên sâu bằng AI"),
+          el("span", {class: "ai-note", text: " Trợ lý đọc bản vẽ đang mở, giải thích tầm quan trọng, hậu quả, cách sửa."})),
         kv([["Nguồn", r.source], ["Thuộc chuẩn", std], ["Loại", r.kind === "deterministic" ? "tất định" : r.kind], ["Rủi ro báo sai", r.false_positive_risk],
           ["Đọc gì", Array.isArray(r.reads) ? r.reads.join(", ") : r.reads], ["Hồ sơ công ty", r.profile ? `${r.profile.name} ${r.profile.version}` : "không áp"]]),
         el("h3", {text: "Tham số đang áp"}),
@@ -2566,6 +2580,61 @@
     renderCost(null);
   }
 
+  // ---------- CÔNG CỤ cho bản vẽ đang mở: Unicode, Dịch, Học template ----------
+  function showPreview(pv) {
+    S.preview = pv;
+    if (S.showDiscussion) S.showDiscussion();
+    renderChg(); loadChangesets(); rightTab("chg");
+  }
+  async function toolUnicode() {
+    if (!S.file) { toast("Mở một bản vẽ trước."); return; }
+    toast("Đang chuẩn bị chuyển Unicode…");
+    try { showPreview(await api("/api/changeset/propose", {file: S.file, standard: "design-hygiene-v0", ops: [{op: "convert_unicode"}]})); }
+    catch (e) { toast(e.message); }
+  }
+  async function toolTranslate(lang, btn) {
+    if (!S.file) { toast("Mở một bản vẽ trước."); return; }
+    if (btn) btn.disabled = true;
+    toast("Đang dịch… (AI đề xuất, CAD Guard kiểm số/đơn vị/mã). Bản vẽ lớn có thể mất vài phút.");
+    try {
+      const r = await api("/api/translate", {file: S.file, to: lang, sheet: S.sheetSel || null});
+      const rp = r.report;
+      toast(`Ngôn ngữ gốc: ${rp.source_language.language_name}. Có bản dịch ${rp.translated}/${rp.strings} chuỗi, chưa dịch ${rp.untranslated}, cần xem ${rp.issue_count}${rp.llm ? "" : " (chưa có AI: chỉ dùng bảng thuật ngữ)"}.`);
+      if (r.preview) showPreview(r.preview);
+    } catch (e) { toast(e.message); }
+    if (btn) btn.disabled = false;
+  }
+  async function toolTemplate() {
+    const sh = S.sheets;
+    const i = sh && S.sheetSel ? sh.sheets.findIndex((s) => s.id === S.sheetSel) : -1;
+    if (i < 0 || sh.sheets[i].kind !== "frame") { toast("Bấm chọn một tờ mẫu (khung tên đẹp nhất) ở thanh Tờ phía trên bản vẽ, rồi bấm lại Học template."); return; }
+    const logo = window.prompt("Đường dẫn tệp logo công ty (PNG/JPG), để trống nếu không có:", "") || "";
+    try {
+      const r = await api("/api/template/learn", {file: S.file, sheet: i + 1, logo: logo.trim() || null});
+      toast(`Đã học template '${r.template.name}' từ ${sh.sheets[i].name}. Chọn phòng 'Trình bày hồ sơ' rồi quét để kiểm trình bày.`);
+    } catch (e) { toast(e.message); }
+  }
+
+  // ---------- GIẢI THÍCH CHUYÊN SÂU BẰNG AI ----------
+  function askAI(text) {
+    if (!S.engine) { toast("Chưa có trợ lý dùng được: vào Kết nối AI để đăng nhập một CLI hoặc nhập khoá API."); go("connect"); return; }
+    closeDrawer();
+    if (S.screen !== "work") go("work");
+    if (S.showDiscussion) S.showDiscussion();
+    rightTab("chat");
+    $("inp").value = text;
+    $("form").requestSubmit();
+  }
+  function explainPrompt(ruleId, title, std, details) {
+    return `Giải thích CHUYÊN SÂU lỗi ${ruleId} (${title}, chuẩn ${std})` + (S.file ? ` trên bản vẽ đang mở ${S.file}` : "") + ` cho người làm thiết kế nội thất:\n`
+      + "1) Luật này kiểm cái gì, vì sao quan trọng với thiết kế, sản xuất, thi công, in ấn và bàn giao hồ sơ.\n"
+      + "2) Hậu quả cụ thể nếu bỏ qua (ví dụ thực tế trong xưởng/công trình).\n"
+      + "3) Mức độ nghiêm trọng THỰC TẾ ở bản vẽ này: dùng công cụ audit/query_model để xem các chỗ bị lỗi"
+      + (details ? ` (CAD Guard báo: ${details})` : "") + ".\n"
+      + "4) Cách sửa từng bước trong AutoCAD, và thao tác sửa an toàn của CAD Guard nếu có.\n"
+      + "5) Khi nào có thể chấp nhận bỏ qua lỗi này. Ghi rõ đâu là nhận xét của AI; kết luận đúng/sai vẫn theo kết quả luật.";
+  }
+
   // ---------- CÀI ĐẶT (một lần mỗi máy) ----------
   async function loadSetup() {
     try { renderSetup((await api("/api/setup")).steps); } catch (e) { toast(e.message); }
@@ -2651,11 +2720,22 @@
     $("mpForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("mpPath").value.trim(); if (v) setProfile(v); });
     $("scanAll").addEventListener("click", scanAll);
     $("layoutSel").addEventListener("change",()=>{S.layout=$("layoutSel").value;S.geo=null;S.view=null;loadGeometry(S.file);});
-    const togglePanel=(kind)=>{const mobile=window.matchMedia("(max-width:900px)").matches;document.body.classList.toggle((mobile?"show-":"hide-")+kind);};
+    const syncPanels=()=>{const hf=document.body.classList.contains("hide-files"),hd=document.body.classList.contains("hide-discussion");
+      $("toggleFiles").textContent=hf?"Hiện tệp":"Ẩn tệp";$("toggleDiscussion").textContent=hd?"Hiện thảo luận":"Ẩn thảo luận";
+      $("toggleDiscussion").classList.toggle("btn-attn",hd);
+      try{localStorage.setItem("cg-hide",JSON.stringify({hf,hd}));}catch(e){}};
+    const togglePanel=(kind)=>{const mobile=window.matchMedia("(max-width:900px)").matches;document.body.classList.toggle((mobile?"show-":"hide-")+kind);syncPanels();};
+    S.showDiscussion=()=>{document.body.classList.remove("hide-discussion");document.body.classList.add("show-discussion");syncPanels();};
+    try{const h=JSON.parse(localStorage.getItem("cg-hide")||"{}");if(h.hf)document.body.classList.add("hide-files");if(h.hd)document.body.classList.add("hide-discussion");}catch(e){}
+    $("reopenDiscussion").addEventListener("click",()=>S.showDiscussion());
     $("toggleFiles").addEventListener("click",()=>togglePanel("files"));
     $("toggleDiscussion").addEventListener("click",()=>togglePanel("discussion"));
-    $("closeFiles").addEventListener("click",()=>{document.body.classList.remove("show-files");document.body.classList.add("hide-files");});
-    $("closeDiscussion").addEventListener("click",()=>{document.body.classList.remove("show-discussion");document.body.classList.add("hide-discussion");});
+    $("closeFiles").addEventListener("click",()=>{document.body.classList.remove("show-files");document.body.classList.add("hide-files");syncPanels();});
+    $("closeDiscussion").addEventListener("click",()=>{document.body.classList.remove("show-discussion");document.body.classList.add("hide-discussion");syncPanels();});
+    syncPanels();
+    $("toolUnicode").addEventListener("click", toolUnicode);
+    $("toolTranslate").addEventListener("click", (e) => toolTranslate($("toolLang").value, e.currentTarget));
+    $("toolTemplate").addEventListener("click", toolTemplate);
     $("zoomIn").addEventListener("click", () => (S.v3d ? S.v3d.zoom(1.25) : zoomButton(0.8)));
     $("zoomOut").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0.8) : zoomButton(1.25)));
     $("zoomFit").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0) : zoomButton(0)));

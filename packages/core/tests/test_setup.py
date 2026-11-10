@@ -13,6 +13,9 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "local"))
     monkeypatch.setenv("CADGUARD_CONFIG_DIR", str(tmp_path / "cfg"))
     monkeypatch.setattr(setup, "_register_font", lambda p: None)  # không ghi sổ đăng ký thật
+    monkeypatch.setattr(setup, "install_plugin", lambda build=None: "plugin (giả)")  # không build .NET, không ghi registry
+    monkeypatch.setattr(setup, "uninstall_plugin", lambda: None)
+    monkeypatch.setattr(setup, "plugin_registered", lambda: False)
     sup = tmp_path / "roaming" / "AutoCAD 2027" / "R26.0" / "enu" / "Support"
     sup.mkdir(parents=True)
     monkeypatch.setattr(setup, "autocad_profiles", lambda: [{"name": "AutoCAD 2027", "release": "R26.0", "support": sup}])

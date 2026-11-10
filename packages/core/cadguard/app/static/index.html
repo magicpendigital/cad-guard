@@ -92,7 +92,13 @@
     <section class="center" id="main" aria-label="Bản vẽ đang mở" tabindex="-1">
       <div class="cv-tools">
         <button class="btn-s" id="toggleFiles" type="button" aria-label="Mở hoặc thu gọn danh sách bản vẽ">Tệp</button>
-        <button class="btn-s" id="toggleDiscussion" type="button" aria-label="Mở hoặc thu gọn thảo luận">Thảo luận</button>
+        <button class="btn-s" id="toggleDiscussion" type="button" aria-label="Mở hoặc thu gọn thảo luận">Ẩn thảo luận</button>
+        <span class="tool-group" aria-label="Công cụ cho bản vẽ đang mở">
+          <button class="btn-s" id="toolUnicode" type="button" title="Đổi chữ TCVN3/VNI sang Unicode (Be Vietnam Pro). Xem trước ở tab Thay đổi, ra tệp mới.">Chuyển Unicode</button>
+          <select id="toolLang" aria-label="Ngôn ngữ dịch"><option value="en">Tiếng Anh</option><option value="zh">Tiếng Trung</option></select>
+          <button class="btn-s" id="toolTranslate" type="button" title="Dịch chữ bản vẽ (cả bản vẽ, hoặc tờ đang chọn). Ngôn ngữ gốc tự nhận. Xem trước ở tab Thay đổi.">Dịch</button>
+          <button class="btn-s" id="toolTemplate" type="button" title="Chọn một tờ ở thanh Tờ rồi bấm: học khung tên chuẩn của công ty từ tờ đó.">Học template</button>
+        </span>
         <a class="btn-s" href="/review.html">Hồ sơ duyệt</a>
         <label>Layout <select id="layoutSel" aria-label="Chọn layout"><option>Model</option></select></label>
         <strong id="cvTitle">Chọn một bản vẽ ở cột trái</strong>
@@ -119,6 +125,7 @@
       </div>
     </section>
 
+    <button class="edge-tab" id="reopenDiscussion" type="button" aria-label="Mở lại thảo luận">◀ Thảo luận</button>
     <aside class="col right" aria-label="Trợ lý"><button class="btn-s panel-close" id="closeDiscussion" type="button">Đóng thảo luận</button>
       <div class="tabs" role="tablist" id="rightTabs">
         <button role="tab" type="button" data-p="chat" aria-selected="true"><span data-icon="chat"></span>Trợ lý</button>

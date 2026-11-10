@@ -637,3 +637,10 @@ body.acad-panel .tabs{overflow-x:auto}
 .setup-how{max-width:900px}
 .setup-how ol{margin:8px 0 8px 20px;padding:0;line-height:1.6}
 @media (max-width:640px){.setup-row{flex-wrap:wrap}}
+
+.tool-group{display:inline-flex;gap:6px;align-items:center;padding-left:8px;margin-left:4px;border-left:1px solid var(--border)}
+.tool-group select{font:inherit;padding:4px 6px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg);color:var(--text)}
+.edge-tab{display:none}
+.hide-discussion .edge-tab{display:block;position:fixed;right:0;top:42%;z-index:30;writing-mode:vertical-rl;padding:12px 6px;border:1px solid var(--border-strong);border-right:0;border-radius:8px 0 0 8px;background:var(--accent,#2563eb);color:#fff;font:600 13px/1 inherit;cursor:pointer}
+.btn-attn{outline:2px solid var(--accent,#2563eb)}
+.ai-note{font-size:12px;color:var(--text2)}

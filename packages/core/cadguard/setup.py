@@ -166,7 +166,8 @@ def autocad_profiles() -> list[dict]:
                         continue
                     sup = Path(roam) / "Support"
                     if sup.is_dir():
-                        out.append({"name": Path(roam).parent.parent.name or rel, "release": rel, "support": sup})
+                        out.append({"name": Path(roam).parent.parent.name or rel, "release": rel, "support": sup,
+                                    "regkey": rf"Software\Autodesk\AutoCAD\{rel}\{prod}"})
     return out
 
 
@@ -197,7 +198,8 @@ def autocad_status() -> dict:
     if not profs:
         detail = "Không thấy AutoCAD bản đầy đủ cho người dùng này."
     elif linked and files_ok:
-        detail = "Đã gắn vào " + ", ".join(p["name"] for p in linked) + ". Trong AutoCAD gõ CADGUARD."
+        detail = ("Đã gắn vào " + ", ".join(p["name"] for p in linked) + ". Mở lại AutoCAD rồi gõ CADGUARD"
+                  + (" (bảng CGBANG cũng tự nạp)." if plugin_registered() else "."))
     else:
         detail = "Tìm thấy " + ", ".join(p["name"] for p in profs) + "; chưa gắn."
     return {"id": "autocad", "title": "Gắn CAD Guard vào AutoCAD", "done": bool(linked) and files_ok,
@@ -228,6 +230,78 @@ def write_runner(dst_dir: Path) -> Path:
     return runner
 
 
+PLUGIN_DLL = "CadGuard.Acad.dll"
+PLUGIN_APP = "CadGuardAcad"
+
+
+def _repo_root() -> Path | None:
+    p = Path(__file__).resolve().parents[3]
+    return p if (p / "scripts" / "build_acad_plugin.py").is_file() and (p / "packages" / "acad-plugin").is_dir() else None
+
+
+def install_plugin(build=None) -> str:
+    """Plugin .NET (CGBANG bảng cad-guard, CGGHIM ghim lỗi): build vào thư mục cài nếu chưa có, ghi cấu hình trỏ đúng
+    Python và mã hiện tại, đăng ký để AutoCAD tự nạp khi khởi động (khoá Applications của người dùng). Trả ghi chú."""
+    import json
+
+    d = addon_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    dll = d / PLUGIN_DLL
+    note = ""
+    repo = _repo_root()
+    if repo is not None and shutil.which("dotnet"):
+        r = (build or subprocess.run)([sys.executable, str(repo / "scripts" / "build_acad_plugin.py"), "--out", str(d),
+                                       "--python", sys.executable], capture_output=True, timeout=600)
+        if getattr(r, "returncode", 1) != 0 and not dll.is_file():
+            note = "Không build được plugin (CGBANG); lệnh CADGUARD vẫn dùng được."
+    elif not dll.is_file():
+        note = "Máy chưa có .NET SDK để build plugin CGBANG; lệnh CADGUARD vẫn dùng được."
+    if not dll.is_file():
+        return note or "Chưa có plugin CGBANG."
+    cfg = {"python": sys.executable, "pythonpath": str(Path(__file__).resolve().parents[1])}
+    (d / "cadguard-acad.json").write_text(json.dumps(cfg, ensure_ascii=False, indent=1), encoding="utf-8")
+    if os.name == "nt":
+        import winreg
+
+        for p in autocad_profiles():
+            if not p.get("regkey"):
+                continue
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, p["regkey"] + "\\Applications\\" + PLUGIN_APP) as k:
+                winreg.SetValueEx(k, "DESCRIPTION", 0, winreg.REG_SZ, "CAD Guard (CGBANG, CGGHIM)")
+                winreg.SetValueEx(k, "LOADCTRLS", 0, winreg.REG_DWORD, 2)  # nạp khi AutoCAD khởi động
+                winreg.SetValueEx(k, "LOADER", 0, winreg.REG_SZ, str(dll))
+                winreg.SetValueEx(k, "MANAGED", 0, winreg.REG_DWORD, 1)
+    return "Plugin CGBANG/CGGHIM được nạp tự động khi mở AutoCAD."
+
+
+def plugin_registered() -> bool:
+    if os.name != "nt":
+        return False
+    import winreg
+
+    for p in autocad_profiles():
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, p.get("regkey", "") + "\\Applications\\" + PLUGIN_APP) as k:
+                loader, _t = winreg.QueryValueEx(k, "LOADER")
+                if Path(loader).is_file():
+                    return True
+        except OSError:
+            continue
+    return False
+
+
+def uninstall_plugin() -> None:
+    if os.name != "nt":
+        return
+    import winreg
+
+    for p in autocad_profiles():
+        try:
+            winreg.DeleteKey(winreg.HKEY_CURRENT_USER, p.get("regkey", "") + "\\Applications\\" + PLUGIN_APP)
+        except OSError:
+            pass
+
+
 def install_autocad() -> dict:
     profs = autocad_profiles()
     if not profs:
@@ -241,10 +315,16 @@ def install_autocad() -> dict:
         f = p["support"] / "acaddoc.lsp"
         old = _strip_block(_read(f))
         f.write_text((old.rstrip("\n") + "\n\n" if old.strip() else "") + _block(lsp), encoding="utf-8")
-    return autocad_status()
+    st = autocad_status()
+    try:
+        st["plugin_note"] = install_plugin()
+    except (OSError, subprocess.SubprocessError) as exc:
+        st["plugin_note"] = f"Không cài được plugin CGBANG ({type(exc).__name__}); lệnh CADGUARD vẫn dùng được."
+    return {**autocad_status(), "plugin_note": st["plugin_note"]}
 
 
 def uninstall_autocad() -> dict:
+    uninstall_plugin()
     for p in autocad_profiles():
         f = p["support"] / "acaddoc.lsp"
         txt = _read(f)
