@@ -41,6 +41,7 @@ class Component:
     w: Measured
     h: Measured  # theo trục Y của hình (sâu ở mặt bằng, cao ở mặt đứng)
     rects: list[Box4] = field(default_factory=list)
+    parts: list[Box4] = field(default_factory=list)  # khung bao từng nét trong cụm
 
     def to_dict(self) -> dict:
         return {"id": self.id, "view": self.view_id, "box": [round(v, 3) for v in self.box], "entities": len(self.handles),
@@ -71,7 +72,8 @@ def components(d: Drawing2D, v: View, roles: frozenset[str], min_size: float = 5
             continue
         hs = sorted(items[i][0] for i in g)
         rects = [r for h in hs if (r := rect_of(d.entities[h])) is not None]
-        out.append(Component("", v.id, box, hs, measure_span(dims, "h", box[0], box[2]), measure_span(dims, "v", box[1], box[3]), rects))
+        out.append(Component("", v.id, box, hs, measure_span(dims, "h", box[0], box[2]), measure_span(dims, "v", box[1], box[3]), rects,
+                             [items[i][1] for i in g]))
     out.sort(key=lambda c: (c.box[0], c.box[1]))
     for i, c in enumerate(out, 1):
         c.id = f"{v.id}:C{i}"

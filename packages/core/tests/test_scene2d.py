@@ -84,3 +84,88 @@ def test_assess_reports_structure_only(synthetic):
     assert r["floor_plan"]["rooms"] == 1
     text = repr(r)
     assert "BẾP" not in text and "SYN_" not in text  # không chữ, không tên layer
+
+
+# ---------------- 3D-2/3D-3: cảnh cg.scene/2 ----------------
+
+import json as _json
+import struct as _struct
+
+from cadguard.cli import main as _main
+from cadguard.scene.assemble import build_from_model, build_item_scene
+from cadguard.scene.render2 import build_glb2, render_html2
+
+
+def _glb_json(data: bytes) -> dict:
+    assert data[:4] == b"glTF"
+    n = _struct.unpack("<I", data[12:16])[0]
+    return _json.loads(data[20:20 + n])
+
+
+def test_item_scene_sizes_and_sources(synthetic):
+    m, _ = _kitchen(synthetic)
+    sc, _d = build_from_model(m, "SYN.10")
+    assert [(lk.method) for lk in sc.links] == ["dimension"]
+    assert sc.room.ceiling == 2700.0 and sc.room.src["ceiling"].kind == "dimension"
+    base, upper = sorted(sc.modules, key=lambda x: x.z0)
+    assert (base.kind, base.w, base.d, base.h, base.z0) == ("base", 2400.0, 600.0, 850.0, 0.0)
+    assert {k: v.kind for k, v in base.src.items()} == {"w": "dimension", "h": "dimension", "d": "dimension", "z0": "geometry"}
+    assert (upper.kind, upper.w, upper.d, upper.h, upper.z0) == ("wall", 2400.0, 350.0, 700.0, 1500.0)
+    assert upper.src["d"].kind == "geometry"  # sâu tủ treo đo trên nét khuất, không có kích thước ghi
+    assert len(base.fronts) == 4 and len(upper.fronts) == 4 and all(f.kind == "door" for f in base.fronts)
+    assert upper.y + upper.d == base.y + base.d  # cùng sát tường sau
+    assert not sc.gaps
+    assert all(v.refs for x in sc.modules for k, v in x.src.items() if v.kind == "dimension")
+
+
+def test_item_scene_low_worktop_fixture(synthetic):
+    m, _ = _kitchen(synthetic, "company_kitchen_low.dxf")
+    sc, _ = build_from_model(m, "SYN.10")
+    assert min(sc.modules, key=lambda x: x.z0).h == 700.0
+
+
+def test_missing_depth_is_gap_then_user_supplement(synthetic):
+    m, _ = _kitchen(synthetic)
+    sc, _ = build_from_model(m, "SYN.10", roles={"SYN_Khuat": "other"})  # không còn nét khuất -> không biết sâu tủ treo
+    assert len(sc.modules) == 1 and len(sc.gaps) == 1
+    g = sc.gaps[0]
+    assert g.kind == "missing_value" and g.fields[0].key.endswith(":d")
+    sc2, _ = build_from_model(m, "SYN.10", {g.fields[0].key: "320"}, roles={"SYN_Khuat": "other"})
+    up = max(sc2.modules, key=lambda x: x.z0)
+    assert up.d == 320.0 and up.src["d"].kind == "user" and not sc2.gaps
+
+
+def test_unlinked_elevation_needs_user_link(synthetic):
+    m, d = _kitchen(synthetic)
+    plan = next(v for v in d.views if v.group == "SYN.10" and v.kind == "plan")
+    elev = next(v for v in d.views if v.group == "SYN.10" and v.kind == "elevation")
+    for h in list(plan.handles):  # bỏ kích thước ở mặt bằng: không còn căn được bằng kích thước chung
+        if d.entities[h].type == "DIMENSION":
+            plan.handles.remove(h)
+    sc = build_item_scene(d, "SYN.10")
+    assert not sc.modules and sc.gaps[0].id == f"link:{elev.id}" and sc.gaps[0].fields[0].options == [plan.id]
+    sc2 = build_item_scene(d, "SYN.10", {f"link:{elev.id}": plan.id})
+    assert sc2.links[0].method == "user" and len(sc2.modules) == 2
+
+
+def test_preview_equals_export_same_scene_hash(synthetic, tmp_path):
+    m, _ = _kitchen(synthetic)
+    sc, _ = build_from_model(m, "SYN.10")
+    assert sc.scene_hash and sc.scene_hash == sc.compute_hash()
+    doc = _glb_json(build_glb2(sc))
+    assert doc["asset"]["extras"]["scene_hash"] == sc.scene_hash
+    page = render_html2(sc)
+    assert sc.scene_hash in page and "kích thước" in page
+    sc_again, _ = build_from_model(m, "SYN.10")
+    assert sc_again.scene_hash == sc.scene_hash  # tất định
+
+
+def test_cli_scene_item_and_assess(synthetic, tmp_path, capsys):
+    src = synthetic / "scene" / "company_kitchen.dxf"
+    out = tmp_path / "bep.glb"
+    assert _main(["scene", str(src), "--item", "auto", "--out", str(out)]) == 0
+    assert out.read_bytes()[:4] == b"glTF"
+    capsys.readouterr()
+    assert _main(["scene-assess", str(src), "--json"]) == 0
+    assert _json.loads(capsys.readouterr().out)["items"]["plan_elevation_aligned_by_dimension"] == 1
+    assert _main(["scene", str(src), "--item", "KHONG.CO", "--out", str(tmp_path / "x.glb")]) == 2

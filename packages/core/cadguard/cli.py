@@ -1,5 +1,5 @@
 """Dòng lệnh: cadguard audit | stats | rules | profile | fixtures | mcp | propose | apply | undo | diff | validate
-| ask | chat | engines | keys | app | scene | studio | review | watch | doctor | mcp-config | autocad.
+| ask | chat | engines | keys | app | scene | scene-assess | studio | review | watch | doctor | mcp-config | autocad.
 
 Mã thoát của `audit`: 0 = không có lỗi mức E; 1 = có lỗi mức E; 2 = không đọc được đầu vào/chuẩn.
 `propose`/`validate`: 0 = đạt, 1 = kiểm không đạt, 2 = lỗi/từ chối. `apply`/`undo`: 0 = xong, 2 = từ chối/lỗi.
@@ -926,6 +926,8 @@ def cmd_scene(args: argparse.Namespace) -> int:
         supp, note = load_supplement(json.loads(Path(args.supplement).read_text(encoding="utf-8")), model.file_hash)
         if note:
             notes.append(note)
+    if args.item:
+        return _scene_item(args, model, supp, notes)
     sc = build_scene(model, supp)
     sc.notes.extend(notes)
     out = Path(args.out)
@@ -949,6 +951,57 @@ def cmd_scene(args: argparse.Namespace) -> int:
     if sc.gaps:
         return 3  # đã ghi phần dựng được; còn phần thiếu cần bổ sung
     return 0 if (sc.walls or sc.modules or sc.panels) else 2
+
+
+def _scene_item(args: argparse.Namespace, model, supp: dict, notes: list[str]) -> int:
+    """`cg.scene/2`: dựng một hạng mục (mặt bằng + mặt đứng của bản vẽ kiểu công ty), xem `scene/assemble.py`."""
+    from .scene import render_form
+    from .scene.assemble import build_from_model, item_summary
+    from .scene.render2 import render_html2, write_glb2
+
+    sc, d = build_from_model(model, None if args.item == "auto" else args.item, supp)
+    sc.notes.extend(notes)
+    if not sc.item or sc.item not in d.groups:
+        print("Không thấy hạng mục. Có: " + ", ".join(f"{x['id']} ({x['plans']} mặt bằng, {x['elevations']} mặt đứng)"
+                                                       for x in item_summary(d)), file=sys.stderr)
+        return 2
+    out = Path(args.out)
+    if out.suffix.lower() == ".html":
+        out.write_text(render_html2(sc), encoding="utf-8")
+    elif out.suffix.lower() == ".json":
+        out.write_text(sc.model_dump_json(by_alias=True, indent=2), encoding="utf-8")
+    else:
+        write_glb2(sc, out)
+    if args.form and sc.gaps:
+        Path(args.form).write_text(render_form(sc), encoding="utf-8")
+    fronts = sum(len(m.fronts) for m in sc.modules)
+    print(f"Hạng mục {sc.item}: {len(sc.modules)} khối, {fronts} cánh/ngăn kéo, {len(sc.walls)} đoạn tường, "
+          f"trần {sc.room.ceiling or 'chưa có'}, {len(sc.gaps)} phần thiếu, mã cảnh {sc.scene_hash} -> {out}")
+    for g in sc.gaps:
+        print(f"thiếu [{g.kind}] {g.message}", file=sys.stderr)
+    if sc.gaps:
+        return 3
+    return 0 if sc.modules else 2
+
+
+def cmd_scene_assess(args: argparse.Namespace) -> int:
+    import json
+
+    from .reader_select import read_with
+    from .scene.feasibility import assess
+
+    r = assess(read_with(args.path, "auto"))
+    if args.json:
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+        return 0
+    it, mk, dm = r["items"], r["section_marks"], r["dimensions"]
+    print(f"Tờ: {r['sheets']['total']}; hình chiếu có hình: {r['views']['with_geometry']}")
+    print(f"Hạng mục: {it['total']}; có mặt bằng + mặt đứng: {it['with_plan_and_elevation']}; căn được bằng kích thước: "
+          f"{it['plan_elevation_aligned_by_dimension']}")
+    print(f"Ký hiệu mặt cắt: {mk['resolved']}/{mk['total']} trỏ đúng hình; kích thước bám đỉnh hình: {dm['attached_pct']} %")
+    print(f"Mặt đứng có kích thước sàn–trần: {r['elevations_with_room_height_dim']['count']}/{r['elevations_with_room_height_dim']['of']}; "
+          f"phòng trên mặt bằng tầng: {r['floor_plan']['rooms']}")
+    return 0
 
 
 def cmd_studio(args: argparse.Namespace) -> int:
@@ -1184,7 +1237,12 @@ def main(argv: list[str] | None = None) -> int:
     sc.add_argument("--form", help="nếu còn phần thiếu: ghi form HTML để nhập bổ sung")
     sc.add_argument("--supplement", help="tệp .cgsup.json (tải từ form) chứa giá trị bổ sung")
     sc.add_argument("--with", dest="with_", action="append", help="DXF bổ sung hình chiếu còn thiếu (có thể lặp)")
+    sc.add_argument("--item", help="cg.scene/2: dựng một hạng mục của bản vẽ kiểu công ty (mã số bản vẽ, vd. xx.65; auto = tự chọn)")
     sc.set_defaults(fn=cmd_scene)
+    sa = sub.add_parser("scene-assess", help="đo khả năng dựng 3D của một bản vẽ (chỉ số cấu trúc, docs/3d-feasibility.md)")
+    sa.add_argument("path")
+    sa.add_argument("--json", action="store_true")
+    sa.set_defaults(fn=cmd_scene_assess)
 
     st = sub.add_parser("studio", help="ứng dụng web cục bộ: trao đổi với LLM, xem 3D, bổ sung dữ liệu thiếu")
     st.add_argument("--port", type=int, default=8770)
