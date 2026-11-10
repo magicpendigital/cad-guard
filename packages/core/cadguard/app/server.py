@@ -26,7 +26,7 @@ from ..privacy import effective as privacy_effective, label as privacy_label, se
 from .. import __version__
 from ..review.types import ReviewError, LOCAL
 from ..standard import ProfileError, find_standards_dir, load_profile
-from . import api, connect, history
+from . import api, bulkfix, connect, history
 from .api import DEPARTMENTS_FILE, NAME_RE, ApiError, AppConfig, AppData, load_departments
 from .chat import Assistant
 from .project import DialogBusy, check_profile_file, check_project_dir, dialog_available, run_dialog
@@ -177,6 +177,13 @@ class CadGuardApp:
                     realtime.setdefault(r.id, bool(r.realtime_ok))
             self._titles, self._realtime = titles, realtime
         return self._titles, self._realtime or {}
+
+    def dept_standards(self, dept: Any) -> list[str]:
+        """Chuẩn của phòng cho sửa hàng loạt; phòng chỉ xem (3D) hoặc không chọn phòng: dùng chuẩn vệ sinh bản vẽ."""
+        data = self.d()
+        dep = api.check_dept(data, dept)
+        stds = list(dep["standards"]) if dep else []
+        return stds or [s for s in ("design-hygiene-v0",) if s in self.standard_names()]
 
     def home(self, dept: Any) -> dict:
         data = self.d()
@@ -380,6 +387,10 @@ class CadGuardApp:
             ("GET", "/api/changeset"): lambda q, b: api.get_changeset(d(), q1(q, "id")),
             ("GET", "/api/changesets"): lambda q, b: api.list_changesets(d()),
             ("POST", "/api/changeset/apply"): lambda q, b: api.apply_changeset(d(), b.get("changeset_id"), b.get("confirm")),
+            ("POST", "/api/fix/bulk/plan"): lambda q, b: bulkfix.plan(d(), b.get("file"), self.dept_standards(b.get("dept")),
+                                                                      unicode=b.get("unicode") is not False),
+            ("POST", "/api/fix/bulk/apply"): lambda q, b: bulkfix.apply(d(), b.get("changeset_id"), b.get("confirm"),
+                                                                        b.get("backup")),
             ("POST", "/api/changeset/undo"): lambda q, b: api.undo_changeset(d(), b.get("changeset_id"), b.get("confirm")),
             ("GET", "/api/engines"): lambda q, b: a.engines(refresh=q1(q, "refresh") == "1"),
             ("POST", "/api/chat/stop"): lambda q, b: {"stopped": a.stop(b.get("run_id"))},
@@ -423,7 +434,7 @@ def make_handler(app: CadGuardApp):
             if self.command != "HEAD":
                 self.wfile.write(body)
 
-        def _error(self, status: int, message: str) -> None:
+        def _error(self, status: int, message: str, hint: dict | None = None) -> None:
             # Windows gửi RST nếu đóng socket còn thân POST chưa đọc: client mất cả phản hồi 4xx.
             if self.command == "POST" and not getattr(self, "_body_consumed", False):
                 try:
@@ -438,7 +449,9 @@ def make_handler(app: CadGuardApp):
                 except (ValueError, OSError):
                     pass
                 self._body_consumed = True
-            self._json(status, {"error": message})
+            from .guidance import hint_for
+
+            self._json(status, {"error": message, "hint": hint or hint_for(message, status)})
 
         def _allowed_hosts(self) -> set[str]:
             port = self.server.server_address[1]
@@ -523,13 +536,13 @@ def make_handler(app: CadGuardApp):
                     return
                 self._json(200, fn(parse_qs(parts.query), body))
             except (ApiError, ReviewError) as exc:
-                self._error(exc.status, str(exc))
+                self._error(exc.status, str(exc), getattr(exc, "hint", None))
             except (BrokenPipeError, ConnectionResetError):
                 pass
             except Exception:  # noqa: BLE001 — không lộ chi tiết nội bộ (đường dẫn, khoá) ra trình duyệt
-                print("cadguard app: lỗi nội bộ khi xử lý một yêu cầu API.", file=sys.stderr)
+                code = log_internal_error(path)
                 try:
-                    self._error(500, "Lỗi nội bộ của cad-guard; xem cửa sổ dòng lệnh.")
+                    self._error(500, f"Lỗi nội bộ của CAD Guard (mã {code}). Chi tiết đã ghi vào nhật ký lỗi trên máy này.")
                 except OSError:
                     pass
 
@@ -569,6 +582,30 @@ def make_handler(app: CadGuardApp):
         do_DELETE = do_PATCH = do_OPTIONS = do_PUT  # không CORS: OPTIONS bị từ chối
 
     return Handler
+
+
+def log_internal_error(api_path: str) -> str:
+    """Ghi traceback vào `<thư mục cấu hình>/logs/app-errors.log` (chỉ trên máy; ứng dụng chạy ngầm không có cửa sổ
+    dòng lệnh). Trả mã ngắn để người dùng đối chiếu khi báo lỗi; trình duyệt không thấy chi tiết."""
+    import secrets
+    import time
+    import traceback
+
+    code = "E-" + secrets.token_hex(3).upper()
+    print(f"cadguard app: lỗi nội bộ {code} khi xử lý {api_path}.", file=sys.stderr)
+    try:
+        from .settings import config_dir
+
+        d = config_dir() / "logs"
+        d.mkdir(parents=True, exist_ok=True)
+        f = d / "app-errors.log"
+        if f.is_file() and f.stat().st_size > 2_000_000:
+            f.replace(d / "app-errors.old.log")
+        with f.open("a", encoding="utf-8") as fh:
+            fh.write(f"--- {time.strftime('%Y-%m-%d %H:%M:%S')} {code} {api_path}" + chr(10) + traceback.format_exc() + chr(10))
+    except OSError:
+        pass
+    return code
 
 
 class AppServer(ThreadingHTTPServer):

@@ -99,6 +99,49 @@
     toast._t = setTimeout(() => t.classList.remove("on"), 3600);
   }
 
+  // ---------- THÔNG BÁO BỀN: lỗi kèm cách khắc phục, việc đang chạy lâu ----------
+  // Thông báo ngắn (toast) chỉ cho tin vui; lỗi không tự tắt, có "vì sao" + "làm gì" + nút làm ngay.
+  const NOTICE_ACTIONS = {
+    repropose: {run: () => S.lastPropose ? S.lastPropose() : toast("Bấm lại nút đã dùng (Chuyển Unicode, Dịch…).")},
+    connect: {run: () => go("connect")},
+    project: {run: () => go("home")},
+    ask_ai: {run: (n) => askAI(`Mình gặp lỗi trong CAD Guard: "${n.msg}". Giải thích ngắn gọn cho người làm thiết kế: lỗi này nghĩa là gì, vì sao xảy ra và cần làm gì để chạy được.`)},
+    guide3d: {run: () => { if (S.showDiscussion) S.showDiscussion(); rightTab("help"); }},
+    sheets: {run: () => { const b = document.querySelector(".sheetbar, #sheetBar"); if (b) b.scrollIntoView({block: "nearest"}); toast("Bấm chọn một tờ ở thanh Tờ phía trên bản vẽ."); }},
+    changes: {run: () => { if (S.showDiscussion) S.showDiscussion(); rightTab("chg"); }},
+    setup: {run: () => go("setup")},
+  };
+  function notice({kind = "err", title, msg, hint, ctx}) {
+    const box = $("notices");
+    const h = hint || {};
+    const x = el("button", {class: "n-x", type: "button", "aria-label": "Đóng thông báo", onclick: () => n.remove()}, "×");
+    const steps = (h.steps || []).length ? el("ol", {}, h.steps.map((s) => el("li", {text: s}))) : null;
+    const data = {msg: msg || "", ctx};
+    const acts = (h.actions || []).filter((a) => NOTICE_ACTIONS[a.id]).map((a) =>
+      el("button", {class: "btn-s btn-sm", type: "button", onclick: () => { NOTICE_ACTIONS[a.id].run(data); }}, a.label));
+    if (kind === "err") acts.push(el("button", {class: "btn-s btn-sm", type: "button", onclick: async () => {
+      try { await navigator.clipboard.writeText(`${title || h.title || ""}\n${msg || ""}${ctx ? "\nThao tác: " + ctx : ""}`); toast("Đã sao chép nội dung lỗi."); } catch (_) { toast("Không sao chép được: hãy bôi đen và Ctrl+C."); }
+    }}, "Sao chép"));
+    const n = el("div", {class: "notice " + kind, role: kind === "err" ? "alert" : "status"}, x,
+      el("h4", {text: title || h.title || (kind === "err" ? "Chưa thực hiện được" : "")}),
+      ctx ? el("div", {class: "n-msg", text: "Thao tác: " + ctx}) : null,
+      msg ? el("div", {class: "n-msg", text: msg}) : null,
+      h.why ? el("div", {}, el("b", {text: "Vì sao: "}), h.why) : null,
+      steps ? [el("b", {text: "Làm gì để chạy được:"}), steps] : null,
+      acts.length ? el("div", {class: "n-act"}, acts) : null);
+    box.prepend(n);
+    while (box.children.length > 4) box.lastChild.remove();
+    return n;
+  }
+  function fail(e, ctx) {
+    const msg = (e && e.message) || String(e);
+    return notice({kind: "err", msg, hint: e && e.hint, ctx});
+  }
+  function busy(title, msg) {
+    const n = notice({kind: "busy", title, msg});
+    return {done: () => n.remove()};
+  }
+
   function when(ts) {
     if (!ts) return "";
     const d = new Date(ts);
@@ -142,6 +185,7 @@
     if (!r.ok) {
       const err = new Error((data && data.error) || ("Lỗi máy chủ " + r.status));
       err.status = r.status;
+      err.hint = data && data.hint;
       throw err;
     }
     return data;
@@ -309,7 +353,7 @@
   // ---------- chọn dự án ----------
   async function loadProjects() {
     let r;
-    try { r = await api("/api/projects"); } catch (e) { toast(e.message); return; }
+    try { r = await api("/api/projects"); } catch (e) { fail(e); return; }
     $("pickBtn").disabled = !r.dialog_available;
     $("pickNote").textContent = r.dialog_available ? "Mở hộp thoại chọn thư mục của hệ điều hành."
       : "Máy này không có hộp thoại chọn thư mục (thiếu tkinter): hãy dán đường dẫn bên dưới.";
@@ -327,7 +371,7 @@
         el("div", {class: "dwg-f"},
           el("button", {class: "btn-p", type: "button", disabled: !p.exists, onclick: () => openProject(p.path)}, "Mở"),
           el("button", {class: "btn-s", type: "button", onclick: async () => {
-            try { await api("/api/project/forget", {path: p.path}); loadProjects(); } catch (e) { toast(e.message); }
+            try { await api("/api/project/forget", {path: p.path}); loadProjects(); } catch (e) { fail(e); }
           }}, "Bỏ khỏi danh sách"),
           el("span", {class: "why", text: p.opened_at ? "Mở lần cuối: " + new Date(p.opened_at).toLocaleString("vi-VN") : ""})));
     }));
@@ -343,12 +387,12 @@
       if (r.cancelled || !r.path) { $("pickNote").textContent = "Đã huỷ chọn thư mục."; return; }
       $("pickNote").textContent = "";
       await openProject(r.path);
-    } catch (e) { toast(e.message); $("pickNote").textContent = ""; } finally { btn.disabled = false; }
+    } catch (e) { fail(e); $("pickNote").textContent = ""; } finally { btn.disabled = false; }
   }
 
   async function openProject(path, confirmed) {
     let r;
-    try { r = await api("/api/project/open", {path, confirm: !!confirmed}); } catch (e) { toast(e.message); return; }
+    try { r = await api("/api/project/open", {path, confirm: !!confirmed}); } catch (e) { fail(e); return; }
     if (r.needs_confirm) {
       const ok = await confirmDialog({title: `Mở “${r.name}” làm dự án?`, body: [r.warning, "Vẫn mở thư mục này?"], yes: "Vẫn mở", no: "Chọn thư mục khác"});
       if (ok) await openProject(path, true);
@@ -374,7 +418,7 @@
   // ---------- VIỆC CỦA TÔI ----------
   async function loadHome() {
     if (!hasProject()) return;
-    try { S.home = await api("/api/home?dept=" + encodeURIComponent(S.dept.id)); } catch (e) { toast(e.message); return; }
+    try { S.home = await api("/api/home?dept=" + encodeURIComponent(S.dept.id)); } catch (e) { fail(e); return; }
     for (const d of S.home.drawings) if (d.scanned) S.stat[d.path] = S.stat[d.path] || {E: d.errors, W: d.warnings, I: d.infos, from: "history"};
     renderFiles();
     renderHome();
@@ -439,7 +483,7 @@
       const r = await api("/api/handover", {file: path, dept: S.dept.id});
       toast(r.note);
       loadHome();
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   function renderHome() {
@@ -520,7 +564,7 @@
   async function loadOverview() {
     if (!hasProject()) return;
     let o;
-    try { o = await api("/api/overview"); } catch (e) { toast(e.message); return; }
+    try { o = await api("/api/overview"); } catch (e) { fail(e); return; }
     const box = $("ovBody");
     if (!o.has_data) {
       fill(box, el("div", {class: "card"}, emptyBox("Chưa có số liệu tuần này", "Số liệu sinh từ lịch sử quét của dự án trên máy này. Quét vài bản vẽ ở màn Bản vẽ (hoặc “Quét cả thư mục”), rồi quay lại.")));
@@ -571,7 +615,7 @@
       S.files = r.drawings;
       S.filesTruncated = r.truncated ? r.limit : 0;
       renderFiles();
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   function statPills(st) {
@@ -645,7 +689,7 @@
       const nx = nextNames(S.dept);
       fill(h, b(`${ready}/${total} bản không còn lỗi mức E`), el("br"),
         nx.length ? `Có thể đánh dấu sẵn sàng giao cho ${nx.join(" và ")} ở màn Việc của tôi.` : "Có thể đánh dấu sẵn sàng xuất cho xưởng ở màn Việc của tôi.");
-    } catch (e) { toast(e.message); h.hidden = true; }
+    } catch (e) { fail(e); h.hidden = true; }
     btn.disabled = false;
   }
 
@@ -1204,7 +1248,7 @@
     const fmt = v => (Math.round(v * 10) / 10).toString();
     $("cvInfo").textContent = `Hạng mục ${r.item} · ${r.counts.modules} khối · ${r.counts.fronts} cánh/ngăn kéo · ${r.counts.gaps} phần thiếu · mã cảnh ${r.scene_hash}`;
     const sel = el("select", {"aria-label": "Chọn hạng mục"},
-      r.items.map(it => el("option", {value: it.id, text: `${it.id} · ${it.plans} mặt bằng, ${it.elevations} mặt đứng`})));
+      r.items.map(it => el("option", {value: it.id, text: `${it.name || it.id} · ${it.plans} mặt bằng, ${it.elevations} mặt đứng${it.plans && it.elevations ? "" : " (chưa dựng được)"}`})));
     sel.value = r.item;
     sel.addEventListener("change", () => load3d(path, sel.value));
     const ceil = el("input", {type: "checkbox", "aria-label": "Hiện trần"});
@@ -1214,18 +1258,24 @@
         const bin = Uint8Array.from(atob(g.b64), c => c.charCodeAt(0));
         const a = el("a", {href: URL.createObjectURL(new Blob([bin], {type: "model/gltf-binary"})), download: g.name});
         a.click();
-      } catch (e) { toast(e.message); }
+      } catch (e) { fail(e); }
     }});
     const save = async (key, value) => {
-      try { render3d2(path, await api("/api/scene/set", {file: path, item: r.item, key, value})); } catch (e) { toast(e.message); }
+      try { render3d2(path, await api("/api/scene/set", {file: path, item: r.item, key, value})); } catch (e) { fail(e); }
     };
     const cv = el("canvas", {"aria-label": "Mô hình 3D dựng từ bản vẽ, kéo chuột để xoay, cuộn để phóng to", role: "img"});
     const head = el("tr", {}, ["Khối", "Loại", "Rộng", "Sâu", "Cao", "Cao độ chân", "Cánh/ngăn kéo", "Đợt"].map(t => el("th", {text: t})));
     const rows = r.modules.map(m => el("tr", {}, el("td", {text: m.id}), el("td", {text: m.label || m.kind}),
       ["w", "d", "h", "z0"].map(k => el("td", {text: `${fmt(m[k].value)} · ${m[k].src}`})),
       el("td", {text: String(m.fronts)}), el("td", {text: String(m.shelves)})));
-    const gaps = r.gaps.map(g => el("div", {class: "gap3d"}, el("div", {text: g.message}), g.fields.map(f => {
-      const inp = f.kind === "choice" ? el("select", {}, el("option", {value: "", text: "— chọn —"}), f.options.map(o => el("option", {value: o, text: o})))
+    const gaps = r.gaps.map(g => el("div", {class: "gap3d"}, g.explain ? [
+        el("div", {class: "g-title", text: `${g.explain.title} · ${g.explain.where}`}),
+        el("div", {class: "g-why", text: "Vì sao: " + g.explain.why}),
+        g.fields.length ? el("div", {class: "g-fix", text: "Sửa nhanh tại đây: " + g.explain.fix_here}) : null,
+        el("div", {class: "g-fix", text: "Sửa gốc trong AutoCAD: " + g.explain.fix_cad}),
+        (g.explain.views || []).length ? el("small", {text: "Hình đang có: " + g.explain.views.join("; ")}) : null]
+      : el("div", {text: g.message}), g.fields.map(f => {
+      const inp = f.kind === "choice" ? el("select", {}, el("option", {value: "", text: "— chọn —"}), f.options.map(o => el("option", {value: o, text: (f.labels && f.labels[o]) || o})))
                                       : el("input", {type: "number", min: "0", step: "any", "aria-label": f.label});
       return el("label", {}, `${f.label}${f.kind === "choice" ? "" : " (mm)"} `, inp,
         el("button", {type: "button", class: "btn", text: "Lưu", onclick: () => inp.value && save(f.key, inp.value)}));
@@ -1237,7 +1287,10 @@
     fill(sheet,
       el("div", {class: "sheet-note"}, "Hạng mục ", sel, " ", el("label", {}, ceil, " hiện trần"), " ", dl, " ", el("small", {text: `mã cảnh ${r.scene_hash}`})),
       cv,
-      el("div", {class: "sheet-note"}, el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), gaps, props,
+      el("div", {class: "sheet-note"}, r.readiness ? el("div", {class: "ready3d"}, b(`Sẵn sàng: ${r.readiness.level}`),
+          ` · ${r.readiness.modules} khối, ${r.readiness.complete} đủ 4 số đo · ${r.readiness.from_dimension_pct}% số đo lấy từ kích thước ghi trên bản vẽ (còn lại đo trên hình) · ${r.readiness.gaps} phần thiếu`,
+          r.gaps.length ? el("div", {text: `Bổ sung ${r.gaps.length} phần thiếu bên dưới để dựng đủ hạng mục.`}) : null) : null,
+        el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), gaps.length ? el("div", {class: "sub-h", text: "Phần thiếu và cách bổ sung"}) : null, gaps, props,
         r.notes.map(n => el("small", {text: n}))));
     S.v3d = makeViewer(cv);
     const show = () => S.v3d.set(r.boxes.filter(b => ceil.checked || b.k !== "ceiling"));
@@ -1359,7 +1412,7 @@
           onclick: (e) => { e.stopPropagation(); askAI(explainPrompt(f.rule_id, f.title, f.std, (f.items || []).slice(0, 3).map((it) => it.message).join("; "))); }}, "Giải thích sâu (AI)"),
         el("button", {class: "link sm", type: "button", title: "Tắt luật này cho dự án (quét lại để thấy kết quả)", onclick: (e) => { e.stopPropagation(); disableRule(f.rule_id, f.std); }}, "Tắt luật"),
         f.rule_id === "LY-01" && S.file ? el("button", {class: "link sm", type: "button", title: "Coi các layer có sẵn của bản vẽ này là quy ước của công ty (LY-01)",
-          onclick: async (e) => { e.stopPropagation(); try { const r = await api("/api/rules/learn_layers", {file: S.file, standard: f.std}); S.rules = null; toast(`Đã học ${r.patterns.length} mẫu layer. Quét lại để thấy kết quả.`); } catch (err) { toast(err.message); } }}, "Học quy ước layer") : null,
+          onclick: async (e) => { e.stopPropagation(); try { const r = await api("/api/rules/learn_layers", {file: S.file, standard: f.std}); S.rules = null; toast(`Đã học ${r.patterns.length} mẫu layer. Quét lại để thấy kết quả.`); } catch (err) { fail(err); } }}, "Học quy ước layer") : null,
         el("button", {class: "link sm", type: "button", title: "Sửa ngưỡng, mức độ của luật", onclick: async (e) => { e.stopPropagation(); await loadRulesQuiet(); showExplain(f.rule_id, f.std); }}, "Sửa ngưỡng")),
       el("div", {class: "f-title", text: f.title}),
       el("div", {class: "f-d"}, el("ul", {}, inSheet.slice(0, 3).map((it) => el("li", {text: it.message}))),
@@ -1475,7 +1528,7 @@
       const acks = (S.audits[f.std] || {}).acks;
       if (acks) { if (r.acked) acks[r.key] = {kind: r.kind, reason}; else delete acks[r.key]; }
       renderFinds(); renderSheetBar();
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   function renderSheetBar() {
@@ -1511,7 +1564,7 @@
           try {
             const r = await api("/api/template/learn", {file: S.file, sheet: cur + 1, logo: logo.trim() || null});
             toast(`Đã học template '${r.template.name}' từ ${sh.sheets[cur].name}. Quét với chuẩn sheet-layout-v0 để kiểm trình bày.`);
-          } catch (e) { toast(e.message); }
+          } catch (e) { fail(e); }
         }}, el("span", {class: "sh-n", text: "Học template từ tờ này"}), el("span", {class: "sh-sub", text: "khung tên chuẩn công ty"})));
     const lang = el("select", {"aria-label": "Ngôn ngữ đích", class: "sh-sel"}, el("option", {value: "en", text: "Tiếng Anh"}), el("option", {value: "zh", text: "Tiếng Trung"}));
     kids.push(el("span", {class: "sh-chip"}, lang, el("button", {type: "button", class: "btn-s btn-sm",
@@ -1524,7 +1577,7 @@
           const rp = r.report;
           toast(`Nguồn: ${rp.source_language.language_name}. ${rp.translated}/${rp.strings} chuỗi có bản dịch, ${rp.untranslated} chưa dịch, ${rp.issue_count} cần xem.`);
           if (r.preview) { S.preview = r.preview; renderChg(); loadChangesets(); }
-        } catch (e) { toast(e.message); }
+        } catch (e) { fail(e); }
         ev.target.disabled = false;
       }}, "Dịch")));
     fill(bar, el("span", {class: "sh-lbl", text: "Tờ"}), ...kids);
@@ -1629,7 +1682,7 @@
       await api("/api/sheets/lock", {file: S.file, sheet: s.id, standards: deptStd(), confirm: true});
       toast(`Đã chốt ${s.name}.`);
       await loadSheets(S.file);
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   async function unlockSheet(s) {
@@ -1637,7 +1690,7 @@
       await api("/api/sheets/unlock", {file: S.file, sheet: s.id});
       toast(`Đã mở lại ${s.name}.`);
       await loadSheets(S.file);
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   function showJunk() {
@@ -1673,14 +1726,14 @@
         if (r.toi_command && navigator.clipboard) navigator.clipboard.writeText(r.toi_command).catch(() => {});
         toast((r.message ? r.message + " " : "") + "Trong AutoCAD gõ CGDEN rồi Enter để tới đối tượng.");
       }
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   async function showExplain(ruleId, standard) {
     try {
       const r = await api(`/api/explain?rule=${encodeURIComponent(ruleId)}&standard=${encodeURIComponent(standard)}`);
       openRuleDrawer(r, standard);
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   // ---------- tab Thay đổi: đề xuất -> xem trước -> duyệt (tệp mới) -> hoàn tác ----------
@@ -1724,9 +1777,10 @@
     foot.hidden = true;
     const pending = S.suggest && !S.applied ? S.suggest.ops.filter((o) => o.on).length : 0;
     $("cntC").textContent = S.applied ? "✓" : String(pending);
-    if (S.dept && S.dept.view === "scene") { fill(list, emptyBox("Không có thay đổi cho xem 3D", "Màn 3D chỉ xem; bản vẽ không bị sửa.")); return; }
     if (S.applied) return renderApplied();
     if (S.preview) return renderPreview();
+    if (S.bulk) return renderBulk();
+    if (S.dept && S.dept.view === "scene" && !S.suggest) { fill(list, emptyBox("Chưa có thay đổi", "Màn 3D chỉ xem. Các nút Chuyển Unicode, Dịch, Sửa hàng loạt vẫn dùng được: bản xem trước hiện ở đây."), changesetList()); return; }
     if (!S.suggest) {
       const fx = S.findings.filter((f) => f.fixable).length;
       fill(list, emptyBox("Chưa có thay đổi nào", "Khi bạn (hoặc trợ lý) đề xuất sửa, từng thay đổi hiện ở đây để bạn xem trước và duyệt.", el("br"), "Bản vẽ gốc không bị chạm tới.",
@@ -1793,7 +1847,7 @@
 
   async function doPreview() {
     let ops;
-    try { ops = selectedOps(); } catch (e) { toast(e.message); return; }
+    try { ops = selectedOps(); } catch (e) { fail(e); return; }
     const btn = $("previewBtn");
     if (btn) btn.disabled = true;
     try {
@@ -1802,7 +1856,7 @@
       renderChg();
       renderSuggestions();
       loadChangesets();
-    } catch (e) { toast(e.message); if (btn) btn.disabled = false; }
+    } catch (e) { fail(e); if (btn) btn.disabled = false; }
   }
 
   function checksList(checks) {
@@ -1844,7 +1898,7 @@
     if (btn) btn.disabled = true;
     say("me", "Duyệt và lưu");
     let r;
-    try { r = await api("/api/changeset/apply", {changeset_id: pv.changeset_id, confirm: true}); } catch (e) { toast(e.message); if (btn) btn.disabled = false; return; }
+    try { r = await api("/api/changeset/apply", {changeset_id: pv.changeset_id, confirm: true}); } catch (e) { fail(e); if (btn) btn.disabled = false; return; }
     S.applied = {cid: r.changeset_id, output: r.output.path, source: r.source.path, validation: r.validation || {}};
     S.preview = null; S.suggest = null; S.cmp = "after";
     toolCard("cadguard.apply_changeset", `{ "changeset": "${r.changeset_id}", "out": "${r.output.path}" }`, "", "đã ghi tệp mới");
@@ -1916,7 +1970,7 @@
       await loadFiles();
       renderAll();
       loadChangesets();
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   async function loadChangesets() {
@@ -1957,7 +2011,7 @@
       S.preview = {...c.preview, changeset_id: c.id};
       rightTab("chg");
       renderChg();
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   function renderAll() { renderFiles(); renderFinds(); renderChg(); renderSheet(); renderSuggestions(); renderWorkSide(); }
@@ -2092,7 +2146,7 @@
       S.engine = pick || null;
       renderEngineMenu();
       if (refresh) $("refreshNote").textContent = "Đã kiểm lại lúc " + new Date().toLocaleTimeString("vi-VN");
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   function renderEngineMenu() {
@@ -2112,7 +2166,7 @@
           async () => {
             if (exp) {
               try { await api("/api/ai/settings", {codex_experimental: true}); await loadEngines(false); }
-              catch (err) { toast(err.message); return; }
+              catch (err) { fail(err); return; }
               x = S.engines.find((y) => y.name === x.name) || x;
               if (!x.available) { toast(x.reason || "Chưa dùng được."); return; }
             }
@@ -2239,7 +2293,7 @@
   async function stopChat() {
     if (!S.run) return;
     $("stopBtn").disabled = true;
-    try { await api("/api/chat/stop", {run_id: S.run}); } catch (e) { toast(e.message); }
+    try { await api("/api/chat/stop", {run_id: S.run}); } catch (e) { fail(e); }
     $("stopBtn").disabled = false;
   }
 
@@ -2252,7 +2306,7 @@
       S.rules = {};
       try {
         for (const n of S.session.standards) S.rules[n] = await api("/api/rules?standard=" + encodeURIComponent(n));
-      } catch (e) { toast(e.message); }
+      } catch (e) { fail(e); }
     }
     renderRules();
   }
@@ -2384,7 +2438,7 @@
       if (S.screen === "rules") renderRules();
       showExplain(id, std);
       return true;
-    } catch (e) { toast(e.message); return false; }
+    } catch (e) { fail(e); return false; }
   }
   function ruleEditor(id, std) {
     const row = ruleRow(id, std);
@@ -2452,7 +2506,7 @@
     try {
       const [ai] = await Promise.all([api("/api/ai/settings"), loadEngines(false)]);
       S.ai = ai;
-    } catch (e) { toast(e.message); return; }
+    } catch (e) { fail(e); return; }
     renderConnect();
   }
 
@@ -2463,7 +2517,7 @@
       await loadEngines(false);
       renderConnect();
       return true;
-    } catch (e) { toast(e.message); return false; }
+    } catch (e) { fail(e); return false; }
   }
 
   function cliCard(e) {
@@ -2616,7 +2670,7 @@
     const forced = S.session && S.session.anonymize_forced;
     const setPriv = async (v) => {
       try { const r = await api("/api/project/privacy", {anonymize: v}); S.session = r.session; renderSession(); renderConnect(); toast(v ? "Đã bật ẩn danh cho dự án này." : "Đã chuyển dự án sang chế độ nội bộ."); }
-      catch (err) { toast(err.message); renderConnect(); }
+      catch (err) { fail(err); renderConnect(); }
     };
     const tier = (checked, t, d, extra, val) => el("label", {class: val === undefined || forced ? "dis" : ""}, el("input", {type: "radio", name: "tier", disabled: val === undefined || forced || !S.session || !S.session.project, checked: !!checked,
       onchange: val === undefined ? null : () => setPriv(val)}),
@@ -2632,26 +2686,36 @@
 
   // ---------- CÔNG CỤ cho bản vẽ đang mở: Unicode, Dịch, Học template ----------
   function showPreview(pv) {
-    S.preview = pv;
+    S.preview = pv; S.applied = null; S.bulk = null;  // thao tác mới: bản xem trước mới luôn được hiện
     if (S.showDiscussion) S.showDiscussion();
     renderChg(); loadChangesets(); rightTab("chg");
   }
   async function toolUnicode() {
     if (!S.file) { toast("Mở một bản vẽ trước."); return; }
-    toast("Đang chuẩn bị chuyển Unicode…");
-    try { showPreview(await api("/api/changeset/propose", {file: S.file, standard: "design-hygiene-v0", ops: [{op: "convert_unicode"}]})); }
-    catch (e) { toast(e.message); }
+    S.lastPropose = toolUnicode;
+    const b = busy("Đang chuẩn bị chuyển Unicode…", "Bản vẽ lớn mất khoảng 10–30 giây. Chưa ghi gì vào bản vẽ.");
+    try { showPreview(await api("/api/changeset/propose", {file: S.file, standard: "design-hygiene-v0", ops: [{op: "convert_unicode"}]})); toast("Đã có bản xem trước ở tab Thay đổi."); }
+    catch (e) { fail(e, "Chuyển Unicode"); }
+    b.done();
   }
   async function toolTranslate(lang, btn, mode) {
     if (!S.file) { toast("Mở một bản vẽ trước."); return; }
     if (btn) btn.disabled = true;
-    toast("Đang dịch… (AI đề xuất, CAD Guard kiểm số/đơn vị/mã). Bản vẽ lớn có thể mất vài phút.");
+    S.lastPropose = () => toolTranslate(lang, btn);
+    const bz = busy("Đang dịch…", "AI đề xuất bản dịch, CAD Guard kiểm số/đơn vị/mã. Bản vẽ lớn có thể mất vài phút; muốn nhanh hãy chọn một tờ ở thanh Tờ rồi bấm Dịch.");
     try {
       const r = await api("/api/translate", {file: S.file, to: lang, sheet: S.sheetSel || null, mode: mode || "copy"});
       const rp = r.report;
-      toast(`Ngôn ngữ gốc: ${rp.source_language.language_name}. Có bản dịch ${rp.translated}/${rp.strings} chuỗi, chưa dịch ${rp.untranslated}, cần xem ${rp.issue_count}${rp.llm ? "" : " (chưa có AI: chỉ dùng bảng thuật ngữ)"}.`);
+      const summary = `Ngôn ngữ gốc: ${rp.source_language.language_name}. Có bản dịch ${rp.translated}/${rp.strings} chuỗi, chưa dịch ${rp.untranslated}, cần xem ${rp.issue_count}.`;
+      if (!rp.llm || rp.untranslated > rp.translated) {
+        notice({kind: "err", title: rp.llm ? "Nhiều chuỗi chưa dịch được" : "Chưa có trợ lý AI nên chỉ dịch theo bảng thuật ngữ", msg: summary,
+          hint: {why: rp.llm ? "Trợ lý AI trả lỗi hoặc quá giờ ở một số lượt (thường do hết lượt dùng hoặc mạng)." : "Dịch câu chữ tự do cần một trợ lý AI đã đăng nhập; bảng thuật ngữ chỉ có các từ cố định.",
+            steps: ["Mở Kết nối AI, kiểm trợ lý đang chọn còn dùng được.", "Chọn một tờ ở thanh Tờ rồi bấm Dịch lại (ít chữ, nhanh, ít lỗi hơn).", "Bản xem trước vẫn dùng được: chuỗi chưa dịch giữ nguyên chữ gốc."],
+            actions: [{id: "connect", label: "Mở Kết nối AI"}, {id: "changes", label: "Xem bản xem trước"}]}});
+      } else toast(summary);
       if (r.preview) showPreview(r.preview);
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e, "Dịch bản vẽ"); }
+    bz.done();
     if (btn) btn.disabled = false;
   }
   async function toolTemplate() {
@@ -2662,7 +2726,62 @@
     try {
       const r = await api("/api/template/learn", {file: S.file, sheet: i + 1, logo: logo.trim() || null});
       toast(`Đã học template '${r.template.name}' từ ${sh.sheets[i].name}. Chọn phòng 'Trình bày hồ sơ' rồi quét để kiểm trình bày.`);
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
+  }
+
+  async function toolBulk() {
+    if (!S.file) { toast("Mở một bản vẽ trước."); return; }
+    S.lastPropose = toolBulk;
+    const b = busy("Đang gom các lỗi tự sửa được…", "Chạy khô trong bộ nhớ, chưa ghi gì. Bản vẽ lớn mất khoảng 20–40 giây.");
+    let p;
+    try { p = await api("/api/fix/bulk/plan", {file: S.file, dept: S.dept && S.dept.id}); }
+    catch (e) { b.done(); fail(e, "Sửa hàng loạt"); return; }
+    b.done();
+    S.bulk = p;
+    if (S.showDiscussion) S.showDiscussion();
+    rightTab("chg");
+    renderBulk();
+  }
+  function renderBulk() {
+    const p = S.bulk, list = $("chgList"), foot = $("chgFoot");
+    if (!p) return;
+    const pv = p.preview;
+    const li = (o, extra) => el("li", {}, b(o.title), " ", el("span", {class: "f-rule", text: o.rule_id}), extra ? el("div", {class: "f-d", text: extra}) : null);
+    fill(list,
+      el("div", {class: "safe"}, icon("shield"), el("span", {}, "Sửa hàng loạt: ", b("luôn sao lưu bản vẽ gốc trước"), ", kết quả ghi ra ", b("tệp mới"), ", hoàn tác được.")),
+      pv ? el("div", {class: "f-card"}, el("b", {text: pv.ok ? "Xem trước ĐẠT" : "Xem trước KHÔNG ĐẠT"}), el("div", {class: "f-d", text: pv.summary_vi}),
+        el("div", {class: "f-d", text: pv.diff_summary_vi || ""})) : emptyBox("Không có lỗi nào sửa tự động được", "Các mục dưới đây cần người sửa trong CAD hoặc chọn giá trị."),
+      p.picked.length ? [el("div", {class: "sub-h", text: `Sẽ sửa (${p.picked.length})`}), el("ol", {class: "bulk-list"}, p.picked.map((o) => li(o)))] : null,
+      p.skipped.length ? [el("div", {class: "sub-h", text: `Chưa sửa tự động (${p.skipped.length}): làm tiếp ở tab Thay đổi`}), el("ul", {class: "bulk-list"}, p.skipped.map((o) => li(o, o.why_skipped)))] : null,
+      p.manual.length ? [el("div", {class: "sub-h", text: `Cần người sửa trong CAD (${p.manual.length})`}), el("ul", {class: "bulk-list"}, p.manual.map((n) => el("li", {}, el("span", {class: "f-rule", text: n.rule_id}), " ", n.message)))] : null);
+    const cb = el("input", {type: "checkbox", id: "bulkBackup", checked: true, disabled: true});
+    fill(foot, el("label", {for: "bulkBackup", class: "safe"}, cb, el("span", {}, " Tạo bản sao lưu bản vẽ gốc vào thư mục ", b(".cadguard/backups"), " của dự án (bắt buộc).")),
+      el("div", {class: "bar-act"},
+        el("button", {class: "btn-p", type: "button", id: "bulkGo", disabled: !(pv && pv.ok), onclick: doBulk}, icon("check"), `Sao lưu & sửa ${p.picked.length} mục`),
+        el("button", {class: "btn-s", type: "button", onclick: () => { S.bulk = null; foot.hidden = true; renderChg(); }}, "Bỏ")));
+    foot.hidden = false;
+  }
+  async function doBulk() {
+    const pv = S.bulk && S.bulk.preview;
+    if (!pv) return;
+    const ok = await confirmDialog({title: "Sao lưu và sửa hàng loạt?",
+      body: [`1. Sao nguyên tệp “${pv.source.path}” vào .cadguard/backups (bản sao lưu).`, `2. Sửa ${S.bulk.picked.length} mục, ghi ra TỆP MỚI; tệp gốc giữ nguyên.`,
+        "3. Mở lại tệp mới và kiểm; không đạt thì không tạo tệp."], yes: "Sao lưu và sửa", no: "Chưa"});
+    if (!ok) return;
+    $("bulkGo").disabled = true;
+    const bz = busy("Đang sao lưu và sửa…", "Bản vẽ lớn mất khoảng 30–60 giây.");
+    let r;
+    try { r = await api("/api/fix/bulk/apply", {changeset_id: pv.changeset_id, confirm: true, backup: true}); }
+    catch (e) { bz.done(); fail(e, "Sửa hàng loạt"); $("bulkGo").disabled = false; return; }
+    bz.done();
+    S.bulk = null;
+    S.applied = {cid: r.changeset_id, output: r.output.path, source: r.source.path, validation: r.validation || {}};
+    S.preview = null; S.suggest = null; S.cmp = "after";
+    notice({kind: "ok", title: "Đã sửa hàng loạt", msg: `Tệp mới: ${r.output.path}. Bản sao lưu: ${r.backup.path}. Tệp gốc không đổi.`});
+    await loadFiles();
+    await recheckApplied();
+    renderAll();
+    loadChangesets();
   }
 
   // ---------- GIẢI THÍCH CHUYÊN SÂU BẰNG AI ----------
@@ -2687,7 +2806,7 @@
 
   // ---------- CÀI ĐẶT (một lần mỗi máy) ----------
   async function loadSetup() {
-    try { renderSetup((await api("/api/setup")).steps); } catch (e) { toast(e.message); }
+    try { renderSetup((await api("/api/setup")).steps); } catch (e) { fail(e); }
   }
   function renderSetup(steps) {
     S.setupSteps = steps;
@@ -2726,7 +2845,7 @@
       renderSession(); renderWorkSide(); S.rules = null;
       toast(path ? "Đã áp hồ sơ công ty cho dự án này" : "Đã bỏ hồ sơ công ty");
       if (S.file) openFile(S.file, {scan: Object.keys(S.audits).length > 0});
-    } catch (e) { toast(e.message); }
+    } catch (e) { fail(e); }
   }
 
   // ---------- khởi động ----------
@@ -2765,7 +2884,7 @@
         const r = await api("/api/project/profile/pick", {});
         if (r.unavailable) toast("Không mở được hộp thoại: hãy dán đường dẫn tệp.");
         else if (r.path) setProfile(r.path);
-      } catch (e) { toast(e.message); }
+      } catch (e) { fail(e); }
     });
     $("mpForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("mpPath").value.trim(); if (v) setProfile(v); });
     $("scanAll").addEventListener("click", scanAll);
@@ -2786,6 +2905,7 @@
     $("toolUnicode").addEventListener("click", toolUnicode);
     $("toolTranslate").addEventListener("click", (e) => toolTranslate($("toolLang").value, e.currentTarget, $("toolMode") ? $("toolMode").value : "copy"));
     $("toolTemplate").addEventListener("click", toolTemplate);
+    $("toolBulk").addEventListener("click", toolBulk);
     $("zoomIn").addEventListener("click", () => (S.v3d ? S.v3d.zoom(1.25) : zoomButton(0.8)));
     $("zoomOut").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0.8) : zoomButton(1.25)));
     $("zoomFit").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0) : zoomButton(0)));
@@ -2811,7 +2931,7 @@
       saveAi({max_cost_usd: v}, "Đã lưu giới hạn chi phí");
     });
     if (!TOKEN) { $("tokenBanner").hidden = false; return; }
-    try { S.session = await api("/api/session"); } catch (e) { toast(e.message); return; }
+    try { S.session = await api("/api/session"); } catch (e) { fail(e); return; }
     renderSession();
     renderWorkSide();
     renderFinds(); renderChg(); renderSheet();

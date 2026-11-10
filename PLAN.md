@@ -67,6 +67,11 @@ Phạm vi kết nối AutoCAD đã duyệt:
 - **Luồng 1:** hoàn thiện Đợt A–F (kiểm tay AutoCAD, thay khung/tỉ lệ/căn khung, dịch chế độ layer, in PDF theo tờ, TP-11, gộp Studio).
 - **Luồng 2:** đánh giá và làm thử dựng 3D từ bản vẽ 2D (3D-0…3D-4), cuối cùng là đánh giá công thái học có số đo + nguồn + AI nhận xét có kiểm chứng. Bộ dựng hiện tại dựng 0 tường/0 mô-đun trên tệp thật; "AI công thái học" của bản nháp Draff không được tiếp nhận vì dùng số bịa.
 
+## 3d. Lỗi có lối ra, đồ thị tri thức, 3D sản xuất (11/11/2026, `plans/cad-guard-kg-3d-production.md`)
+
+- **P0 xong:** kiểm tệp ra đúng trên bản vẽ thật (Unicode/Dịch trước đây không bao giờ ra tệp), xem trước ở phòng 3D, thông báo lỗi không tự tắt kèm "vì sao / làm gì" (`app/guidance.py`), phần thiếu 3D nói rõ tờ nào và cách sửa, **Sửa hàng loạt** bắt buộc sao lưu (`app/bulkfix.py`).
+- **Tiếp theo:** P1 đồ thị tri thức bản vẽ `cg.drawing-graph/1` + cổng sẵn sàng; P2 agent làm giàu đồ thị có harness; P3–P5 mô hình tấm, cut list, exploded/X-ray, cánh/bản lề/ray, bóc tách vật tư. Nghiên cứu ngành: `docs/research/3d-san-xuat-noi-that.md`.
+
 ## 4. Quyết định còn mở
 
 1. Bản AutoCAD trên máy thử: đã kiểm AutoCAD 2027 bản đầy đủ dùng thử (09/11/2026, `docs/autocad.md` mục 5). Còn mở: AutoCAD LT nếu công ty định mua LT.
@@ -85,4 +90,5 @@ Phạm vi kết nối AutoCAD đã duyệt:
 | `plans/cad-guard-3d.md` | Dựng 3D tất định và Studio |
 | `plans/cad-guard-platform.md` | Tệp nặng, nhiều định dạng, giao diện hợp nhất (đánh giá) |
 | `plans/cad-guard-vision-assessment.md` | Đánh giá hướng mở rộng dài hạn (chưa thành kế hoạch) |
+| `plans/cad-guard-kg-3d-production.md` | Lỗi có lối ra, Sửa hàng loạt, đồ thị tri thức bản vẽ, 3D phục vụ sản xuất (P0 đã làm 11/11) |
 | `plans/cad-guard-sheets-presentation.md` | **Đã duyệt và triển khai 10/11/2026 (mục 3b):** mở rào chặn cho dùng nội bộ, sửa luật không tài khoản, chỉ mục tờ, chuyển chữ Unicode, template trình bày, dịch bản vẽ, đánh giá MCP AutoCAD; Đợt A–F |

@@ -648,3 +648,19 @@ body.acad-panel .tabs{overflow-x:auto}
 /* 3D cg.scene/2 */
 .tbl3d{border-collapse:collapse;margin:6px 0;font-size:12px}.tbl3d td,.tbl3d th{border:1px solid var(--line,#ccc);padding:2px 6px;text-align:left}
 .gap3d{border-left:3px solid #d64;padding:4px 8px;margin:4px 0}.gap3d label{display:inline-block;margin:2px 8px 2px 0}
+
+.notices{position:fixed;right:16px;bottom:16px;z-index:70;display:flex;flex-direction:column;gap:10px;max-width:min(460px,calc(100vw - 32px));max-height:70vh;overflow:auto}
+.notice{background:var(--bg);color:var(--text);border:1px solid var(--border-strong);border-left:5px solid #c2410c;border-radius:10px;padding:12px 14px;box-shadow:var(--shadow);font-size:13px;line-height:1.45}
+.notice.busy{border-left-color:var(--accent,#2563eb)}
+.notice.ok{border-left-color:#15803d}
+.notice h4{margin:0 0 4px;font-size:14px}
+.notice .n-msg{color:var(--text2);margin:4px 0;word-break:break-word}
+.notice ol{margin:6px 0 6px 18px;padding:0}
+.notice .n-act{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.notice .n-x{float:right;border:0;background:none;font-size:18px;line-height:1;cursor:pointer;color:var(--text2)}
+.gap3d .g-title{font-weight:600}
+.gap3d .g-why{color:var(--text2);margin:2px 0}
+.gap3d .g-fix{margin:2px 0}
+.ready3d{padding:6px 10px;border-radius:8px;background:var(--bg2,#f4f4f5);margin:6px 0}
+.bulk-list{margin:6px 0 10px 18px}
+.bulk-list li{margin:2px 0}
