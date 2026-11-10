@@ -848,6 +848,33 @@ def cmd_sheets(args: argparse.Namespace) -> int:
     from .dwg import ensure_dxf
 
     path = ensure_dxf(Path(args.path))
+    if getattr(args, "pdf", None):
+        from .sheet_pdf import PdfError, plot_sheets
+        from .template import TemplateError, find_template, load_template
+
+        model = read_with(path, "ezdxf")
+        try:
+            picks = parse_sheet_list(args.pick, len(build_structure(model).sheets))
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        tp = find_template(Path(args.path).resolve().parent)
+        try:
+            tpl = load_template(tp) if tp else None
+        except TemplateError:
+            tpl = None
+        try:
+            res = plot_sheets(path, Path(args.pdf), tpl=tpl, picks=picks, ctb=args.ctb)
+        except PdfError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        for n in res["notes"]:
+            print("Ghi chú: " + n)
+        print(f"Đã in {len(res['printed'])}/{res['count']} tờ ra {args.pdf} trong {res['seconds']} giây"
+              + ("" if tpl else " (chưa có template: tên tệp To-NN.pdf)") + ".")
+        for m in res["missing"]:
+            print(f"  Chưa in được: {m['name']} ({m['file']})", file=sys.stderr)
+        return 0 if not res["missing"] else 1
     if getattr(args, "render", None):
         from .sheet_render import render_sheets
 
@@ -1246,6 +1273,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="dựng hình từng tờ (SVG + index.html; chữ mã cũ hiện đúng) vào thư mục này")
     sh.add_argument("--pick", default=None, help="chỉ dựng các tờ này, vd. 1,3-5")
     sh.add_argument("--format", choices=["svg", "png", "pdf"], default="svg", help="png/pdf cần matplotlib")
+    sh.add_argument("--pdf", default=None, metavar="THƯ_MỤC",
+                    help="in PDF từng tờ qua AutoCAD (accoreconsole), tên tệp theo số bản vẽ của template")
+    sh.add_argument("--ctb", default="monochrome.ctb", help="--pdf: bảng nét in (mặc định monochrome.ctb)")
     sh.set_defaults(fn=cmd_sheets)
 
     ac = sub.add_parser("autocad", help="đường dẫn và cách nạp cadguard.lsp (CGXUAT, CGTOI, CGDEN, CGBAOCAO, CGHELP) cho AutoCAD")
