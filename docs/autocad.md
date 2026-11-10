@@ -166,7 +166,7 @@ vào mục 5 (ngày, bản AutoCAD, mục đạt/không đạt, ghi chú).
 
 Chuẩn bị (một lần):
 
-- A. `cadguard app` → tab **Cài đặt** → *Gắn CAD Guard vào AutoCAD* → Cài. Kiểm: `%APPDATA%\Autodesk\AutoCAD 2027\…  Supportcaddoc.lsp` có khối đánh dấu CAD Guard; thư mục cài có `cadguard.lsp`, `cadguard-run.cmd`,
+- A. `cadguard app` → tab **Cài đặt** → *Gắn CAD Guard vào AutoCAD* → Cài. Kiểm: `%APPDATA%\Autodesk\AutoCAD 2027\<hồ sơ>\Support\acaddoc.lsp` có khối đánh dấu CAD Guard; thư mục cài có `cadguard.lsp`, `cadguard-run.cmd`,
   `cadguard-acad.json` trỏ đúng Python và mã của `main` (không phải nhánh/worktree cũ).
 - B. Đóng hết phiên CAD Guard cũ (hoặc khởi động lại máy), mở lại AutoCAD; lần đầu chọn *Always load* ở hộp thoại bảo mật.
 - C. Bản vẽ thử: `cadguard fixtures <thư mục>` → mở `sheets/model_sheets.dxf` → SAVEAS DWG 2018 vào thư mục thử
