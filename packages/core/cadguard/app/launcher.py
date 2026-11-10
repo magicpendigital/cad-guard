@@ -28,7 +28,13 @@ def instance_path() -> Path:
 def write_instance(url: str, token: str, port: int) -> None:
     p = instance_path()
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps({"url": url, "token": token, "port": port, "pid": os.getpid()}), encoding="utf-8")
+    p.write_text(json.dumps({"url": url, "token": token, "port": port, "pid": os.getpid(), "pkg": _pkg()}),
+                 encoding="utf-8")
+
+
+def _pkg() -> str:
+    """Thư mục mã đang chạy: phiên của bản cũ/thư mục khác thì không dùng lại (tránh giao diện cũ)."""
+    return str(Path(__file__).resolve().parents[2])
 
 
 def clear_instance() -> None:
@@ -56,6 +62,8 @@ def _call(inst: dict, path: str, body: dict | None = None, timeout: float = 3.0)
 def running() -> dict | None:
     try:
         inst = json.loads(instance_path().read_text(encoding="utf-8"))
+        if inst.get("pkg") != _pkg():
+            return None
         _call(inst, "/api/session")
         return inst
     except Exception:  # noqa: BLE001 - không có, đã tắt, hay hỏng: coi như chưa chạy
@@ -72,7 +80,7 @@ def _spawn(workspace: Path | None) -> None:
     if os.name == "nt":
         flags = 0x00000008 | 0x00000200 | 0x08000000  # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
     env = dict(os.environ)
-    pkg = str(Path(__file__).resolve().parents[2])
+    pkg = _pkg()
     env["PYTHONPATH"] = pkg + os.pathsep + env.get("PYTHONPATH", "")
     env.setdefault("PYTHONUTF8", "1")
     subprocess.Popen(cmd, creationflags=flags, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
