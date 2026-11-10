@@ -62,6 +62,11 @@ Phạm vi kết nối AutoCAD đã duyệt:
 | E | `cadguard translate` en/zh, tự nhận ngôn ngữ, bảng thuật ngữ + bộ nhớ dịch, CSV duyệt, công cụ trợ lý `propose_translation` | Chế độ `layer`; chạy với LLM thật trên tệp thử |
 | F | `autocad/executor.py` (COM, một nhóm undo, sao lưu, kiểm chưa đổi), CGKIEM/CGUNICODE/CGDICH/CGTRINHBAY | Kiểm tay trên AutoCAD 2027; in PDF hàng loạt |
 
+## 3c. Hai luồng song song (10/11/2026, `plans/cad-guard-two-tracks.md`)
+
+- **Luồng 1:** hoàn thiện Đợt A–F (kiểm tay AutoCAD, thay khung/tỉ lệ/căn khung, dịch chế độ layer, in PDF theo tờ, TP-11, gộp Studio).
+- **Luồng 2:** đánh giá và làm thử dựng 3D từ bản vẽ 2D (3D-0…3D-4), cuối cùng là đánh giá công thái học có số đo + nguồn + AI nhận xét có kiểm chứng. Bộ dựng hiện tại dựng 0 tường/0 mô-đun trên tệp thật; "AI công thái học" của bản nháp Draff không được tiếp nhận vì dùng số bịa.
+
 ## 4. Quyết định còn mở
 
 1. Bản AutoCAD trên máy thử: đã kiểm AutoCAD 2027 bản đầy đủ dùng thử (09/11/2026, `docs/autocad.md` mục 5). Còn mở: AutoCAD LT nếu công ty định mua LT.
