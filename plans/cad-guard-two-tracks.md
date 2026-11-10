@@ -108,6 +108,11 @@ Năng lực agent cần:
 | TP-11, gộp Studio vào App | Như kế hoạch gốc |
 | Chạy dịch với LLM thật trên tệp thử, đo chất lượng | Tỉ lệ chuỗi có bản dịch, số lỗi giữ chỗ/thuật ngữ, thời gian, chi phí |
 
+Trạng thái 10/11/2026 (nhánh Luồng 1, chưa gộp `main`): đã làm `replace_title_block`/`set_sheet_scale`/`fit_sheet`
+(nghiệm thu trên fixture đạt), dịch `layer`, in PDF theo tờ (tệp thử 40/40 tờ), TP-11, đo dịch LLM thật (số ở
+`docs/sheets-presentation.md` mục E). Còn: kiểm tay trên AutoCAD có giao diện (`docs/autocad.md` mục 8.1), gộp Studio
+vào App.
+
 ## 5. Phối hợp hai luồng
 
 - Mỗi luồng một worktree, nhánh riêng tách từ `main`; không push. Gộp vào `main` khi người dùng duyệt.

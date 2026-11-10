@@ -91,7 +91,12 @@ class ClaudeCliBackend:
         with tempfile.TemporaryDirectory(prefix="cadguard-llm-") as empty:  # thư mục rỗng: CLI không có gì khác để đọc
             p = subprocess.run(cmd, input=convo, capture_output=True, text=True, encoding="utf-8", cwd=empty, timeout=300)
         if p.returncode != 0:
-            raise LlmError(f"CLI claude lỗi (mã {p.returncode}): {p.stderr.strip()[:300]}")
+            why = p.stderr.strip()
+            try:  # --output-format json: lý do lỗi (vd. hết hạn mức) nằm ở "result" của stdout
+                why = why or str(json.loads(p.stdout).get("result", ""))
+            except (json.JSONDecodeError, AttributeError):
+                why = why or p.stdout.strip()
+            raise LlmError(f"CLI claude lỗi (mã {p.returncode}): {why[:300]}")
         try:
             return str(json.loads(p.stdout).get("result", ""))
         except json.JSONDecodeError:

@@ -93,6 +93,27 @@ Tệp phiên thử: **40 tờ** (25 tờ 1:15, 10 tờ 1:20, 1 tờ 1:10, 4 tờ
 - Ra tệp mới `<tên>.en.dxf` / `<tên>.zh.dxf`. App: nút **Dịch** trên thanh Tờ. Trợ lý (MCP/App, cờ `--allow-propose`):
   công cụ `propose_translation` hai bước (trợ lý là người dịch, code kiểm).
 
+### E.1 Đo dịch với LLM thật trên tệp phiên thử (10/11/2026)
+
+Bản sao tệp phiên thử (thư mục tạm, không ghi vào thư mục gốc), `--to en`, chế độ `copy`, engine `claude-cli`
+(gói thuê bao, không có số tiền theo lượt), bảng thuật ngữ có sẵn, không dùng bộ nhớ dịch. Chỉ ghi số tổng hợp.
+
+| Chỉ số | Giá trị |
+| --- | --- |
+| Chuỗi chữ thu được (TEXT, MTEXT, thuộc tính, MULTILEADER, chữ ghi đè kích thước) | 590 |
+| Cần dịch (sau khi bỏ chuỗi chỉ có số/mã) / chuỗi khác nhau sau khi giữ chỗ | 521 / 198 |
+| Có bản dịch | **390 / 521 (75 %)**: 347 từ LLM, 43 từ bảng thuật ngữ |
+| Chưa dịch | 131, **đều do 2/4 lượt CLI lỗi** (1 lượt quá trần 300 giây, 1 lượt lỗi sau 8,6 giây); lượt chạy được thì mọi chuỗi đều có bản dịch |
+| Lỗi giữ chỗ (mất/đổi số, đơn vị, mã) | **0** |
+| Lệch thuật ngữ so với bảng | 13 chuỗi |
+| Cảnh báo "chữ dịch dài hơn 1,3 lần, có thể tràn khung" | 199 chuỗi (tiếng Anh dài hơn tiếng Việt viết tắt; cần người duyệt) |
+| Thời gian | 517 giây cả lần; lượt CLI 89 / 101 / 314 / 9 giây (lô 60 chuỗi) |
+
+Sửa sau lần đo: trước đây một lượt LLM lỗi làm hỏng cả lần dịch (lỗi ném ra ngoài `build`); nay lô lỗi được chia đôi
+thử lại tối đa 2 lần, số lượt lỗi báo ở `llm_errors`; thông báo lỗi CLI hiện lý do từ đầu ra JSON. Lần đo lại không chạy
+được: CLI báo hết hạn mức tài khoản ("Credit balance is too low", 28/28 lượt). Việc cần làm khi có hạn mức: đo lại
+(mong đợi gần 100 % có bản dịch), giảm lô xuống ~30 chuỗi để lượt không chạm trần 300 giây, và đo `--to zh`.
+
 ## F. Thực thi trong AutoCAD (bản đầy đủ)
 
 - Cài: `cadguard autocad --copy-to <thư mục tin cậy>` (chép `cadguard.lsp` + ghi `cadguard-run.cmd`), APPLOAD.
