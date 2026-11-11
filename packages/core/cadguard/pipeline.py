@@ -26,6 +26,7 @@ STEPS = [
     ("numbers", "Đọc số còn thiếu (sâu, cao, trần)", "code"),
     ("ai", "AI đọc phần code chưa giải được", "ai"),
     ("structure", "Kiểm kết cấu (hồi, nóc, đáy, hậu, vách, đợt, cánh)", "check"),
+    ("consistency", "Kiểm nhất quán (giữa các hình, mô hình tủ)", "check"),
     ("review", "Người duyệt", "human"),
 ]
 KEEP = 20
@@ -156,6 +157,14 @@ def run_item(model, root: Path, item: str, *, backend=None, force: bool = False,
         auto = [x for x in issues if x["level"] == "auto"]
         return ("warn" if warn else "ok"), f"{len(auto)} vách tự thêm, {len(warn)} điểm cần xem", {"auto": len(auto), "warn": len(warn)}
 
+    def s_consistency():
+        from .scene.consistency import check as consistency_check
+
+        r = consistency_check(ctx["sc"])
+        n = r["counts"]
+        st = "warn" if n["conflict"] or n["warn"] else "ok"
+        return st, f"điểm {r['score']:.2f}: {n['conflict']} mâu thuẫn, {n['warn']} cần xem", {"score": r["score"], **n}
+
     def s_review():
         need = [s["id"] for s in run["steps"] if s["status"] in ("needs_review", "warn", "error")]
         return ("needs_review" if need else "ok"), ("cần duyệt: " + ", ".join(need)) if need else "không còn việc chờ người", {"steps": need}
@@ -164,7 +173,7 @@ def run_item(model, root: Path, item: str, *, backend=None, force: bool = False,
         run["state"] = "error"
     else:
         for sid, fn in (("views", s_views), ("build", s_build), ("split", s_split), ("numbers", s_numbers), ("ai", s_ai),
-                        ("structure", s_structure), ("review", s_review)):
+                        ("structure", s_structure), ("consistency", s_consistency), ("review", s_review)):
             step(sid, fn)
         run["state"] = run["steps"][-1]["status"]
     run["finished"] = time.strftime("%Y-%m-%d %H:%M:%S")

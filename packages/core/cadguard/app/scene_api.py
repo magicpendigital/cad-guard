@@ -218,6 +218,7 @@ def production(sc, root: Path, file_hash: str) -> dict:
     return {"panels": {k: panel_boxes(ps, k)[:MAX_BOXES] for k in ("panel", "explode", "xray")},
             "structure": structure_check(cab, c, lambda m: hinge_sides(m.fronts, m.x, m.x + m.w)),
             "cabinet": summary(cab),
+            "consistency": __import__("cadguard.scene.consistency", fromlist=["check"]).check(cab),
             "cutlist": cutlist(ps, c, mats),
             "construction": {"confirmed": prof["confirmed"],
                              "summary": f"ván {c['board_thickness']} mm, hậu {'bắt vít' if c['back_type'] == 'screw' else 'rãnh'} "

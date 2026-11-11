@@ -1697,7 +1697,17 @@
         " (hồi, nóc, đáy, hậu, vách ngăn, đợt, cánh — theo Kết cấu xưởng)"),
       st.map(x => el("div", {class: "gap3d"}, el("span", {class: "src-b " + LV[x.level][0], text: LV[x.level][1]}), " ", b(x.title),
         el("div", {class: "g-why", text: "Vì sao: " + x.why}), el("div", {class: "g-fix", text: x.fix})))) : null;
-    fill(sheet, el("div", {class: "v3d"}, srcBar, splitBar, banner, structBox, stage, bottom));
+    // kiểm nhất quán (mô hình tủ + đối chiếu hình): chỉ báo, không tự đổi cách dựng
+    const cs = r.consistency;
+    const CV = {conflict: ["src-default", "Mâu thuẫn"], warn: ["src-default", "Cần xem"], info: ["src-user", "Ghi nhận"]};
+    const consBox = cs && cs.issues.length ? el("details", {class: "struct3d", open: cs.counts.conflict > 0},
+      el("summary", {}, b(`Kiểm nhất quán · điểm ${Math.round(cs.score * 100)}/100 · ${cs.counts.conflict} mâu thuẫn · ${cs.counts.warn} cần xem · ${cs.counts.info} ghi nhận`),
+        " (giữa hình có cánh, hình bỏ cánh, mặt bằng; tấm, vách, cánh trong từng khoang)"),
+      cs.issues.map(x => el("div", {class: "gap3d"}, el("span", {class: "src-b " + CV[x.level][0], text: CV[x.level][1]}), " ", b(`${x.code} · ${x.title}`),
+        el("div", {class: "g-why", text: "Vì sao: " + x.why}), x.fix ? el("div", {class: "g-fix", text: x.fix}) : null,
+        (x.refs || []).length ? el("button", {class: "link sm", type: "button", title: "Chọn các nét làm bằng chứng trong AutoCAD",
+          onclick: () => showInAutocad({handles: x.refs, items: []})}, "Tới trong AutoCAD") : null))) : null;
+    fill(sheet, el("div", {class: "v3d"}, srcBar, splitBar, banner, structBox, consBox, stage, bottom));
     if (S.v3d) { S.v3d.stop(); S.v3d = null; }
     if (mode !== "2d") {
       S.v3d = makeViewer(cv);

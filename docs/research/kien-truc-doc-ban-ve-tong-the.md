@@ -1,6 +1,6 @@
 # Thiết kế: đọc bản vẽ nội thất theo kiến trúc tổng thể (11/11/2026)
 
-Trạng thái: **đã duyệt 11/11/2026**. P1, P2 xong (§9); P3–P7 chưa làm.
+Trạng thái: **đã duyệt 11/11/2026**. P1, P2, P3 xong (§9); P4–P7 chưa làm.
 
 ## 1. Vấn đề
 
@@ -213,3 +213,35 @@ Cổng kiểm trên 102 hạng mục:
 
 Ví dụ tủ áo của ca thật: khoang gốc chia ngang bởi nóc hộc và đợt trên; khoang dưới chia đứng bởi vách giữa hai hộc;
 khoang giữa chứa thanh treo và đèn; cặp cánh trên gắn vào khoang trên. Test: `tests/test_cabinet.py`.
+
+**P3 — bộ chấm nhất quán, chế độ chỉ báo (11/11/2026).** `scene/consistency.py` chấm mô hình tủ đã dựng và liệt kê
+mâu thuẫn kèm bằng chứng (handle). Bộ chấm **không đổi** cách dựng. Các mã:
+
+- **Kết cấu:**
+  - K01 hai mặt trước chồng nhau;
+  - K02 mặt trước lòi ra ngoài khối;
+  - K03 tấm ngang cắt qua vách;
+  - K04 tấm ngang xuyên qua ô thiết bị / hộc trong;
+  - K05 nội thất nằm ngoài khối;
+  - K06 khoang treo dưới thanh treo thấp hơn 800.
+- **Đối chiếu hình:**
+  - H01 đường ráp giữa hai hàng cánh cao (≥ 400) không có tấm ngang phía sau;
+  - H02 số đo khối là số mặc định.
+- **Ghi nhận:** I01 khoang để hở, I02 nội thất đọc ở hình bỏ cánh.
+
+Điểm khối = 1 − 0,3 × số mâu thuẫn − 0,1 × số cần xem; điểm hạng mục là trung bình các khối.
+
+Nơi hiện kết quả:
+- màn 3D có mục "Kiểm nhất quán", mỗi dòng có nút "Tới trong AutoCAD";
+- bộ chạy luồng có bước "Kiểm nhất quán";
+- API trả ở khoá `consistency`.
+
+Kết quả trên 102 hạng mục:
+- không mâu thuẫn nào; cảnh báo duy nhất còn lại là H02 (sâu mặc định ở hạng mục thật thiếu số sâu, và ở mẫu mô
+  phỏng "sâu chỉ ở mặt cắt" khi chưa áp gợi ý), đúng thực tế;
+- tủ áo của ca thật: 100/100;
+- cảnh, tấm ván, danh sách cắt, kiểm kết cấu giống hệt trước P3.
+
+Lần chạy đầu có H01 báo nhầm ở ngăn kéo hẹp bị xếp loại "cánh". Đã giới hạn H01 cho cánh cao ≥ 400; việc xếp loại cánh
+và ngăn kéo theo tỉ lệ sẽ xem lại ở P4. Các mã còn lại đã thử bằng ca hỏng dựng tay (`tests/test_consistency.py`); chưa
+có ca thật nào bộc lộ các mã này.
