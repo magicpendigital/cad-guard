@@ -109,6 +109,12 @@ def test_app_interior_key(tmp_path):
     m = read_dxf(p)
     v = scene_api.view(m, tmp_path, spec["id"])
     assert v["provenance"]["used"]["interior"] and any(x["inner_vi"] for x in v["modules"])
+    # Hình khối: khối có nội thất là thùng rỗng + nội thất (mở cánh thấy bên trong), không còn khối đặc
+    inner_ids = {x["id"] for x in v["modules"] if x["inner_vi"]}
+    assert not any(b["k"] == "module" and b["n"] in inner_ids for b in v["boxes"])
+    parts = {b["n"].split(":", 1)[1].rstrip("0123456789.v") for b in v["boxes"] if b["k"] == "module-part"}
+    assert {"rod", "side_l", "shelf"} <= parts and "door" not in parts
+    assert any(b["k"].startswith("front") for b in v["boxes"])
     other = v["provenance"]["used"]["interior"][0]
     r = scene_api.set_value(m, tmp_path, spec["id"], f"interior:{spec['id']}", other)
     assert r["provenance"]["interior_pick"] == other

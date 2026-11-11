@@ -1579,6 +1579,7 @@
     const srcBar = el("div", {class: "v3d-src"},
       el("div", {}, b("Đang xem: "), pv.item_name || r.item, ` · ${pv.sheets.length} tờ của hạng mục`),
       el("div", {}, b("Dựng từ: "), pv.used.elevations.map(vlabel).join("; ") || "—", " + ", pv.used.plans.map(vlabel).join("; ") || "—",
+        (pv.used.interior || []).length ? [" · ", b("Nội thất từ: "), pv.used.interior.map(vlabel).join("; ")] : null,
         ...[...pv.used.elevations, ...pv.used.plans].filter(id => pv.views[id] && (pv.views[id].handles || []).length).map(id =>
           [" ", el("button", {class: "link sm", type: "button", title: "Mở AutoCAD và phóng tới " + vlabel(id),
             onclick: () => showInAutocad({handles: pv.views[id].handles, items: []})}, (pv.views[id].kind === "plan" ? "Mặt bằng" : "Mặt đứng") + " trong AutoCAD")])),

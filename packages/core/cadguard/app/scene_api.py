@@ -157,7 +157,33 @@ def _block_boxes(bx, sc, root: Path) -> list[dict]:
 
     out = [{"b": [list(p) for p in b.base], "z0": b.z0, "z1": b.z1, "c": list(color_for(b.material)), "k": b.kind, "n": b.name}
            for b in bx[:MAX_BOXES]]
-    return block_fronts(out, sc, float(effective(root)["values"]["door_gap"]))[:MAX_BOXES]
+    c = effective(root)["values"]
+    return block_fronts(_hollow(out, sc, c), sc, float(c["door_gap"]))[:MAX_BOXES]
+
+
+SHELL_SKIP = ("panel-door", "panel-drawer", "panel-handle", "panel-tray")
+
+
+def _hollow(out: list[dict], sc, c: dict) -> list[dict]:
+    """Khối đã đọc được nội thất (hình bỏ cánh): thay khối đặc bằng thùng rỗng + nội thất (đợt, hộc, thanh treo, đá, kính,
+    thiết bị) để mở cánh ở chế độ Hình khối cũng thấy bên trong. Cánh/ngăn kéo vẫn lấy từ hộp mặt trước của Hình khối."""
+    want = {m.id for m in sc.modules if getattr(m, "inner", None)}
+    if not want:
+        return out
+    from ..scene.panels import boxes as panel_boxes
+    from ..scene.panels import panels_for
+
+    shell: dict[str, list[dict]] = {}
+    for b in panel_boxes([p for p in panels_for(sc, c) if p.module in want], "panel"):
+        if b["k"] not in SHELL_SKIP:
+            shell.setdefault(b["n"].split(":", 1)[0], []).append(b)
+    res = []
+    for b in out:
+        if b.get("k") == "module" and b.get("n") in shell:
+            res += [{**x, "k": "module-part"} for x in shell[b["n"]]]
+        else:
+            res.append(b)
+    return res
 
 
 def _auto_splits(d, sc, supp, pending) -> list[dict]:
