@@ -53,6 +53,10 @@ class Panel:
 
 
 def panels_for(scene, c: dict) -> list[Panel]:
+    """Tấm ván của hạng mục, đọc từ mô hình tủ chuẩn `cg.cabinet/1` (nhận cả `Scene2`: tự chuyển)."""
+    from .cabinet import as_cabinet
+
+    scene = as_cabinet(scene)
     t = float(c["board_thickness"])
     bt = float(c["back_thickness"])
     td = float(c["door_thickness"])

@@ -1,6 +1,6 @@
 # Thiết kế: đọc bản vẽ nội thất theo kiến trúc tổng thể (11/11/2026)
 
-Trạng thái: **đã duyệt 11/11/2026**. P1 xong (§9); P2–P7 chưa làm.
+Trạng thái: **đã duyệt 11/11/2026**. P1, P2 xong (§9); P3–P7 chưa làm.
 
 ## 1. Vấn đề
 
@@ -196,3 +196,20 @@ P1–P2 là tái cấu trúc, rủi ro thấp nhờ cổng "kết quả y hệt"
 
 Cổng kiểm: chụp toàn bộ cảnh, tấm ván và danh sách cắt của 102 hạng mục (bộ 40 tờ thật, 3 tệp thử của phiên Demo, 72
 hạng mục mô phỏng) trước và sau khi tách. Hai bản **giống hệt** (cùng mã băm). Test: `tests/test_primitives.py`.
+
+**P2 — mô hình tủ chuẩn `cg.cabinet/1` (11/11/2026).** `scene/cabinet.py`:
+- `Cabinet` → `Unit` (khối) → cây `Node` (khoang). Phép chia "h" theo tấm ngang chạy suốt khoang, "v" theo vách chạy
+  suốt chiều cao. Tấm không chạy suốt ghi ở `loose`.
+- Cánh, ngăn kéo và đồ bên trong gắn vào khoang nhỏ nhất che ≥ 85 % diện tích của nó.
+- `from_scene` / `to_scene` chuyển hai chiều không mất gì (thứ tự giữ bằng `_o`).
+- `summary` cho ra cây khoang gọn, trả kèm màn 3D ở khoá `cabinet`.
+
+Tấm ván, danh sách cắt và kiểm kết cấu (`panels_for`, `structure.check`) nay đọc mô hình này; truyền `Scene2` thì tự
+chuyển. `Scene2` vẫn là dạng lưu và trả cho app.
+
+Cổng kiểm trên 102 hạng mục:
+- cảnh, tấm ván, danh sách cắt và kiểm kết cấu **giống hệt** trước P2 (cùng mã băm);
+- `to_scene(from_scene(cảnh))` bằng đúng cảnh gốc ở cả 102 hạng mục.
+
+Ví dụ tủ áo của ca thật: khoang gốc chia ngang bởi nóc hộc và đợt trên; khoang dưới chia đứng bởi vách giữa hai hộc;
+khoang giữa chứa thanh treo và đèn; cặp cánh trên gắn vào khoang trên. Test: `tests/test_cabinet.py`.

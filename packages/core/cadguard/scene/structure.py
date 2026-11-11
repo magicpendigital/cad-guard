@@ -88,7 +88,11 @@ def plan_module(m, hinges: dict[str, str], c: dict) -> list[dict]:
 
 
 def check(scene, c: dict, hinges_of) -> list[dict]:
-    """Lưu ý kết cấu từng khối: [{module, code, level, title, why, fix}]. `hinges_of(m)` -> {front id: 'l'|'r'}."""
+    """Lưu ý kết cấu từng khối: [{module, code, level, title, why, fix}]. `hinges_of(m)` -> {front id: 'l'|'r'}.
+    Đọc từ mô hình tủ chuẩn `cg.cabinet/1` (nhận cả `Scene2`)."""
+    from .cabinet import as_cabinet
+
+    scene = as_cabinet(scene)
     out = []
     dmax = float(c.get("door_max_width", 600))
     span = float(c.get("shelf_max_span", 700))

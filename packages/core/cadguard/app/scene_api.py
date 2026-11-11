@@ -207,13 +207,17 @@ def production(sc, root: Path, file_hash: str) -> dict:
 
     prof = effective(root)
     c = prof["values"]
-    ps = panels_for(sc, c)
+    from ..scene.cabinet import from_scene, summary
+
+    cab = from_scene(sc)  # tấm ván, danh sách cắt, kiểm kết cấu đọc mô hình tủ chuẩn (L3)
+    ps = panels_for(cab, c)
     mats = [m for m in load_overrides(root, file_hash).get("materials", []) if m.get("item") == sc.item]
     from ..scene.panels import hinge_sides
     from ..scene.structure import check as structure_check
 
     return {"panels": {k: panel_boxes(ps, k)[:MAX_BOXES] for k in ("panel", "explode", "xray")},
-            "structure": structure_check(sc, c, lambda m: hinge_sides(m.fronts, m.x, m.x + m.w)),
+            "structure": structure_check(cab, c, lambda m: hinge_sides(m.fronts, m.x, m.x + m.w)),
+            "cabinet": summary(cab),
             "cutlist": cutlist(ps, c, mats),
             "construction": {"confirmed": prof["confirmed"],
                              "summary": f"ván {c['board_thickness']} mm, hậu {'bắt vít' if c['back_type'] == 'screw' else 'rãnh'} "
