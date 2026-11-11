@@ -1,6 +1,6 @@
 # Thiết kế: đọc bản vẽ nội thất theo kiến trúc tổng thể (11/11/2026)
 
-Trạng thái: **bản đề xuất, chờ duyệt**. Chưa có thay đổi code theo tài liệu này.
+Trạng thái: **đã duyệt 11/11/2026**. P1 xong (§9); P2–P7 chưa làm.
 
 ## 1. Vấn đề
 
@@ -183,3 +183,16 @@ P1–P2 là tái cấu trúc, rủi ro thấp nhờ cổng "kết quả y hệt"
 1. Duyệt hướng 5 lớp và thứ tự P1 → P7, hoặc chỉnh thứ tự.
 2. Người kỹ thuật nào ghi 10–20 đáp án thật, và từ những người vẽ nào.
 3. Công ty / kiểu vẽ nào ưu tiên trước, để hồ sơ trình bày đầu tiên làm theo kiểu đó.
+
+## 9. Đã làm
+
+**P1 — lớp nguyên tố (11/11/2026).** `scene/primitives.py`:
+- kiểu dữ liệu `Board`, `Frame`, `Symbol`, `Note`, `Primitives`, mỗi cái kèm `refs` và `conf`;
+- hàm dùng chung: chồng nét thành tấm ngang và kiểm tựa, tấm đứng (vách), ô, ô dấu X, ký hiệu mở cánh / khấu / vòng
+  chú thích, nghĩa chữ (cả khi một chữ có nhiều nghĩa);
+- `extract(d, view)` trích mọi nguyên tố của một hình.
+
+`interior`, `segment` và `assemble` dùng lớp này thay cho bản sao riêng; tên cũ vẫn giữ để nơi gọi không phải sửa.
+
+Cổng kiểm: chụp toàn bộ cảnh, tấm ván và danh sách cắt của 102 hạng mục (bộ 40 tờ thật, 3 tệp thử của phiên Demo, 72
+hạng mục mô phỏng) trước và sau khi tách. Hai bản **giống hệt** (cùng mã băm). Test: `tests/test_primitives.py`.

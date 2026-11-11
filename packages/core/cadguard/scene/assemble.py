@@ -250,6 +250,7 @@ def _read_interiors(d: Drawing2D, sc, group: str, e: View, oxe: float, floor: fl
                     e_no_doors: bool = False) -> None:
     """Nội thất từng khối: đọc ở hình bỏ cánh (nếu có, cùng mặt bằng) hoặc chính hình có cánh; đường khấu, vòng chú thích."""
     from . import interior as itr
+    from . import primitives as prim
 
     if shelf_src is not None:
         se = shelf_src[0]
@@ -260,7 +261,7 @@ def _read_interiors(d: Drawing2D, sc, group: str, e: View, oxe: float, floor: fl
     # đọc đủ nội thất (vách, thanh treo, hộc trong, đèn) chỉ ở hình bỏ cánh THẬT: hình riêng, hoặc hình chính có tiêu đề
     # "bỏ cánh" mà gần như không có ký hiệu mở cánh (< 10 % diện tích hình)
     eb = e.box or (0, 0, 0, 0)
-    interior_mode = (v is not e) or (e_no_doors and itr.door_symbol_area(d, e) < 0.1 * max((eb[2] - eb[0]) * (eb[3] - eb[1]), 1.0))
+    interior_mode = (v is not e) or (e_no_doors and prim.door_symbol_area(d, e) < 0.1 * max((eb[2] - eb[0]) * (eb[3] - eb[1]), 1.0))
     details = None
     sheet_hs = [h for s in d.structure.sheets if s.id == e.sheet_id for h in s.handles if h in d.entities]
     for m in sc.modules:
@@ -270,7 +271,7 @@ def _read_interiors(d: Drawing2D, sc, group: str, e: View, oxe: float, floor: fl
         notes = []  # chữ trong khung hình (phân vùng có thể không gán chữ vào hình)
         for vv, oo, ff, src in ((v, oxv, fl, "v"),) + (((e, oxe, floor, "e"),) if v is not e else ()):
             b = vv.box
-            notes += [(x + oo, z - ff, t, h, src) for x, z, t, h in itr._text_items(d, sheet_hs)
+            notes += [(x + oo, z - ff, t, h, src) for x, z, t, h in prim.text_items(d, sheet_hs)
                       if b and b[0] - 5 <= x <= b[2] + 5 and b[1] - 5 <= z <= b[3] + 5]
         res = itr.read_interior(d, v, oxv, fl, body, mod, m.fronts, notes, interior=interior_mode)
         inner = []
@@ -440,6 +441,7 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
     for e, p, ox, refs, method in links.values():
         sc.links.append(Link(elevation=e.id, plan=p.id, method=method, offset_x=round(ox, 3), refs=refs))
     from . import interior as itr
+    from . import primitives as prim
 
     main = [lk for lk in links.values() if "no_doors" not in lk[0].flags] or list(links.values())
     doors_view: str | None = None  # hình có cánh nhận theo nội dung (tiêu đề chép trùng "bỏ cánh")
@@ -507,8 +509,7 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
 
     comps: list[Component] = components(d, e, furn, min_size=200.0)
     # nét khuất trừ đường khấu/bo cong và vòng chú thích (ký hiệu đặc biệt, không phải nét tủ hay ký hiệu cánh)
-    hidden = [it for it in seg.items_in(d, e.handles, HIDDEN)
-              if not itr.is_curve_mark(list(d.entities[it[1]].pts or [])) and not itr.is_callout(d.entities[it[1]], it[2])]
+    hidden = [it for it in seg.items_in(d, e.handles, HIDDEN) if not prim.is_annotation(d, it[1])]
     fill_x = tuple(_filler_notes(d, e))  # vị trí ghi chú "tấm fix" (hồ sơ trình bày): giữ tấm bù hẹp thành khối riêng
     blocks: list[tuple] = []  # (khung khối trên mặt đứng, handles, mặt trước [(box, handle)], dạng)
     for c in comps:

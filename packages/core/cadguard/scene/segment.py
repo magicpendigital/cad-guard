@@ -11,7 +11,8 @@ Tất định, chỉ đọc nét. Dùng cho `assemble.build_item_scene`.
 """
 from __future__ import annotations
 
-from .views2d import Drawing2D, entity_box, rect_of
+from .primitives import box_of, items_in  # noqa: F401 — lớp nguyên tố L1 (tên cũ giữ cho nơi gọi)
+from .views2d import Drawing2D, rect_of
 
 PIECE_MIN = 150.0  # mảnh nhỏ hơn: tấm hông/nóc/chân, nhập vào mảnh bên cạnh
 BAY_MIN = 300.0  # bỏ nóc chung để tách: mỗi bên ít nhất bấy nhiêu
@@ -21,24 +22,7 @@ EDGE_TOL = 40.0
 EPS = 0.5
 
 Box = tuple[float, float, float, float]
-Item = tuple[Box, str, str]  # (khung, handle — rỗng nếu là phần nóc chung chia cho khối thứ hai trở đi, vai trò)
-
-
-def items_in(d: Drawing2D, handles, roles: frozenset[str]) -> list[Item]:
-    out = []
-    for h in handles:
-        e = d.entities[h]
-        r = d.roles.get(e.layer)
-        if r not in roles or e.type in ("TEXT", "MTEXT", "DIMENSION", "INSERT", "HATCH"):
-            continue
-        b = entity_box(e, {})
-        if b is not None:
-            out.append((b, h, r))
-    return out
-
-
-def box_of(items: list[Item]) -> Box:
-    return (min(i[0][0] for i in items), min(i[0][1] for i in items), max(i[0][2] for i in items), max(i[0][3] for i in items))
+from .primitives import Item  # noqa: E402,F401
 
 
 def _cuts(items: list[Item], axis: int, keep: tuple = ()) -> list[list[Item]]:

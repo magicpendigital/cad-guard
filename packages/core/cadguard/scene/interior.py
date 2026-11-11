@@ -15,91 +15,18 @@ nét khuất nên bị coi như nét tủ.
 """
 from __future__ import annotations
 
+from .primitives import (BODY, DRAW_TYPES, EDGE_ZONE, SYMBOL_MIN, board_stacks, door_symbol_area, front_rects,
+                         has_meaning, hsegs, is_callout, is_curve_mark, meaning, pts, text_items, vertical_boards, vsegs, xbox)
+from .primitives import cell as _cell
 from .views2d import Drawing2D, View, entity_box, rect_of
 
-STACK_GAP = 62.0  # hai nét ngang cách nhau ≤ mức này là cùng một tấm (ván + đá, hai mặt tấm kính…)
-STACK_RATIO = 0.8  # các nét của một tấm dài gần bằng nhau (loại đáy máy hút mùi hình thang…)
-EDGE_ZONE = 150.0  # tầng sát đáy/nóc khối: chân, đáy, nóc, phào — không phải đợt
-SYMBOL_MIN = 150.0
-CALLOUT_R = 50.0
 NOTE_DIST = 400.0  # ghi chú cách tầng tối đa để gán loại tầng
 GLASS_MAX = 14.0
 HANG_MIN = 800.0  # khoang dưới thanh treo cao tối thiểu (treo áo)
-BODY = frozenset({"furniture", "cut"})
-DRAW_TYPES = ("LINE", "LWPOLYLINE", "POLYLINE")
 
-
-def _pts(e) -> list[tuple[float, float]]:
-    return [(float(p[0]), float(p[1])) for p in (e.pts or [])]
-
-
-def _text_items(d: Drawing2D, handles) -> list[tuple[float, float, str, str]]:
-    from .explain import _vi
-
-    out = []
-    for h in handles:
-        e = d.entities[h]
-        p = e.pos or e.insert
-        if e.type in ("TEXT", "MTEXT") and e.text and p:
-            out.append((float(p[0]), float(p[1]), _vi(e.text), h))
-    return out
-
-
-def meaning(d: Drawing2D, text: str) -> str | None:
-    if not getattr(d, "keywords", None):
-        return None
-    from ..drafting import meaning_of
-
-    return meaning_of(text, d.keywords)
-
-
-def has_meaning(d: Drawing2D, text: str, want: str) -> bool:
-    """Chữ có chứa từ khoá mang nghĩa `want` (không chỉ nghĩa của từ dài nhất): "GHI CHÚ KHẤU … CHO THOÁT HƠI TỦ LẠNH"."""
-    from ..drafting import up
-
-    t = up(text)
-    return any(k["meaning"] == want and up(k["text"]) in t for k in (getattr(d, "keywords", None) or []))
-
-
-# ---------------- ký hiệu trên layer nét khuất ----------------
-
-def is_curve_mark(pts: list[tuple[float, float]], tol: float = 5.0) -> bool:
-    """Polyline 3 điểm: hai đầu không cùng cạnh (lệch cả X lẫn Y), điểm giữa nằm trong tam giác (đầu, đầu, góc) = cung
-    khấu/bo cong vẽ gãy khúc. Ký hiệu mở cánh/ngăn kéo có hai đầu cùng một cạnh nên không lọt."""
-    if len(pts) != 3:
-        return False
-    (ax, ay), (mx, my), (bx, by) = pts
-    if abs(ax - bx) <= tol or abs(ay - by) <= tol or min(abs(ax - bx), abs(ay - by)) < 50:
-        return False
-    for cx, cy in ((ax, by), (bx, ay)):  # góc vuông tạo bởi hai cạnh chứa hai đầu
-        if min(ax, bx) - tol <= mx <= max(ax, bx) + tol and min(ay, by) - tol <= my <= max(ay, by) + tol:
-            # điểm giữa phía góc so với dây cung
-            side = lambda px, py: (bx - ax) * (py - ay) - (by - ay) * (px - ax)  # noqa: E731
-            if side(mx, my) * side(cx, cy) > 0:
-                return True
-    return False
-
-
-def is_callout(e, role: str | None) -> bool:
-    return e.type == "CIRCLE" and role not in BODY and float(getattr(e, "radius", 0) or 0) >= CALLOUT_R
-
-
-def door_symbol_area(d: Drawing2D, v: View) -> float:
-    """Tổng diện tích khung các ký hiệu mở cánh/ngăn kéo (nét khuất có đoạn chéo ≥ 150 × 150, không kể đường khấu)."""
-    tot = 0.0
-    for h in v.handles:
-        e = d.entities[h]
-        if d.roles.get(e.layer) != "hidden" or e.type not in DRAW_TYPES:
-            continue
-        pts = _pts(e)
-        if is_curve_mark(pts):
-            continue
-        if not any(abs(x1 - x0) >= SYMBOL_MIN and abs(y1 - y0) >= SYMBOL_MIN for (x0, y0), (x1, y1) in zip(pts, pts[1:])):
-            continue
-        b = entity_box(e, {})
-        if b:
-            tot += (b[2] - b[0]) * (b[3] - b[1])
-    return tot
+# tên cũ (lớp nguyên tố L1 nay ở `primitives.py`)
+levels = board_stacks
+_text_items, _hsegs, _vsegs, _pts, _xbox, _front_rects = text_items, hsegs, vsegs, pts, xbox, front_rects
 
 
 def interior_score(d: Drawing2D, v: View) -> int:
@@ -126,135 +53,6 @@ def classify(d: Drawing2D, views: list[View]) -> tuple[View, View, str] | None:
     why = (f"Hai mặt đứng cùng tiêu đề \"{hi[1].title}\": hình {hi[1].id} có {sign} nên là hình CÓ CÁNH (dựng khối, "
            f"cánh); hình {lo[1].id} gần như không có nên là hình BỎ CÁNH (đọc đợt, hộc, thanh treo, thiết bị).")
     return hi[1], lo[1], why
-
-
-def _front_rects(d: Drawing2D, v: View) -> int:
-    """Số khung chữ nhật kín ≥ 150 × 150 trên layer thân tủ (đường bao khối + cánh/ngăn kéo vẽ khung kín)."""
-    n = 0
-    for h in v.handles:
-        e = d.entities[h]
-        if d.roles.get(e.layer) in ("hidden", "dim", "text", "frame", None):
-            continue
-        r = rect_of(e)
-        if r and (r[2] - r[0]) >= SYMBOL_MIN and (r[3] - r[1]) >= SYMBOL_MIN:
-            n += 1
-    return n
-
-
-# ---------------- tầng ngang ----------------
-
-def _hsegs(d: Drawing2D, handles, roles: frozenset[str]) -> list[tuple[float, float, float, str]]:
-    """Đoạn ngang (x0, x1, z, handle) của các nét thuộc vai trò `roles`."""
-    out = []
-    for h in handles:
-        e = d.entities[h]
-        if d.roles.get(e.layer) not in roles or e.type not in DRAW_TYPES:
-            continue
-        pts = _pts(e)
-        if e.closed and len(pts) > 2:
-            pts = pts + [pts[0]]
-        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-            if abs(y0 - y1) <= 0.5 and abs(x1 - x0) > 1:
-                out.append((min(x0, x1), max(x0, x1), (y0 + y1) / 2, h))
-    return out
-
-
-def _vsegs(d: Drawing2D, handles, roles: frozenset[str]) -> list[tuple[float, float, float, str]]:
-    out = []
-    for h in handles:
-        e = d.entities[h]
-        if d.roles.get(e.layer) not in roles or e.type not in DRAW_TYPES:
-            continue
-        pts = _pts(e)
-        if e.closed and len(pts) > 2:
-            pts = pts + [pts[0]]
-        for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
-            if abs(x0 - x1) <= 0.5 and abs(y1 - y0) > 1:
-                out.append((min(y0, y1), max(y0, y1), (x0 + x1) / 2, h))
-    return out
-
-
-SUPPORT_TOL = 6.0  # đầu tấm ngang chạm hông/vách (lòng ngăn kéo, đáy máy hút mùi lơ lửng thì không)
-
-
-def _supported(x: float, z: float, vsegs, x0: float, x1: float) -> bool:
-    if abs(x - x0) <= SUPPORT_TOL or abs(x - x1) <= SUPPORT_TOL:
-        return True
-    # nét đứng đi QUA cao độ tấm (hông, vách); cạnh lòng ngăn kéo/máy hút mùi chỉ mọc lên từ tấm nên không tính
-    return any(abs(s[2] - x) <= SUPPORT_TOL and s[0] <= z - 30 and s[1] >= z + 30 for s in vsegs)
-
-
-def levels(segs: list[tuple[float, float, float, str]], x0: float, x1: float, z0: float, z1: float, vsegs=None) -> list[dict]:
-    """Tầng ngang trong khung [x0, x1] × [z0, z1] (toạ độ của hình): chồng nét ngang cách nhau ≤ STACK_GAP. Một nét đơn
-    chỉ tính khi dài ≥ 60 % khối (cách vẽ đợt bằng một nét). Bỏ tầng sát đáy/nóc (chân, đáy, nóc, phào). Có `vsegs`
-    (nét đứng thân tủ): tấm phải tựa — ít nhất một đầu chạm hông khối hoặc một nét đứng đi qua cao độ tấm (đáy lòng
-    ngăn kéo, đáy máy hút mùi không tựa)."""
-    w = x1 - x0
-    cand = sorted((s for s in segs if s[0] >= x0 - 5 and s[1] <= x1 + 5 and (s[1] - s[0]) >= 150.0
-                   and z0 - 1 <= s[2] <= z1 + 1), key=lambda s: (s[2], s[0]))
-    stacks: list[list] = []
-    for s in cand:
-        # cùng tấm: nét ngang ngay trên (≤ STACK_GAP), chồng lên nhau theo X, dài gần bằng nhau
-        home = None
-        for st in reversed(stacks):
-            last = st[-1]
-            if s[2] - last[2] > STACK_GAP:
-                continue
-            ov = min(s[1], last[1]) - max(s[0], last[0])
-            ln = (s[1] - s[0], last[1] - last[0])
-            if ov >= 0.8 * min(ln) and min(ln) >= STACK_RATIO * max(ln):
-                home = st
-                break
-        if home is not None:
-            home.append(s)
-        else:
-            stacks.append([s])
-    out = []
-    for st in stacks:
-        zs = sorted({round(s[2], 1) for s in st})
-        lo, hi = zs[0], zs[-1]
-        if lo <= z0 + EDGE_ZONE or hi >= z1 - EDGE_ZONE:
-            continue
-        if len(zs) == 1 and max(s[1] - s[0] for s in st) < 0.6 * w:
-            continue
-        if vsegs is not None:
-            ends = (min(s[0] for s in st), max(s[1] for s in st))
-            if not any(_supported(x, z, vsegs, x0, x1) for x in ends for z in zs):
-                continue
-        out.append({"z0": lo, "z1": hi if hi > lo else lo + 1.0, "lines": zs, "x0": min(s[0] for s in st), "x1": max(s[1] for s in st),
-                    "refs": sorted({s[3] for s in st})})
-    return out
-
-
-def _cell(hs, vs, x: float, z: float, box) -> tuple[float, float, float, float] | None:
-    """Ô nhỏ nhất bao điểm (x, z) tạo bởi nét đứng trái/phải và nét ngang dưới/trên."""
-    left = [s[2] for s in vs if s[2] < x and s[0] - 2 <= z <= s[1] + 2 and s[2] >= box[0] - 2]
-    right = [s[2] for s in vs if s[2] > x and s[0] - 2 <= z <= s[1] + 2 and s[2] <= box[2] + 2]
-    below = [s[2] for s in hs if s[2] < z and s[0] - 2 <= x <= s[1] + 2 and s[2] >= box[1] - 2]
-    above = [s[2] for s in hs if s[2] > z and s[0] - 2 <= x <= s[1] + 2 and s[2] <= box[3] + 2]
-    if not (left and right and below and above):
-        return None
-    return max(left), min(below), min(right), min(above)
-
-
-def _xbox(d: Drawing2D, handles, x: float, z: float):
-    """Khung có dấu X (hai đường chéo góc-góc) chứa điểm (x, z): ô thiết bị."""
-    rects = []
-    for h in handles:
-        e = d.entities[h]
-        r = rect_of(e)
-        if r and r[0] <= x <= r[2] and r[1] <= z <= r[3] and (r[2] - r[0]) >= SYMBOL_MIN and (r[3] - r[1]) >= SYMBOL_MIN:
-            rects.append((r, h))
-    for r, h in sorted(rects, key=lambda t: (t[0][2] - t[0][0]) * (t[0][3] - t[0][1])):
-        diag = 0
-        for h2 in handles:
-            pts = _pts(d.entities[h2])
-            for (ax, ay), (bx, by) in zip(pts, pts[1:]):
-                if abs(min(ax, bx) - r[0]) <= 3 and abs(max(ax, bx) - r[2]) <= 3 and abs(min(ay, by) - r[1]) <= 3 and abs(max(ay, by) - r[3]) <= 3:
-                    diag += 1
-        if diag >= 2:
-            return r, h
-    return None
 
 
 def read_interior(d: Drawing2D, v: View, ox: float, floor: float, body: frozenset[str], mod: dict, fronts=(),
@@ -298,21 +96,10 @@ def read_interior(d: Drawing2D, v: View, ox: float, floor: float, body: frozense
             elif best[1] == "stone" and len(L["lines"]) >= 2:
                 L["kind"], L["note"] = "stone", best[2]
     out = {"levels": [], "drawers": [], "appliances": [], "rods": [], "lights": [], "partitions": []}
-    # vách đứng vẽ ở hình: hai nét đứng cách nhau 10–60 mm, cao ≥ 150, không sát hông khối
-    vv = sorted((s for s in vs if interior and (s[1] - s[0]) >= 150 and bx0 + 40 < s[2] < bx1 - 40), key=lambda s: s[2])
-    def _rests(x: float, z: float, end: str) -> bool:  # đầu vách tựa lên tấm ngang / đáy / nóc khối
-        if (end == "lo" and z <= bz0 + EDGE_ZONE) or (end == "hi" and z >= bz1 - EDGE_ZONE):
-            return True
-        return any(s[0] - 5 <= x <= s[1] + 5 and abs(s[2] - z) <= 25 for s in hs)
-
-    for a, b in zip(vv, vv[1:]):
-        if 14 <= b[2] - a[2] <= 60 and min(a[1], b[1]) - max(a[0], b[0]) >= 150:
-            z0, z1 = max(a[0], b[0]), min(a[1], b[1])
-            xm = (a[2] + b[2]) / 2
-            if not (_rests(xm, z0, "lo") and _rests(xm, z1, "hi")):
-                continue  # cạnh lòng ngăn kéo, khung… không phải vách
-            if not any(abs(o["x0"] - (a[2] + ox)) < 5 for o in out["partitions"]):
-                out["partitions"].append({"x0": a[2] + ox, "x1": b[2] + ox, "z0": z0 - floor, "z1": z1 - floor, "refs": [a[3], b[3]]})
+    # vách đứng vẽ ở hình (chỉ hình bỏ cánh thật: ở hình có cánh nét đứng đôi là mép cánh/tay nắm)
+    if interior:
+        for q in vertical_boards(vs, hs, box):
+            out["partitions"].append({"x0": q["x0"] + ox, "x1": q["x1"] + ox, "z0": q["z0"] - floor, "z1": q["z1"] - floor, "refs": q["refs"]})
     for L in lv:
         out["levels"].append({"kind": L["kind"], "x0": L["x0"] + ox, "x1": L["x1"] + ox, "z0": L["z0"] - floor, "z1": L["z1"] - floor,
                               "lines": [z - floor for z in L["lines"]], "refs": L["refs"] + ([L["note"]] if L.get("note") else [])})
