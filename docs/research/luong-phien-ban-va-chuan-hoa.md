@@ -55,3 +55,23 @@ Thứ tự: code đọc tất định → code đọc theo cách khác (dự ph�
 - Dọn bản trung gian: giữ bản gốc + bản phát hành + N bản gần nhất; xoá chỉ khi người dùng xác nhận.
 - AI nhìn **ảnh** tờ bản vẽ (không chỉ chữ/kích thước) để đề xuất vùng hình và tiêu đề khi người vẽ đặt sai; vẫn qua
   harness và người xác nhận.
+
+## 6. Bước 1 đã làm: hồ sơ trình bày (11/11/2026)
+
+Hướng đã chọn: AI/code **đọc và chú giải** bản vẽ, code kiểm và dựng; không viết lại bản vẽ. Bước 1 là học CÁCH
+TRÌNH BÀY của một công ty/người vẽ một lần, người dùng duyệt, code dùng cho mọi bản vẽ kiểu đó.
+
+- `cadguard/drafting.py` (`cg.drafting-profile/1`, `drafting.yaml` cả máy hoặc `.cadguard/drafting.yaml` dự án, nhật ký
+  `drafting-log.jsonl`): vai trò layer, thẻ số bản vẽ của khung tên, từ khoá ghi chú và nghĩa (tấm bù, thiết bị, khoang
+  hở, ngăn kéo, kính, đèn; có bộ mặc định).
+- Đề xuất bằng code (layer nét thấy/khác mang phần lớn nét của hình hạng mục -> thân đồ; ghi chú khớp nghĩa đã biết) và
+  bằng AI (danh sách layer + ghi chú của hạng mục); harness `drafting.check`: layer phải có, nét dẫn phải thuộc layer đó,
+  chữ khoá phải có trong ghi chú được dẫn. Người dùng Đồng ý mới ghi.
+- Mọi chỗ đọc bản vẽ cho 3D/bản đồ dùng `drafting.read` (theo hồ sơ). Ghi chú "TẤM FIX…" trong một khối không cánh ->
+  dạng `filler` (tấm bù), dựng thành tấm mỏng.
+- App: nút "Hồ sơ trình bày" ở thanh công cụ 3D và trên thanh cảnh báo (`/api/drafting`, `/save`, `/propose`).
+- Hai kiểu mẫu: `test 2.dxf` (Demo) -> code đề xuất layer "THAY" là thân đồ, khối 830 nhận đúng là tấm bù; bộ 40 tờ
+  phiên 01 -> không có đề xuất (layer đã theo chuẩn), kết quả dựng giữ nguyên.
+
+Bước sau (2): AI chú giải từng hạng mục từ ảnh tờ + nét (chia khối theo hình bỏ cánh, liên kết nhiều hình), bộ kiểm hình
+học, màn duyệt; (3) bộ đáp án đo độ chính xác; (4) xuất bản vẽ đã chuẩn hoá ra tệp mới.

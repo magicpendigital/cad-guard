@@ -1548,7 +1548,8 @@
         el("div", {class: "f-d", text: "3D sai ở đây là do bản vẽ thiếu số hoặc trình bày khác mẫu CAD Guard đọc được. Nhập số đúng, hoặc nhờ code/AI đọc lại bản vẽ (mặt cắt, ghi chú) rồi xác nhận."})),
       el("div", {class: "w-act"},
         el("button", {class: "btn-s btn-sm", type: "button", title: "Tìm chiều sâu ở kích thước ngang của các mặt cắt cùng hạng mục", onclick: () => runSceneAI(path, r.item, false)}, "Gợi ý bằng code"),
-        el("button", {class: "btn-p btn-sm", type: "button", title: "AI đọc tiêu đề, kích thước, ghi chú của hạng mục; mỗi số phải dẫn đúng kích thước/chữ trên bản vẽ", onclick: () => runSceneAI(path, r.item, true)}, "Nhờ AI đọc bản vẽ")),
+        el("button", {class: "btn-p btn-sm", type: "button", title: "AI đọc tiêu đề, kích thước, ghi chú của hạng mục; mỗi số phải dẫn đúng kích thước/chữ trên bản vẽ", onclick: () => runSceneAI(path, r.item, true)}, "Nhờ AI đọc bản vẽ"),
+        el("button", {class: "btn-s btn-sm", type: "button", title: "Khai một lần cách công ty/người vẽ trình bày (layer thân tủ, ghi chú…) để mọi bản vẽ kiểu này đọc đúng", onclick: () => openDrafting()}, "Hồ sơ trình bày")),
       props.length ? [el("div", {class: "sub-h", text: "Đề xuất chờ bạn xác nhận"}), props] : null,
       gaps.length ? el("details", {class: "w-gaps", open: gaps.length <= 3}, el("summary", {text: `Từng chỗ thiếu, vì sao và ô nhập (${gaps.length})`}), gaps) : null) : null;
     const room = r.room.ceiling ? `Cao sàn–trần ${fmt(r.room.ceiling)} · ${r.room.src}` : "Chưa có cao sàn–trần";
@@ -1624,6 +1625,88 @@
       el("div", {class: "dr-f"}, el("label", {}, "Lưu cho ", scope), el("span", {class: "spacer"}),
         el("button", {class: "btn-s", type: "button", onclick: () => save(true)}, "Về mặc định"),
         el("button", {class: "btn-p", type: "button", onclick: () => save(false)}, "Lưu")));
+    d.classList.add("on");
+    close.focus();
+  }
+  // Hồ sơ trình bày: cách công ty/người vẽ trình bày (vai trò layer, nghĩa ghi chú). Code/AI đề xuất có bằng chứng,
+  // người dùng Đồng ý từng mục; lưu cả máy hoặc riêng dự án; code đọc mọi bản vẽ theo hồ sơ này.
+  async function openDrafting(found) {
+    let c;
+    try { c = await api("/api/drafting", {file: S.file}); } catch (e) { fail(e, "Mở hồ sơ trình bày"); return; }
+    const d = $("drawer");
+    const ORIG = {default: "mặc định", machine: "cả máy", project: "dự án này", code: "code đoán"};
+    const scope = el("select", {"aria-label": "Lưu cho"}, el("option", {value: "machine", text: "Cả máy (mọi dự án)"}), el("option", {value: "project", text: "Riêng dự án này"}));
+    const reload = () => {
+      if (S.file && S.dept && S.dept.view === "scene") load3d(S.file, S.r3d ? S.r3d.item : undefined);
+      else if (S.mapOn) loadMap(false);
+    };
+    const savePatch = async (patch, msg, keep) => {
+      try { await api("/api/drafting/save", {scope: scope.value, patch, file: S.file}); } catch (e) { fail(e, "Lưu hồ sơ trình bày"); return; }
+      toast(msg || "Đã lưu hồ sơ trình bày. 3D và bản đồ đọc lại theo hồ sơ mới.");
+      reload();
+      openDrafting(keep);
+    };
+    const roleSel = (cur) => el("select", {"aria-label": "Vai trò layer"}, Object.entries(c.roles).map(([k, v]) => el("option", {value: k, text: v, selected: k === cur})));
+    const layerRows = c.layers.map((x) => {
+      const sel = roleSel(x.role);
+      return el("tr", {}, el("td", {text: x.layer}), el("td", {text: String(x.lines)}), el("td", {}, sel),
+        el("td", {}, el("span", {class: "src-b " + (x.origin === "code" ? "src-geometry" : "src-user"), text: ORIG[x.origin] || x.origin})),
+        el("td", {}, el("button", {class: "btn-s btn-sm", type: "button", onclick: () => savePatch({layer_roles: {[x.layer]: sel.value}})}, "Lưu"),
+          x.origin !== "code" ? el("button", {class: "link sm", type: "button", onclick: () => savePatch({layer_roles: {[x.layer]: "reset"}})}, "Bỏ") : null));
+    });
+    const kwRows = c.keywords.map((k) => el("tr", {}, el("td", {text: k.text}), el("td", {text: c.meanings[k.meaning] || k.meaning}),
+      el("td", {}, el("span", {class: "src-b " + (k.origin === "default" ? "src-default" : "src-user"), text: ORIG[k.origin] || k.origin})),
+      el("td", {}, el("button", {class: "link sm", type: "button", onclick: () => savePatch({removed_keywords: [k.text]}, "Đã bỏ từ khoá.")}, "Bỏ"))));
+    const kwText = el("input", {type: "text", maxlength: "60", placeholder: "vd. TẤM FIX", "aria-label": "Chữ ghi chú"});
+    const kwMean = el("select", {"aria-label": "Nghĩa"}, Object.entries(c.meanings).map(([k, v]) => el("option", {value: k, text: v})));
+    const props = el("div", {class: "props"});
+    const showProps = (items, rejected) => {
+      fill(props, items.length ? items.map((p) => el("div", {class: "gap3d prop3d"},
+        el("span", {class: "src-b " + (p.origin === "code" ? "src-geometry" : "src-user"), text: p.origin === "code" ? "Code" : "AI"}), " ",
+        p.kind === "layer_role" ? [b(`Layer “${p.target}”`), ` là ${c.roles[p.value] || p.value}`] : [b(`“${p.target}”`), ` nghĩa là ${c.meanings[p.value] || p.value}`],
+        el("div", {class: "g-why", text: p.reason}),
+        el("button", {class: "btn-p btn-sm", type: "button", onclick: () => savePatch(p.kind === "layer_role" ? {layer_roles: {[p.target]: p.value}} : {keywords: [{text: p.target, meaning: p.value}]},
+          "Đã đồng ý và lưu vào hồ sơ.", {items: items.filter((x) => x !== p), rejected})}, "Đồng ý"),
+        " ", el("button", {class: "link sm", type: "button", onclick: () => showProps(items.filter((x) => x !== p), rejected)}, "Bỏ qua")))
+        : el("div", {class: "f-d", text: "Không có đề xuất mới: hồ sơ hiện tại đã đọc được bản vẽ này."}),
+        rejected && rejected.length ? el("small", {class: "muted", text: `${rejected.length} đề xuất bị loại vì không có bằng chứng trong bản vẽ.`}) : null);
+    };
+    const propose = async (ai) => {
+      if (!S.file) { toast("Mở một bản vẽ trước để đề xuất."); return; }
+      const bz = busy(ai ? "AI đang xem cách trình bày bản vẽ…" : "Đang tìm bằng code…", ai ? "Mỗi đề xuất phải dẫn đúng layer/ghi chú có trong bản vẽ." : "");
+      let job;
+      try { job = await api("/api/drafting/propose", {file: S.file, ai, engine: S.engine ? S.engine.name : null}); } catch (e) { bz.done(); fail(e, "Đề xuất hồ sơ trình bày"); return; }
+      if (job.note) toast(job.note);
+      while (job.state === "running") {
+        await new Promise((res) => setTimeout(res, 2000));
+        try { job = await api("/api/drafting/propose/status", {job: job.id}); } catch (e) { bz.done(); fail(e, "Đề xuất hồ sơ trình bày"); return; }
+      }
+      bz.done();
+      if (job.state === "error") { fail(new Error(job.error || "Lỗi khi đề xuất."), "Đề xuất hồ sơ trình bày"); return; }
+      showProps(job.items, job.rejected);
+    };
+    if (found) showProps(found.items, found.rejected);
+    const close = el("button", {class: "iconbtn", type: "button", "aria-label": "Đóng", onclick: closeDrawer}, icon("x"));
+    fill(d,
+      el("div", {class: "dr-h"}, el("div", {class: "grow1"}, el("h2", {id: "drTitle", text: "Hồ sơ trình bày"}),
+        el("div", {class: "f-d", text: c.confirmed ? "Đã có hồ sơ lưu cho công ty/dự án này." : "Chưa lưu hồ sơ: đang đọc theo cách đoán mặc định."})), close),
+      el("div", {class: "dr-b"},
+        el("p", {class: "f-d", text: "Mỗi người kỹ thuật trình bày một kiểu. Khai một lần ở đây (hoặc để code/AI đề xuất rồi Đồng ý), CAD Guard sẽ đọc mọi bản vẽ kiểu này đúng cách. Bản vẽ không bị sửa."}),
+        el("div", {class: "w-act"},
+          el("button", {class: "btn-s btn-sm", type: "button", onclick: () => propose(false)}, "Đề xuất bằng code"),
+          el("button", {class: "btn-p btn-sm", type: "button", onclick: () => propose(true)}, "Nhờ AI xem bản vẽ")),
+        props,
+        el("h3", {text: "Layer trong các hình hạng mục"}),
+        c.layers.length ? el("table", {class: "tbl3d"}, el("tr", {}, ["Layer", "Số nét", "Là", "Nguồn", ""].map((t) => el("th", {text: t}))), layerRows)
+          : el("div", {class: "f-d", text: "Mở một bản vẽ có hạng mục để xem layer."}),
+        el("h3", {text: "Ghi chú và nghĩa"}),
+        el("table", {class: "tbl3d"}, el("tr", {}, ["Chữ trên bản vẽ", "Nghĩa", "Nguồn", ""].map((t) => el("th", {text: t}))), kwRows),
+        el("div", {class: "w-act"}, kwText, kwMean,
+          el("button", {class: "btn-s btn-sm", type: "button", onclick: () => kwText.value.trim() && savePatch({keywords: [{text: kwText.value, meaning: kwMean.value}]})}, "Thêm"))),
+      el("div", {class: "dr-f"}, el("label", {}, "Lưu cho ", scope), el("span", {class: "spacer"}),
+        el("button", {class: "btn-s", type: "button", onclick: async () => {
+          try { await api("/api/drafting/save", {scope: scope.value, reset: true}); toast("Đã bỏ hồ sơ đã lưu ở phạm vi này."); reload(); openDrafting(); } catch (e) { fail(e, "Hồ sơ trình bày"); }
+        }}, "Về mặc định")));
     d.classList.add("on");
     close.focus();
   }
@@ -3626,6 +3709,7 @@
     for (const x of $$("#t3Mode button")) x.addEventListener("click", () => { S.mode3d = x.dataset.v; seg("t3Mode", S.mode3d); if (S.r3d && !S.mapOn) render3d2(S.file, S.r3d, true); });
     for (const x of $$("#t3Body button")) x.addEventListener("click", () => setBody3d(x.dataset.v));
     $("t3Construct").addEventListener("click", () => openConstruction());
+    $("t3Drafting").addEventListener("click", () => openDrafting());
     $("zoomIn").addEventListener("click", () => (S.v3d ? S.v3d.zoom(1.25) : zoomButton(0.8)));
     $("zoomOut").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0.8) : zoomButton(1.25)));
     $("zoomFit").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0) : zoomButton(0)));

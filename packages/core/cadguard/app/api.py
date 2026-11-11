@@ -890,8 +890,12 @@ def _construction_key(root) -> str:
 
     from ..construction import effective
 
+    from ..drafting import effective as drafting_effective
+
     e = effective(root)
-    return hashlib.sha256(json.dumps([e["values"], e["confirmed"]], sort_keys=True).encode("utf-8")).hexdigest()[:6]
+    dp = drafting_effective(root)  # hồ sơ trình bày đổi -> đồ thị đọc lại
+    return hashlib.sha256(json.dumps([e["values"], e["confirmed"], dp["layer_roles"], dp["number_tag"], dp["keywords"]],
+                                     sort_keys=True).encode("utf-8")).hexdigest()[:6]
 
 
 def drawing_graph(app: AppData, rel: Any, refresh: Any = False) -> dict:
@@ -921,7 +925,9 @@ def drawing_graph(app: AppData, rel: Any, refresh: Any = False) -> dict:
             pass
     from ..construction import effective as construction_effective
 
-    g = build_graph(model, supplement=supp, overrides=load_overrides(app.ws.root, model.file_hash),
+    from ..drafting import read as read_drafting
+
+    g = build_graph(model, drawing=read_drafting(model, app.ws.root), supplement=supp, overrides=load_overrides(app.ws.root, model.file_hash),
                     profile={"construction": construction_effective(app.ws.root)["confirmed"]})
     try:
         cache.parent.mkdir(parents=True, exist_ok=True)

@@ -78,8 +78,9 @@ def boxes2(scene, ceiling: bool = True) -> list[Box]:
         if w.start != w.end:
             out.append(Box(w.id, "wall", "wall", _norm(_seg_base(w.start, w.end, w.thickness, w.side)), 0.0, w.height))
     for m in scene.modules:
-        base = ((m.x, m.y), (m.x + m.w, m.y), (m.x + m.w, m.y + m.d), (m.x, m.y + m.d))
-        out.append(Box(m.id, "module", f"module-{m.kind}", base, m.z0, m.z0 + m.h))
+        dd = min(m.d, 20.0) if getattr(m, "form", "") == "filler" else m.d  # tấm bù: tấm mỏng ở mặt trước
+        base = ((m.x, m.y), (m.x + m.w, m.y), (m.x + m.w, m.y + dd), (m.x, m.y + dd))
+        out.append(Box(m.id, "module", "filler" if getattr(m, "form", "") == "filler" else f"module-{m.kind}", base, m.z0, m.z0 + m.h))
         for f in m.fronts:
             fb = ((f.x0, m.y - FRONT_MM), (f.x1, m.y - FRONT_MM), (f.x1, m.y), (f.x0, m.y))
             out.append(Box(f.id, "front", f"front-{f.kind}", fb, f.z0, f.z1))

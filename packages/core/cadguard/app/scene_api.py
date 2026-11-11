@@ -61,14 +61,17 @@ def _write(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _drawing(model):
-    return read_drawing(model)
+def _drawing(model, root: Path | None = None):
+    """Đọc bản vẽ theo hồ sơ trình bày của công ty (vai trò layer, thẻ số bản vẽ, nghĩa ghi chú)."""
+    from ..drafting import read
+
+    return read(model, root)
 
 
 def build(model, root: Path, item: str | None):
     from ..graph_ai import apply_overrides, load_overrides
 
-    d = apply_overrides(_drawing(model), load_overrides(root, model.file_hash))  # loại hình người dùng đã xác nhận
+    d = apply_overrides(_drawing(model, root), load_overrides(root, model.file_hash))  # loại hình người dùng đã xác nhận
     raw = read_supplement(root, model.file_hash)
     g = item if item in d.groups else best_item(d)
     if g is None:
@@ -183,7 +186,7 @@ def provenance(sc, d, supp: dict) -> dict:
 
 
 TYPE_VI = {"base": "Tủ dưới", "wall": "Tủ treo", "tall": "Tủ cao"}
-FORM_VI = {"open": "Kệ mở", "panel": "Tấm ốp"}
+FORM_VI = {"open": "Kệ mở", "panel": "Tấm ốp", "filler": "Tấm bù (đo thực tế)"}
 
 
 def _type_vi(m) -> str:
@@ -361,7 +364,7 @@ def _space(model, root: Path) -> dict:
     from ..graph_ai import apply_overrides, load_overrides
     from ..scene.space import build_space
 
-    d = apply_overrides(_drawing(model), load_overrides(root, model.file_hash))
+    d = apply_overrides(_drawing(model, root), load_overrides(root, model.file_hash))
     raw = read_supplement(root, model.file_hash)
     return build_space(model, d, lambda g: item_supp(raw, g), raw), d
 
@@ -386,7 +389,7 @@ def space_set(model, root: Path, key: Any, value: Any) -> dict:
         raise SceneApiError("Thiếu khoá hoặc giá trị.")
     sval = str(value).strip()
     raw = read_supplement(root, model.file_hash)
-    d = _drawing(model)
+    d = _drawing(model, root)
     if key.startswith("place:") and key[6:] in d.groups:
         if sval not in ("0", "90", "180", "270", "reset"):
             raise SceneApiError("Góc xoay phải là 0, 90, 180 hoặc 270.")

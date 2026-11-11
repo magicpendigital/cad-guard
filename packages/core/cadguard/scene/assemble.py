@@ -186,6 +186,8 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
     w, h = measure_span(edims, "h", box[0], box[2]), measure_span(edims, "v", box[1], box[3])
     m = Module2(id=mid, kind=kind, form=form, x=round(x0p - origin[0], 3), y=0.0, z0=round(z0, 3), w=w.value, d=0.0, h=h.value, refs=list(hs)[:50])
     m.src["w"], m.src["h"] = _src(w), _src(h)
+    if form == "filler":
+        sc.notes.append(f"Khối {mid}: ghi chú trên bản vẽ cho biết đây là tấm bù đo thực tế (hồ sơ trình bày), dựng thành tấm mỏng.")
     zd = next((x for x in edims if x.axis == "v" and abs(x.lo - floor) <= 1.0 and abs(x.hi - box[1]) <= tol_for(max(z0, 1.0))), None)
     m.src["z0"] = Src(kind="dimension", refs=[zd.handle]) if zd else Src(kind="geometry")
     m.elevation, m.plan, m.ebox = e.id, p.id, [round(float(v), 3) for v in box]
@@ -225,6 +227,23 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
 
 
 CLUSTER_GAP = 150.0  # khe giữa hai bản vẽ đặt cạnh nhau trong cùng một khung tiêu đề
+
+
+def _note_meaning(d: Drawing2D, e: View, box) -> str | None:
+    """Nghĩa (theo hồ sơ trình bày) của ghi chú nằm trong khung khối trên mặt đứng."""
+    if not getattr(d, "keywords", None):
+        return None
+    from ..drafting import meaning_of
+    from .explain import _vi
+
+    for h in e.handles:
+        t = d.entities[h]
+        p = t.pos or t.insert
+        if t.type in ("TEXT", "MTEXT") and t.text and p and box[0] <= p[0] <= box[2] and box[1] <= p[1] <= box[3]:
+            m = meaning_of(_vi(t.text), d.keywords)
+            if m:
+                return m
+    return None
 
 
 def _crop_to_dim(d: Drawing2D, e: View, refs: list[str], sc: Scene2) -> View:
@@ -343,7 +362,10 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
                 continue
             # hình "bỏ cánh": tiêu đề có thể đặt nhầm (người vẽ chép tiêu đề) -> vẫn nhận ô có ký hiệu mở cánh
             fr = seg.fronts(d, body, [it for it in leaf if it[2] in HIDDEN], box, symbols_only="no_doors" in e.flags)
-            blocks.append((box, [h for _b, h, _r in body if h], fr, seg.form_of(d, body, box, fr), len(seg.board_levels(leaf))))
+            form = seg.form_of(d, body, box, fr)
+            if not fr and _note_meaning(d, e, box) == "filler":  # hồ sơ trình bày: "TẤM FIX…" = tấm bù, không phải tủ
+                form = "filler"
+            blocks.append((box, [h for _b, h, _r in body if h], fr, form, len(seg.board_levels(leaf))))
     blocks.sort(key=lambda t: (t[0][0], t[0][1]))
     for i, (box, hs, fr, form, levels) in enumerate(blocks, 1):
         _add_module(sc, f"M{i}", box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form, pt, levels)

@@ -14,12 +14,12 @@ import io
 from dataclasses import dataclass, field
 
 PART_VI = {"side_l": "Hông trái", "side_r": "Hông phải", "top": "Nóc", "bottom": "Đáy", "back": "Hậu", "shelf": "Đợt",
-           "door": "Cánh", "drawer": "Mặt ngăn kéo", "panel": "Tấm ốp"}
+           "door": "Cánh", "drawer": "Mặt ngăn kéo", "panel": "Tấm ốp", "filler": "Tấm bù (đo thực tế)"}
 GROUP_OF = {"side_l": "thùng", "side_r": "thùng", "top": "thùng", "bottom": "thùng", "shelf": "đợt", "back": "hậu",
-            "door": "cánh", "drawer": "cánh", "panel": "ốp"}
+            "door": "cánh", "drawer": "cánh", "panel": "ốp", "filler": "ốp"}
 COLORS = {"side_l": (0.80, 0.70, 0.55), "side_r": (0.80, 0.70, 0.55), "top": (0.74, 0.64, 0.50), "bottom": (0.74, 0.64, 0.50),
           "back": (0.62, 0.60, 0.58), "shelf": (0.86, 0.78, 0.62), "door": (0.93, 0.89, 0.80), "drawer": (0.90, 0.84, 0.72),
-          "panel": (0.88, 0.82, 0.70)}
+          "panel": (0.88, 0.82, 0.70), "filler": (0.80, 0.80, 0.78)}
 
 
 @dataclass
@@ -53,6 +53,9 @@ def panels_for(scene, c: dict) -> list[Panel]:
         if m.w <= 2 * t or m.h <= 2 * t or m.d <= td + bt:
             continue
         x0, x1, z0, z1 = m.x, m.x + m.w, m.z0, m.z0 + m.h
+        if getattr(m, "form", "cabinet") == "filler":  # tấm bù đo thực tế: một tấm mặt trước
+            out.append(Panel(f"{m.id}:filler", m.id, "filler", x0, m.y, z0, x1, m.y + t, z1, 2, {}))
+            continue
         if getattr(m, "form", "cabinet") == "panel":  # tấm ốp (vách TV…): một tấm mặt trước, không thùng
             out.append(Panel(f"{m.id}:panel", m.id, "panel", x0, m.y, z0, x1, m.y + t, z1, 4, {}))
             continue

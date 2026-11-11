@@ -54,7 +54,9 @@ def start(app, rel: Any, use_ai: Any, translate_backend: Any, experimental: bool
         try:
             from ..scene.views2d import read_drawing
 
-            d = graph_ai.apply_overrides(read_drawing(model), graph_ai.load_overrides(root, model.file_hash))
+            from ..drafting import read as read_drafting
+
+            d = graph_ai.apply_overrides(read_drafting(model, root), graph_ai.load_overrides(root, model.file_hash))
             supp = scene_api.read_supplement(root, model.file_hash)
             graph_ai.run(d, supp, root, model.file_hash, backend=backend,
                          progress=lambda a: job.__setitem__("agent", a))
