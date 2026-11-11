@@ -68,6 +68,10 @@ class Module2(BaseModel):
     shelves: int = 0
     label: str = ""  # nhãn người xác nhận (tủ bếp dưới, tủ cao…); trống = chưa gán
     refs: list[str] = Field(default_factory=list)
+    # Nguồn để đối chiếu 2D ↔ 3D: hình chiếu dựng ra khối và khung của khối trên mặt đứng (toạ độ bản vẽ)
+    elevation: str = ""
+    plan: str = ""
+    ebox: list[float] = Field(default_factory=list)
 
 
 class Wall2(BaseModel):
@@ -239,6 +243,13 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
     m.src["w"], m.src["h"] = _src(w), _src(h)
     zd = next((x for x in edims if x.axis == "v" and abs(x.lo - floor) <= 1.0 and abs(x.hi - box[1]) <= tol_for(max(z0, 1.0))), None)
     m.src["z0"] = Src(kind="dimension", refs=[zd.handle]) if zd else Src(kind="geometry")
+    m.elevation, m.plan, m.ebox = e.id, p.id, [round(float(v), 3) for v in box]
+    for k in ("w", "h", "z0"):  # người dùng sửa số đo khối (đối chiếu 2D thấy sai): ghi đè, nguồn = user
+        raw = supp.get(f"module:{mid}:{k}")
+        uv = (0.0 if k == "z0" and str(raw).strip() in ("0", "0.0") else _num(raw)) if raw is not None else None
+        if uv is not None:
+            setattr(m, k, uv)
+            m.src[k] = Src(kind="user")
     ud = _num(supp.get(f"module:{mid}:d"))
     if ud:
         back = max((q.box[3] for q in pf), default=p.box[3])
@@ -277,6 +288,9 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
     for e, p, ox, refs, method in links.values():
         sc.links.append(Link(elevation=e.id, plan=p.id, method=method, offset_x=round(ox, 3), refs=refs))
     main = [lk for lk in links.values() if "no_doors" not in lk[0].flags] or list(links.values())
+    pick = supp.get(f"main:{group}")  # người dùng chọn mặt đứng dùng để dựng khối
+    if pick in links:
+        main = [links[pick]] + [lk for lk in main if lk is not links[pick]]
     if not main:
         return _finish(sc, d)
     e, p, ox, _refs, _m = main[0]

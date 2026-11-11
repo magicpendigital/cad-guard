@@ -89,7 +89,9 @@ def view(model, root: Path, item: Any = None) -> dict:
                   for b in bx[:MAX_BOXES]],
         "truncated": len(bx) > MAX_BOXES,
         "modules": [{"id": m.id, "kind": m.kind, "label": m.label, "fronts": len(m.fronts), "shelves": m.shelves,
-                     **{k: {"value": getattr(m, k), "src": SRC_LABEL.get(m.src[k].kind, m.src[k].kind) if k in m.src else "?"}
+                     "x": m.x, "y": m.y,
+                     **{k: {"value": getattr(m, k), "src": SRC_LABEL.get(m.src[k].kind, m.src[k].kind) if k in m.src else "?",
+                            "kind": m.src[k].kind if k in m.src else "missing"}
                         for k in ("w", "d", "h", "z0")}} for m in sc.modules],
         "room": {"ceiling": sc.room.ceiling, "src": SRC_LABEL.get(sc.room.src["ceiling"].kind) if "ceiling" in sc.room.src else None},
         "links": [lk.model_dump() for lk in sc.links],
@@ -101,7 +103,105 @@ def view(model, root: Path, item: Any = None) -> dict:
         "counts": {"modules": len(sc.modules), "fronts": sum(len(m.fronts) for m in sc.modules), "walls": len(sc.walls),
                    "gaps": len(sc.gaps)},
         "notes": sc.notes[:10],
+        "provenance": provenance(sc, d, supp),
+        **production(sc, root, model.file_hash),
     }
+
+
+def production(sc, root: Path, file_hash: str) -> dict:
+    """P3: tấm ván (3 kiểu xem), danh sách cắt, bản lề theo hồ sơ kết cấu xưởng (mặc định nếu chưa khai)."""
+    from ..construction import effective
+    from ..graph_ai import load_overrides
+    from ..scene.panels import boxes as panel_boxes
+    from ..scene.panels import cutlist, panels_for
+
+    prof = effective(root)
+    c = prof["values"]
+    ps = panels_for(sc, c)
+    mats = [m for m in load_overrides(root, file_hash).get("materials", []) if m.get("item") == sc.item]
+    return {"panels": {k: panel_boxes(ps, k)[:MAX_BOXES] for k in ("panel", "explode", "xray")},
+            "cutlist": cutlist(ps, c, mats),
+            "construction": {"confirmed": prof["confirmed"],
+                             "summary": f"ván {c['board_thickness']} mm, hậu {'bắt vít' if c['back_type'] == 'screw' else 'rãnh'} "
+                                        f"{c['back_thickness']} mm, cánh {'trùm toàn' if c['door_overlay'] == 'full' else ('trùm nửa' if c['door_overlay'] == 'half' else 'lọt')}, "
+                                        f"khe {c['door_gap']} mm"}}
+
+
+def cutlist_file(model, root: Path, item: Any) -> dict:
+    from ..scene.panels import cutlist_csv
+
+    sc, _d, _supp = build(model, root, item if isinstance(item, str) else None)
+    if sc is None:
+        raise SceneApiError("Không có hạng mục.")
+    cl = production(sc, root, model.file_hash)["cutlist"]
+    name = f"danh-sach-cat-{sc.item}.csv".replace(":", "-")
+    return {"name": name, "csv": chr(0xFEFF) + cutlist_csv(cl)}
+
+
+def provenance(sc, d, supp: dict) -> dict:
+    """Đối chiếu 2D ↔ 3D: dựng từ hình nào, tờ nào; mặt đứng nào chưa dùng; từng số đo của khối lấy từ đâu."""
+    used_e = sorted({m.elevation for m in sc.modules if m.elevation})
+    used_p = sorted({m.plan for m in sc.modules if m.plan})
+    all_e = [v.id for v in d.views_of(sc.item, "elevation") if v.box]
+    linked = {lk.elevation for lk in sc.links}
+    views = {}
+    for vid in set(used_e) | set(used_p) | set(all_e):
+        v = d.view(vid)
+        if v is not None:
+            views[vid] = {"id": vid, "label": _view_vi(d, vid), "kind": v.kind, "sheet": v.sheet_id,
+                          "box": [round(x, 1) for x in v.box] if v.box else None}
+    return {
+        "item_name": _vi(str((d.groups.get(sc.item) or {}).get("name") or sc.item)),
+        "sheets": [{"id": s, "label": _sheet_label(d, s)} for s in (d.groups.get(sc.item) or {}).get("sheets") or []],
+        "used": {"elevations": used_e, "plans": used_p},
+        "elevations": [{"id": e, "label": views[e]["label"], "linked": e in linked, "used": e in used_e} for e in all_e if e in views],
+        "views": views,
+        "main_pick": supp.get(f"main:{sc.item}"),
+        "modules": {m.id: {"elevation": m.elevation, "plan": m.plan, "ebox": m.ebox,
+                           "refs": {k: (m.src[k].refs if k in m.src else []) for k in ("w", "d", "h", "z0")},
+                           "user": [k for k in ("w", "d", "h", "z0") if f"module:{m.id}:{k}" in supp]} for m in sc.modules},
+    }
+
+
+def _sheet_label(d, sid: str) -> str:
+    from ..scene.explain import _sheet_name
+
+    s = _sheet_name(d, sid)
+    return s if len(s) <= 70 else s[:68] + "…"
+
+
+def source_geometry(model, root: Path, item: Any, view_id: Any) -> dict:
+    """Hình 2D của MỘT hình chiếu (mặt đứng/mặt bằng) để xem cạnh 3D: nét, chữ, kích thước, theo toạ độ bản vẽ."""
+    sc, d, _supp = build(model, root, item if isinstance(item, str) else None)
+    if sc is None:
+        raise SceneApiError("Không có hạng mục.")
+    v = d.view(view_id) if isinstance(view_id, str) else None
+    if v is None or v.group != sc.item or not v.box:
+        raise SceneApiError("Hình chiếu không thuộc hạng mục.")
+    items = []
+    for h in v.handles[:6000]:
+        e = d.entities.get(h)
+        if e is None:
+            continue
+        r = lambda q: [round(q[0], 1), round(q[1], 1)]  # noqa: E731
+        if e.type == "LINE" and e.pts and len(e.pts) >= 2:
+            items.append([h, "L", r(e.pts[0]) + r(e.pts[1])])
+        elif e.type == "LWPOLYLINE" and e.pts and len(e.pts) >= 2:
+            items.append([h, "Q" if e.closed else "P", [c for q in e.pts for c in r(q)]])
+        elif e.type in ("CIRCLE",) and e.pts and e.radius:
+            items.append([h, "C", r(e.pts[0]) + [round(e.radius, 1)]])
+        elif e.type == "ARC" and e.arc is not None:
+            cx, cy, rad, a0, a1 = e.arc
+            items.append([h, "A", [round(cx, 1), round(cy, 1), round(rad, 1), round(a0, 1), round(a1, 1)]])
+        elif e.type == "DIMENSION" and e.dim_value is not None and e.pos:
+            pts = [c for q in (e.dim_pts or [])[:2] for c in r(q)]
+            items.append([h, "D", r(e.pos) + [round(float(e.dim_value), 1)] + pts])
+        elif e.text and (e.pos or e.insert):
+            from ..scene.explain import _vi
+
+            items.append([h, "T", r(e.pos or e.insert) + [_vi(e.text)[:60], round(float(e.text_height or 0), 1)]])
+    return {"view": v.id, "label": _view_vi(d, v.id), "box": [round(x, 1) for x in v.box], "items": items,
+            "truncated": len(v.handles) > 6000}
 
 
 def _allowed(sc: Scene2, d, key: str):
@@ -115,6 +215,11 @@ def _allowed(sc: Scene2, d, key: str):
             return "link"
     if key.startswith("label:") and key[6:] in {m.id for m in sc.modules}:
         return "label"
+    if key == f"main:{sc.item}":
+        return "main"
+    parts = key.split(":")
+    if len(parts) == 3 and parts[0] == "module" and parts[2] in ("w", "d", "h", "z0") and parts[1] in {m.id for m in sc.modules}:
+        return "dim"
     return None
 
 
@@ -128,7 +233,23 @@ def set_value(model, root: Path, item: Any, key: Any, value: Any) -> dict:
     if f is None:
         raise SceneApiError("Khoá không thuộc phần thiếu của cảnh hiện tại.")
     sval = str(value).strip()
-    if f == "link":
+    if sval == "reset" and f in ("dim", "main"):  # bỏ giá trị người dùng đã sửa: quay về số đo từ bản vẽ
+        sp, _ = _paths(root, model.file_hash)
+        vals = {k: v for k, v in supp.items() if k != key}
+        _write(sp, {"schema": SUPPLEMENT_SCHEMA, "source_hash": model.file_hash, "origin": "user", "values": vals})
+        return view(model, root, sc.item)
+    if f == "main":
+        if sval not in {lk.elevation for lk in sc.links}:
+            raise SceneApiError("Mặt đứng chưa ghép với mặt bằng nên chưa dựng được từ nó.")
+    elif f == "dim":
+        try:
+            num = float(sval.replace(",", "."))
+        except ValueError:
+            raise SceneApiError("Giá trị phải là số (mm).") from None
+        if not (0 <= num < 100000) or (num == 0 and not key.endswith(":z0")):
+            raise SceneApiError("Giá trị ngoài khoảng hợp lệ (mm).")
+        sval = f"{num:g}"
+    elif f == "link":
         if sval not in {v.id for v in d.views_of(sc.item, "plan")}:
             raise SceneApiError("Mặt bằng không thuộc hạng mục.")
     elif f == "label":

@@ -471,9 +471,10 @@ def learn_layers(app: AppData, rel: Any, standard: Any, scope: Any = "project") 
     return {**out, "table": rules_table(app, std)}
 
 
-def translate_drawing(app: AppData, rel: Any, to: Any, sheet: Any = None, backend: Any = "auto", mode: Any = "copy") -> dict:
+def translate_drawing(app: AppData, rel: Any, to: Any, sheet: Any = None, backend: Any = "auto", mode: Any = "copy",
+                      prefer: Any = None, experimental: bool = False) -> dict:
     """Dịch bản vẽ (hoặc một tờ) sang Tiếng Anh/Tiếng Trung: đề xuất changeset, trả xem trước + báo cáo dịch."""
-    from ..studio.llm import auto_backend
+    from ..studio.llm import all_backends
     from ..translate import TARGETS, TranslateError, build
 
     path = app.resolve(rel)
@@ -488,7 +489,9 @@ def translate_drawing(app: AppData, rel: Any, to: Any, sheet: Any = None, backen
         if s is None:
             raise ApiError("Không có tờ này.")
         handles = set(s.handles)
-    be = backend if backend is not None and not isinstance(backend, str) else (auto_backend() if backend != "none" else None)
+    # AI theo trợ lý người dùng đã chọn (vd. Codex CLI) trước; AI khác chỉ là dự phòng khi cái đó lỗi/hết lượt
+    be = backend if backend is not None and not isinstance(backend, str) else (
+        all_backends(allow_codex=experimental, prefer=prefer if isinstance(prefer, str) else None) if backend != "none" else None)
     try:
         res = build(path, to, workspace=app.ws.root, handles=handles, backend=be, mode=mode)
     except TranslateError as exc:
@@ -856,7 +859,35 @@ def scene3d(app: AppData, rel: Any, item: Any = None) -> dict:
             "gaps": [g.message for g in sc.gaps[:20]], "notes": list(sc.notes)[:10]}
 
 
+def construction_get(app: AppData) -> dict:
+    from ..construction import describe, effective
+
+    return {**effective(app.ws.root), "fields": describe()}
+
+
+def construction_save(app: AppData, scope: Any, values: Any, reset: Any = False) -> dict:
+    from .. import construction as cons
+
+    if reset is True:
+        return {**cons.reset(app.ws.root, str(scope)), "fields": cons.describe()}
+    if not isinstance(values, dict):
+        raise ApiError("Thiếu thông số.")
+    try:
+        return {**cons.save(app.ws.root, str(scope), values), "fields": cons.describe()}
+    except ValueError as exc:
+        raise ApiError(str(exc)) from None
+
+
 GRAPH_DIR = ".cadguard/graph"
+
+
+def _construction_key(root) -> str:
+    import hashlib
+
+    from ..construction import effective
+
+    e = effective(root)
+    return hashlib.sha256(json.dumps([e["values"], e["confirmed"]], sort_keys=True).encode("utf-8")).hexdigest()[:6]
 
 
 def drawing_graph(app: AppData, rel: Any, refresh: Any = False) -> dict:
@@ -874,7 +905,8 @@ def drawing_graph(app: AppData, rel: Any, refresh: Any = False) -> dict:
 
     supp = scene_api.read_supplement(app.ws.root, model.file_hash)
     key = (model.file_hash[:16] + "-" + hashlib.sha256(json.dumps(supp, sort_keys=True).encode("utf-8")).hexdigest()[:8]
-           + overrides_key(app.ws.root, model.file_hash))
+           + overrides_key(app.ws.root, model.file_hash)
+           + _construction_key(app.ws.root))
     cache = app.ws.root / GRAPH_DIR / f"{key}.json"
     if refresh is not True and cache.is_file():
         try:
@@ -883,7 +915,10 @@ def drawing_graph(app: AppData, rel: Any, refresh: Any = False) -> dict:
                 return {"file": app.rel(path), "cached": True, **g}
         except (OSError, ValueError):
             pass
-    g = build_graph(model, supplement=supp, overrides=load_overrides(app.ws.root, model.file_hash))
+    from ..construction import effective as construction_effective
+
+    g = build_graph(model, supplement=supp, overrides=load_overrides(app.ws.root, model.file_hash),
+                    profile={"construction": construction_effective(app.ws.root)["confirmed"]})
     try:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(g, ensure_ascii=False), encoding="utf-8")
@@ -909,6 +944,10 @@ def scene_action(app: AppData, rel: Any, action: str, body: dict) -> dict:
             return scene_api.prompt(model, root, body.get("item"))
         if action == "glb":
             return scene_api.glb(model, root, body.get("item"))
+        if action == "cutlist":
+            return scene_api.cutlist_file(model, root, body.get("item"))
+        if action == "source":
+            return scene_api.source_geometry(model, root, body.get("item"), body.get("view"))
     except scene_api.SceneApiError as exc:
         raise ApiError(str(exc), 422) from None
     raise ApiError("Thao tác 3D không hợp lệ.")

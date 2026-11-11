@@ -14,7 +14,7 @@ _JOBS: dict[str, dict] = {}
 _LOCK = threading.Lock()
 
 
-def _backend(app, translate_backend: Any, app_experimental: bool = False):
+def _backend(app, translate_backend: Any, app_experimental: bool = False, prefer: str | None = None):
     """Cùng cách chọn AI như Dịch: đối tượng có complete() (test) | "none" | "auto"."""
     if translate_backend is not None and not isinstance(translate_backend, str):
         return translate_backend
@@ -23,10 +23,10 @@ def _backend(app, translate_backend: Any, app_experimental: bool = False):
     from ..studio.llm import all_backends
 
     # Codex CLI chỉ khi người dùng đã bật thử nghiệm Codex (như trợ lý chat); một AI hết tín dụng thì sang AI khác.
-    return all_backends(allow_codex=bool(app_experimental))
+    return all_backends(allow_codex=bool(app_experimental), prefer=prefer)
 
 
-def start(app, rel: Any, use_ai: Any, translate_backend: Any, experimental: bool = False) -> dict:
+def start(app, rel: Any, use_ai: Any, translate_backend: Any, experimental: bool = False, prefer: Any = None) -> dict:
     from .. import graph_ai
     from .api import ApiError
     from . import scene_api
@@ -40,7 +40,7 @@ def start(app, rel: Any, use_ai: Any, translate_backend: Any, experimental: bool
     if ai and app.anonymize:
         ai, note = False, "Dự án đang bật ẩn danh (NDA): chỉ chạy gợi ý bằng code, không gửi chữ bản vẽ cho AI."
     if ai:
-        backend = _backend(app, translate_backend, experimental)
+        backend = _backend(app, translate_backend, experimental, prefer if isinstance(prefer, str) else None)
         if backend is None:
             ai, note = False, "Chưa có trợ lý AI dùng được (Kết nối AI): chỉ chạy gợi ý bằng code."
     with _LOCK:

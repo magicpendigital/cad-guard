@@ -122,7 +122,7 @@ Không làm trong v1: render ảnh thực (vật liệu PBR, ánh sáng), G-code
 | P0 ✅ 11/11 | Kiểm tệp ra trên bản vẽ thật, xem trước ở phòng 3D, thông báo bền có hướng dẫn, phần thiếu 3D nói rõ cách sửa, Sửa hàng loạt có sao lưu | Unicode/Dịch/Sửa hàng loạt ra tệp mới ĐẠT trên bản sao tệp phiên 01; test chặn hồi quy |
 | P1 ✅ 11/11 | Đồ thị khung tất định `cg.drawing-graph/1` + màn "Bản đồ bản vẽ" + cổng sẵn sàng; Sửa hàng loạt cả thư mục, tự chia nhỏ khi không đạt | Đồ thị phiên 01: 40 tờ, 11 hạng mục, ≥ 90 % hình có loại; mỗi cổng có danh sách việc cần làm |
 | P2 ✅ 11/11 | Agent làm giàu đồ thị: 4 sub-agent, công cụ đồ thị trong `agent/registry.py`, đầu ra `cg.graph-proposals/1`, harness, màn xác nhận | Trên phiên 01: ghép được ≥ 2/3 mặt đứng đang thiếu ghép; 0 đề xuất không có bằng chứng lọt qua harness |
-| P3 | Hồ sơ kết cấu công ty + mô hình tấm + exploded/X-ray/mặt cắt + danh sách cắt/dán cạnh | Mọi khối có tấm; cut list CSV khớp tổng diện tích ván ± 1 % |
+| P3 ✅ 11/11 (số mặc định) | Hồ sơ kết cấu công ty + mô hình tấm + exploded/X-ray/mặt cắt + danh sách cắt/dán cạnh | Mọi khối có tấm; cut list CSV khớp tổng diện tích ván ± 1 % |
 | P4 | Cánh/bản lề/ngăn kéo theo bảng hãng có phiên bản, hoạt cảnh mở, va chạm, công thái học `info` | Số bản lề/ray khớp bảng hãng trên bộ ca tổng hợp |
 | P5 | Bóc tách vật tư theo vật liệu từ đồ thị; xuất dữ liệu sản xuất tham khảo; tái cấu trúc theo đồ thị qua Sửa hàng loạt | Bảng vật tư theo hạng mục; changeset chuẩn hoá ĐẠT |
 
@@ -161,6 +161,31 @@ Không làm trong v1: render ảnh thực (vật liệu PBR, ánh sáng), G-code
     theo chữ cạnh hình; code: mặt đứng theo tên tờ), 4 đề xuất bị harness loại (bằng chứng không có trong bản vẽ).
 - Còn mở: căn vị trí ngang khi mặt đứng chỉ là một đoạn của mặt bằng (đang căn mép trái, có cảnh báo); mặt bên (theo chiều sâu)
   chưa dùng để dựng; agent `review` chưa đưa nhận xét nào trên tệp này.
+
+## 5d. P3 + đối chiếu 2D ↔ 3D (11/11/2026)
+
+Phản hồi chạy thử: thanh công cụ phòng 3D giống phòng Kỹ thuật; không biết 3D lấy từ tờ nào; chỉ thấy một tủ; trợ lý chọn Codex
+nhưng Dịch/Đề xuất vẫn gọi Claude. Nguyên nhân và cách sửa:
+
+| Hiện tượng | Nguyên nhân | Đã sửa |
+| --- | --- | --- |
+| Chỉ thấy một tủ, không đổi được hạng mục | Ô chọn hạng mục và bảng nằm trong lớp phủ `pointer-events: none` (không bấm được); bộ dựng chỉ dùng mặt đứng đầu tiên, im lặng bỏ các mặt đứng khác | Bố cục mới; ô Hạng mục lên thanh công cụ; dòng "Dựng từ: mặt đứng … (Tờ …) + mặt bằng … (Tờ …)", danh sách mặt đứng (đang dùng / đã ghép chưa dùng / chưa ghép) và nút "Dựng từ hình này" |
+| Không biết số đo lấy từ đâu | Không có dữ liệu nguồn ở giao diện | Nhãn nguồn từng số: Ghi (kích thước trên bản vẽ) / Đo (đo trên nét) / Đã sửa / Mặc định; bấm số để sửa, "Bỏ sửa" để về số bản vẽ (lưu ở phần bổ sung 3D, dựng lại không mất) |
+| Không đối chiếu được | Chỉ có 3D | Chế độ 3D / **Song song 2D \| 3D** / 2D gốc; chọn khối ở bảng hoặc khung khối trên hình 2D thì tô sáng cả hai bên và nét/kích thước bằng chứng; "Hỏi trợ lý" gửi kèm nguồn + số đo của khối |
+| Thanh công cụ giống phòng Kỹ thuật | Thanh công cụ không theo phòng | Phòng 3D: Hạng mục, Cách xem, Kiểu khối (Hình khối/Tấm ván/Tách lớp/Xuyên thấu), Kết cấu xưởng, Bản đồ; ẩn Unicode/Dịch/Học template/Layout |
+| Chọn Codex mà vẫn gọi Claude | Dịch/Đề xuất dùng thứ tự cố định (khoá API → Claude CLI) | Dùng trợ lý người dùng đang chọn (hoặc trợ lý mặc định ở Kết nối AI) trước; AI khác chỉ là dự phòng khi cái đó lỗi |
+
+P3 (số mặc định, người dùng chỉnh được):
+- `construction.py` (`cg.construction/1`): 16 thông số (độ dày ván/hậu/cánh, liên kết thùng, kiểu hậu, kiểu cánh, khe cánh, lùi đợt,
+  dán cạnh, khối lượng riêng, bảng bản lề) có nguồn số mặc định; màn **Kết cấu xưởng** lưu cho cả máy hoặc riêng dự án, có nhật ký,
+  "Về mặc định". Cổng "Dữ liệu sản xuất" nhắc xác nhận khi còn dùng số mặc định.
+- `scene/panels.py`: khối → tấm (hông, nóc, đáy, hậu, đợt, cánh/mặt ngăn kéo) theo hồ sơ; xem Tấm ván / Tách lớp / Xuyên thấu;
+  danh sách cắt (dài × rộng × dày, số lượng, vật liệu theo bộ phận đã Đồng ý ở P2, số cạnh dán), tổng m² ván, m dán cạnh, số bản lề
+  (theo khối lượng cánh); tải CSV mở bằng Excel. Mô hình tham khảo, không phải dữ liệu chạy máy.
+- Nghiên cứu mẫu UX đối chiếu 2D/3D: `docs/research/doi-chieu-2d-3d.md`.
+
+Còn mở: phủ chiếu ngược khối 3D lên hình 2D để tự khoanh chỗ lệch; dựng nhiều mặt đứng cùng lúc (tường B/C xoay góc); báo "3D đã cũ"
+khi DXF đổi; bản lề/ray theo mã hãng cụ thể; mặt bên theo chiều sâu.
 
 ## 6. Cần khách trả lời trước P3
 

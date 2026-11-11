@@ -178,6 +178,13 @@ class CadGuardApp:
             self._titles, self._realtime = titles, realtime
         return self._titles, self._realtime or {}
 
+    def preferred_engine(self, body: dict) -> str | None:
+        """Trợ lý người dùng đang chọn trên giao diện, không có thì trợ lý mặc định trong Kết nối AI."""
+        e = body.get("engine")
+        if isinstance(e, str) and e:
+            return e
+        return self.assistant.effective().get("default_engine")
+
     def dept_standards(self, dept: Any) -> list[str]:
         """Chuẩn của phòng cho sửa hàng loạt; phòng chỉ xem (3D) hoặc không chọn phòng: dùng chuẩn vệ sinh bản vẽ."""
         data = self.d()
@@ -364,6 +371,10 @@ class CadGuardApp:
             ("POST", "/api/scene/propose"): lambda q, b: api.scene_action(d(), b.get("file"), "propose", b),
             ("POST", "/api/scene/prompt"): lambda q, b: api.scene_action(d(), b.get("file"), "prompt", b),
             ("POST", "/api/scene/glb"): lambda q, b: api.scene_action(d(), b.get("file"), "glb", b),
+            ("POST", "/api/scene/source"): lambda q, b: api.scene_action(d(), b.get("file"), "source", b),
+            ("POST", "/api/scene/cutlist"): lambda q, b: api.scene_action(d(), b.get("file"), "cutlist", b),
+            ("GET", "/api/construction"): lambda q, b: api.construction_get(d()),
+            ("POST", "/api/construction"): lambda q, b: api.construction_save(d(), b.get("scope"), b.get("values"), b.get("reset")),
             ("POST", "/api/handover"): lambda q, b: api.handover(d(), b.get("file"), b.get("dept")),
             ("GET", "/api/home"): lambda q, b: self.home(q1(q, "dept")),
             ("GET", "/api/overview"): lambda q, b: self.overview(),
@@ -376,7 +387,9 @@ class CadGuardApp:
             ("GET", "/api/setup"): lambda q, b: self.setup_status(),
             ("POST", "/api/setup/run"): lambda q, b: self.setup_run(b.get("step"), b.get("remove") is True),
             ("POST", "/api/translate"): lambda q, b: api.translate_drawing(d(), b.get("file"), b.get("to"), b.get("sheet"),
-                                                                          self.translate_backend, b.get("mode") or "copy"),
+                                                                          self.translate_backend, b.get("mode") or "copy",
+                                                                          self.preferred_engine(b),
+                                                                          self.assistant.effective()["experimental"]),
             ("POST", "/api/template/learn"): lambda q, b: api.template_learn(d(), b.get("file"), b.get("sheet"),
                                                                             b.get("logo"), b.get("name")),
             ("POST", "/api/rules/reset"): lambda q, b: api.reset_rule(d(), b.get("standard"), b.get("rule_id"),
@@ -389,7 +402,8 @@ class CadGuardApp:
             ("POST", "/api/changeset/apply"): lambda q, b: api.apply_changeset(d(), b.get("changeset_id"), b.get("confirm")),
             ("POST", "/api/graph"): lambda q, b: api.drawing_graph(d(), b.get("file"), b.get("refresh")),
             ("POST", "/api/graph/suggest"): lambda q, b: graph_api.start(d(), b.get("file"), b.get("ai"), self.translate_backend,
-                                                                           self.assistant.effective()["experimental"]),
+                                                                           self.assistant.effective()["experimental"],
+                                                                           self.preferred_engine(b)),
             ("POST", "/api/graph/suggest/status"): lambda q, b: graph_api.status(b.get("job")),
             ("POST", "/api/graph/proposals"): lambda q, b: graph_api.proposals(d(), b.get("file")),
             ("POST", "/api/graph/decide"): lambda q, b: graph_api.decide(d(), b.get("file"), b.get("id"), b.get("accept")),

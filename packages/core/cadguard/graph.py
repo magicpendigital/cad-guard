@@ -324,15 +324,22 @@ def _gates(d: Drawing2D, g: _G, scenes: dict, fragments: list, profile: dict) ->
     out.append(_gate("boq", "Bóc tách vật tư", ok_boq, len(scenes), t3,
                      note="Đủ: hạng mục có khối và có ghi chú vật liệu. Bảng khối lượng chi tiết làm ở P5."))
 
-    # 4. Dữ liệu sản xuất: cần hồ sơ kết cấu công ty (P3) + bóc tách đủ
+    # 4. Dữ liệu sản xuất: mô hình tấm + danh sách cắt theo hồ sơ kết cấu xưởng (P3); số mặc định thì phải xác nhận
     t4: list[dict] = []
+    built = [g for g, sc in scenes.items() if sc is not None and sc.modules]
     if not profile.get("construction"):
-        t4.append(_task("production", "Chưa có hồ sơ kết cấu công ty", "Công ty",
-                        "Mô hình tấm, danh sách cắt, dán cạnh, bản lề cần biết xưởng làm hông trùm hay nóc trùm, hậu rãnh "
-                        "hay bắt vít, độ dày ván, hãng bản lề/ray. Không có chuẩn quốc gia cho các số này.",
-                        "P3: chọn mẫu hồ sơ kết cấu và chỉnh theo xưởng.", "—", None, "E"))
-    out.append(_gate("production", "Dữ liệu sản xuất", 0, len(scenes), t4, blocked=not profile.get("construction"),
-                     note="Mở ở P3 (mô hình tấm, danh sách cắt/dán cạnh)."))
+        t4.append(_task("production", "Hồ sơ kết cấu xưởng đang dùng số mặc định", "Công ty",
+                        "Tấm ván, danh sách cắt, dán cạnh, bản lề đang tính theo số thường gặp (ván 17 mm, hậu bắt vít, "
+                        "cánh trùm toàn, khe 3 mm, bản lề theo bảng Blum). Không có chuẩn quốc gia cho các số này.",
+                        "Bấm 'Kết cấu xưởng' ở phòng Thiết kế 3D, sửa theo xưởng rồi Lưu.", "—", {"id": "construction"}, "W"))
+    for grp, sc in scenes.items():
+        if sc is None or not sc.modules:
+            t4.append(_task("production", "Chưa có khối để tách tấm", g.nodes[f"item:{grp}"]["label"],
+                            "Danh sách cắt cần khối tủ đã dựng (xem cổng Dựng 3D).", "Bổ sung phần thiếu ở màn 3D.", "—",
+                            {"id": "open3d", "item": grp}, "I"))
+    out.append(_gate("production", "Dữ liệu sản xuất (tham khảo)", len(built) if profile.get("construction") else 0, len(scenes), t4,
+                     note="Tấm ván + danh sách cắt + bản lề ở màn 3D (Tấm ván / Tách lớp / Xuyên thấu). Mô hình tham khảo, "
+                          "không phải dữ liệu chạy máy."))
     return out
 
 

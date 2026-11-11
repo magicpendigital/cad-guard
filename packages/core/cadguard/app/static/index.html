@@ -102,8 +102,23 @@
           <button class="btn-s" id="toolMap" type="button" title="Bản đồ bản vẽ: tờ, hình, hạng mục, khối, vật liệu và việc cần làm để dựng 3D, bóc tách, sản xuất.">Bản đồ</button>
           <button class="btn-p" id="toolBulk" type="button" title="Gom mọi lỗi tự sửa được thành một lần sửa. Luôn tạo bản sao lưu bản vẽ gốc trước, kết quả ra tệp mới, hoàn tác được.">Sửa hàng loạt</button>
         </span>
-        <a class="btn-s" href="/review.html">Hồ sơ duyệt</a>
-        <label>Layout <select id="layoutSel" aria-label="Chọn layout"><option>Model</option></select></label>
+        <span class="tool-group" id="tools3d" aria-label="Công cụ phòng Thiết kế 3D" hidden>
+          <label>Hạng mục <select id="t3Item" aria-label="Chọn hạng mục để dựng 3D"></select></label>
+          <span class="seg" id="t3Mode" role="group" aria-label="Cách xem">
+            <button type="button" data-v="3d" aria-pressed="true" title="Chỉ xem 3D">3D</button>
+            <button type="button" data-v="split" aria-pressed="false" title="3D cạnh hình 2D gốc để đối chiếu">Song song 2D | 3D</button>
+            <button type="button" data-v="2d" aria-pressed="false" title="Chỉ xem hình 2D gốc (mặt đứng/mặt bằng)">2D gốc</button>
+          </span>
+          <span class="seg" id="t3Body" role="group" aria-label="Kiểu khối" title="Hình khối hoặc từng tấm ván theo hồ sơ kết cấu xưởng">
+            <button type="button" data-v="block" aria-pressed="true">Hình khối</button>
+            <button type="button" data-v="panel" aria-pressed="false">Tấm ván</button>
+            <button type="button" data-v="explode" aria-pressed="false">Tách lớp</button>
+            <button type="button" data-v="xray" aria-pressed="false">Xuyên thấu</button>
+          </span>
+          <button class="btn-s" id="t3Construct" type="button" title="Thông số kết cấu của xưởng (độ dày ván, hậu, khe cánh, bản lề…) dùng để dựng tấm và danh sách cắt">Kết cấu xưởng</button>
+        </span>
+        <a class="btn-s" href="/review.html" id="toolReview">Hồ sơ duyệt</a>
+        <label id="layoutLbl">Layout <select id="layoutSel" aria-label="Chọn layout"><option>Model</option></select></label>
         <strong id="cvTitle">Chọn một bản vẽ ở cột trái</strong>
         <span class="pill neu" id="viewTag" hidden></span>
         <div class="spacer"></div>

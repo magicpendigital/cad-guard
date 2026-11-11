@@ -30,7 +30,9 @@ def _view_vi(d, vid: str) -> str:
     v = d.view(vid)
     if v is None:
         return vid
-    return f"{KIND_VI.get(v.kind, 'Hình')} “{v.title or v.label or v.id}” (tờ {_sheet_name(d, v.sheet_id)})"
+    sn = _sheet_name(d, v.sheet_id)
+    where = sn if sn.lower().startswith("tờ") else f"tờ {sn}"  # tên tờ đã có chữ "Tờ": không lặp
+    return f"{KIND_VI.get(v.kind, 'Hình')} “{v.title or v.label or v.id}” ({where})"
 
 
 def explain_gap(g, d, sc) -> dict:

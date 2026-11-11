@@ -272,3 +272,28 @@ def test_material_clauses_pair_components_and_keep_diacritics():
     assert _clauses("TỦ CAO CÁNH KÍNH KHUNG NHÔM, MÀU CHỈ ĐỊNH") == [("Kính", ["cánh"]), ("Nhôm", ["khung"])]
     assert _clauses("TỦ BẾP TRÊN KHUNG NHÔM, CÁNH KÍNH, TAY NẮM") == [("Nhôm", ["khung"]), ("Kính", ["cánh"])]
     assert _clauses("GƯƠNG NHẬT 5MM CÓ MÀI CẠNH") == [("Gương", [])]  # CẠNH (mép) không phải CÁNH (cửa)
+
+
+def test_backends_follow_the_engine_the_user_selected(monkeypatch):
+    """Người dùng chọn Codex CLI cho trợ lý: Dịch/Đề xuất phải gọi Codex trước, Claude chỉ là dự phòng."""
+    from cadguard.studio import llm
+
+    made = []
+
+    def fake(name):
+        class B:
+            def __init__(self):
+                made.append(name)
+                self.name = name
+
+            def complete(self, s, m):
+                return name
+        return B
+
+    monkeypatch.setattr(llm, "AnthropicBackend", fake("anthropic-api"))
+    monkeypatch.setattr(llm, "ClaudeCliBackend", fake("claude-cli"))
+    monkeypatch.setattr(llm, "CodexCliBackend", fake("codex-cli"))
+    be = llm.all_backends(allow_codex=False, prefer="codex-cli")
+    assert be.backends[0].name == "codex-cli" and be.complete("s", []) == "codex-cli"
+    assert llm.all_backends(prefer="claude-cli").backends[0].name == "claude-cli"
+    assert [b.name for b in llm.all_backends().backends] == ["anthropic-api", "claude-cli"]  # không chọn, không bật: không Codex

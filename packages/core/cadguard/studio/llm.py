@@ -188,10 +188,20 @@ class FallbackBackend:
         raise LlmError("; ".join(self.errors[-len(self.backends):]) if last else "Không có AI.")
 
 
-def all_backends(allow_codex: bool = False) -> Backend | None:
-    """Mọi backend có trên máy, gói trong FallbackBackend (một cái hết tín dụng thì sang cái khác)."""
+ENGINE_BACKENDS = {"anthropic": "AnthropicBackend", "claude-cli": "ClaudeCliBackend", "codex-cli": "CodexCliBackend"}
+
+
+def all_backends(allow_codex: bool = False, prefer: str | None = None) -> Backend | None:
+    """Mọi backend có trên máy, gói trong FallbackBackend (một cái hết tín dụng thì sang cái khác).
+
+    `prefer`: tên engine người dùng chọn cho trợ lý (vd. "codex-cli"): thử TRƯỚC, đúng như người dùng cấu hình; các AI khác
+    chỉ là dự phòng. Chọn codex-cli tức là người dùng đã bật thử nghiệm Codex trong ứng dụng."""
+    order = [AnthropicBackend, ClaudeCliBackend] + ([CodexCliBackend] if allow_codex or prefer == "codex-cli" else [])
+    first = globals().get(ENGINE_BACKENDS.get(prefer or "", ""))
+    if first is not None:
+        order = [first] + [f for f in order if f is not first]
     found = []
-    for factory in [AnthropicBackend, ClaudeCliBackend] + ([CodexCliBackend] if allow_codex else []):
+    for factory in order:
         try:
             found.append(factory())
         except LlmError:

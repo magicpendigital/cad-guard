@@ -43,7 +43,7 @@ def test_gates_turn_gaps_into_tasks_with_fixes(synthetic):
     assert t["title"] and t["why"] and t["fix_here"] and t["fix_cad"]
     assert "V:" not in t["where"]  # nói bằng tên hình/tờ, không bằng mã máy
     prod = next(x for x in g["gates"] if x["id"] == "production")
-    assert prod["status"] == "blocked"  # chưa có hồ sơ kết cấu công ty (P3)
+    assert prod["done"] == 0 and any(x["action"] == {"id": "construction"} for x in prod["tasks"])  # hồ sơ kết cấu chưa xác nhận
     assert "Dựng 3D hình khối" in summary_vi(g)
 
 

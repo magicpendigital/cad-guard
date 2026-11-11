@@ -653,6 +653,7 @@
   }
 
   function renderWorkSide() {
+    syncToolbar();
     if (!S.session) return;
     const stds = deptStd();
     $("stdName").textContent = stds.length ? stds.join(" + ") : (S.dept && S.dept.view === "scene" ? "Chưa có (luật 3D đang phát triển)" : "Chưa gán chuẩn");
@@ -1245,38 +1246,138 @@
     renderFinds();
   }
 
-  // cg.scene/2: một hạng mục dựng từ mặt bằng + mặt đứng; số đo kèm nguồn; phần thiếu nhập tay; đề xuất AI chờ xác nhận.
-  function render3d2(path, r) {
+  // cg.scene/2: một hạng mục dựng từ mặt bằng + mặt đứng. Đối chiếu 2D ↔ 3D: dựng từ hình nào/tờ nào, mỗi số đo
+  // lấy từ đâu (Ghi = kích thước trên bản vẽ, Đo = đo trên nét, Đã sửa = người dùng), xem song song hình 2D gốc,
+  // bấm khối để tô sáng cả hai bên, sửa số đo (lưu vết, Bỏ sửa), hỏi trợ lý về một khối.
+  const SRC_BADGE = {dimension: "Ghi", geometry: "Đo", user: "Đã sửa", default: "Mặc định", missing: "Thiếu"};
+  const SRC_TIP = {dimension: "Lấy từ kích thước ghi trên bản vẽ", geometry: "Đo trên nét vẽ (không có kích thước ghi)",
+    user: "Bạn đã sửa số này", default: "Giá trị mặc định", missing: "Chưa có"};
+  function syncToolbar() {
+    const scene = !!(S.dept && S.dept.view === "scene");
+    for (const id of ["toolUnicode", "toolLang", "toolMode", "toolTranslate", "toolTemplate", "toolBulk", "toolReview", "layoutLbl"]) {
+      const x = $(id); if (x) x.hidden = scene;
+    }
+    $("tools3d").hidden = !scene;
+  }
+  function seg(id, v) { for (const x of $$(`#${id} button`)) x.setAttribute("aria-pressed", x.dataset.v === v ? "true" : "false"); }
+  async function draw2d(host, path, r, viewId) {
+    const pv = r.provenance;
+    fill(host, el("span", {class: "cap", text: "Đang tải hình 2D…"}));
+    let g;
+    try { g = await api("/api/scene/source", {file: path, item: r.item, view: viewId}); } catch (e) { fill(host, el("span", {class: "cap", text: e.message})); return; }
+    const [x0, y0, x1, y1] = g.box, pad = 0.06 * Math.max(x1 - x0, y1 - y0);
+    const svg = svgEl("svg", {viewBox: `${x0 - pad} ${-(y1 + pad)} ${x1 - x0 + 2 * pad} ${y1 - y0 + 2 * pad}`, role: "img", "aria-label": g.label});
+    const root = svgEl("g", {transform: "scale(1,-1)"});
+    const sw = 0.0015 * Math.max(x1 - x0, y1 - y0);
+    const hl = new Set();
+    const sel = S.sel3d && pv.modules[S.sel3d];
+    if (sel) for (const k of Object.keys(sel.refs)) for (const h of sel.refs[k]) hl.add(h);
+    for (const [h, k, d] of g.items) {
+      const cls = hl.has(h) ? "ln hl" : "ln";
+      if (k === "L") root.append(svgEl("line", {x1: d[0], y1: d[1], x2: d[2], y2: d[3], class: cls, "stroke-width": sw}));
+      else if (k === "P" || k === "Q") { const pts = []; for (let i = 0; i < d.length; i += 2) pts.push(d[i] + "," + d[i + 1]); root.append(svgEl(k === "Q" ? "polygon" : "polyline", {points: pts.join(" "), class: cls, "stroke-width": sw})); }
+      else if (k === "C") root.append(svgEl("circle", {cx: d[0], cy: d[1], r: d[2], class: cls, "stroke-width": sw}));
+      else if (k === "A") {
+        const a0 = d[3] * Math.PI / 180, a1 = d[4] * Math.PI / 180, sx = d[0] + d[2] * Math.cos(a0), sy = d[1] + d[2] * Math.sin(a0), ex = d[0] + d[2] * Math.cos(a1), ey = d[1] + d[2] * Math.sin(a1);
+        const large = ((d[4] - d[3] + 360) % 360) > 180 ? 1 : 0;
+        root.append(svgEl("path", {d: `M${sx} ${sy} A${d[2]} ${d[2]} 0 ${large} 1 ${ex} ${ey}`, class: cls, "stroke-width": sw}));
+      } else if (k === "D" || k === "T") {
+        const size = k === "D" ? 0.018 * Math.max(x1 - x0, y1 - y0) : Math.max(d[3] || 0, 0.012 * Math.max(x1 - x0, y1 - y0));
+        const txt = svgEl("text", {x: d[0], y: -d[1], transform: "scale(1,-1)", "font-size": size, class: hl.has(h) ? "tx hl" : (k === "D" ? "dim" : "tx"),
+          "text-anchor": k === "D" ? "middle" : "start"});
+        txt.textContent = k === "D" ? String(Math.round(d[2])) : d[2];
+        root.append(txt);
+      }
+    }
+    // khung các khối dựng được trên hình này: bấm để chọn (tô sáng bên 3D và hàng trong bảng)
+    const isPlan = pv.views[viewId] && pv.views[viewId].kind === "plan";
+    const pbox = isPlan ? pv.views[viewId].box : null;
+    for (const m of r.modules) {
+      const src = pv.modules[m.id];
+      if (!src) continue;
+      let rect = null;
+      if (!isPlan && src.elevation === viewId && src.ebox.length === 4) rect = src.ebox;
+      if (isPlan && src.plan === viewId && pbox) rect = [pbox[0] + m.x, pbox[1] + m.y, pbox[0] + m.x + m.w.value, pbox[1] + m.y + m.d.value];
+      if (!rect) continue;
+      const rc = svgEl("rect", {x: rect[0], y: rect[1], width: rect[2] - rect[0], height: rect[3] - rect[1], class: "mod" + (S.sel3d === m.id ? " on" : ""), "stroke-width": sw * 2});
+      rc.addEventListener("click", () => select3d(m.id));
+      const tl = svgEl("title", {}); tl.textContent = `${m.id} — bấm để chọn`; rc.append(tl);
+      root.append(rc);
+    }
+    svg.append(root);
+    fill(host, svg, el("span", {class: "cap", text: g.label + (g.truncated ? " (đã cắt bớt)" : "")}));
+  }
+  function select3d(id) {
+    S.sel3d = S.sel3d === id ? null : id;
+    if (S.r3d) render3d2(S.file, S.r3d, true);
+  }
+  function render3d2(path, r, keepView) {
+    S.r3d = r;
     const sheet = $("sheet");
+    const pv = r.provenance || {views: {}, modules: {}, elevations: [], used: {elevations: [], plans: []}, sheets: []};
     const fmt = v => (Math.round(v * 10) / 10).toString();
     $("cvInfo").textContent = `Hạng mục ${r.item} · ${r.counts.modules} khối · ${r.counts.fronts} cánh/ngăn kéo · ${r.counts.gaps} phần thiếu · mã cảnh ${r.scene_hash}`;
-    const sel = el("select", {"aria-label": "Chọn hạng mục"},
-      r.items.map(it => el("option", {value: it.id, text: `${it.name || it.id} · ${it.plans} mặt bằng, ${it.elevations} mặt đứng${it.plans && it.elevations ? "" : " (chưa dựng được)"}`})));
-    sel.value = r.item;
-    sel.addEventListener("change", () => load3d(path, sel.value));
-    const ceil = el("input", {type: "checkbox", "aria-label": "Hiện trần"});
-    const dl = el("button", {type: "button", class: "btn", text: "Tải GLB", onclick: async () => {
-      try {
-        const g = await api("/api/scene/glb", {file: path, item: r.item});
-        const bin = Uint8Array.from(atob(g.b64), c => c.charCodeAt(0));
-        const a = el("a", {href: URL.createObjectURL(new Blob([bin], {type: "model/gltf-binary"})), download: g.name});
-        a.click();
-      } catch (e) { fail(e); }
-    }});
+    // thanh công cụ: chọn hạng mục
+    const isel = $("t3Item");
+    isel.replaceChildren(...r.items.map(it => el("option", {value: it.id, text: `${it.name || it.id}${it.plans && it.elevations ? "" : " (chưa dựng được)"}`})));
+    isel.value = r.item;
+    if (!isel.dataset.bound) { isel.dataset.bound = "1"; isel.addEventListener("change", () => { S.sel3d = null; load3d(S.file, isel.value); }); }
+    const mode = S.mode3d || "3d";
+    seg("t3Mode", mode);
+    seg("t3Body", S.body3d || "block");
     const save = async (key, value) => {
-      try { render3d2(path, await api("/api/scene/set", {file: path, item: r.item, key, value})); } catch (e) { fail(e); }
+      try { render3d2(path, await api("/api/scene/set", {file: path, item: r.item, key, value}), true); } catch (e) { fail(e, "Lưu số liệu 3D"); }
     };
+    // nguồn: dựng từ hình nào, tờ nào; mặt đứng nào chưa dùng
+    const vlabel = (id) => (pv.views[id] ? pv.views[id].label : id);
+    const elevChips = pv.elevations.map(e => el("span", {class: "chip" + (e.used ? " used" : " off"), title: e.used ? "Đang dùng để dựng khối" : (e.linked ? "Đã ghép với mặt bằng, chưa dùng để dựng" : "Chưa ghép với mặt bằng (xem Phần thiếu)")},
+      (e.used ? "✓ " : "") + e.label,
+      !e.used && e.linked ? [" ", el("button", {class: "link sm", type: "button", onclick: () => save(`main:${r.item}`, e.id)}, "Dựng từ hình này")] : null));
+    const srcBar = el("div", {class: "v3d-src"},
+      el("div", {}, b("Đang xem: "), pv.item_name || r.item, ` · ${pv.sheets.length} tờ của hạng mục`),
+      el("div", {}, b("Dựng từ: "), pv.used.elevations.map(vlabel).join("; ") || "—", " + ", pv.used.plans.map(vlabel).join("; ") || "—"),
+      pv.elevations.length > 1 || pv.main_pick ? el("div", {}, b("Các mặt đứng của hạng mục: "), elevChips,
+        pv.main_pick ? el("button", {class: "link sm", type: "button", onclick: () => save(`main:${r.item}`, "reset")}, "Về mặc định") : null) : null,
+      el("div", {class: "f-d", text: "Bấm một hàng trong bảng hoặc một khung khối trên hình 2D để tô sáng cả hai bên. Bấm vào số đo để sửa nếu dựng sai; nhãn cho biết số lấy từ đâu."}));
+    // sân khấu: 3D | song song | 2D
+    const stage = el("div", {class: "v3d-stage"});
+    const host3 = el("div", {});
+    const host2 = el("div", {});
     const cv = el("canvas", {"aria-label": "Mô hình 3D dựng từ bản vẽ, kéo chuột để xoay, cuộn để phóng to", role: "img"});
-    const head = el("tr", {}, ["Khối", "Loại", "Rộng", "Sâu", "Cao", "Cao độ chân", "Cánh/ngăn kéo", "Đợt"].map(t => el("th", {text: t})));
-    const rows = r.modules.map(m => el("tr", {}, el("td", {text: m.id}), el("td", {text: m.label || m.kind}),
-      ["w", "d", "h", "z0"].map(k => el("td", {text: `${fmt(m[k].value)} · ${m[k].src}`})),
-      el("td", {text: String(m.fronts)}), el("td", {text: String(m.shelves)})));
+    host3.append(cv, el("span", {class: "cap", text: "3D · kéo để xoay, cuộn để phóng to"}));
+    if (mode !== "2d") stage.append(host3);
+    if (mode !== "3d") stage.append(host2);
+    const viewSel = el("select", {"aria-label": "Hình 2D để đối chiếu"},
+      [...pv.used.elevations, ...pv.used.plans].map(v => el("option", {value: v, text: vlabel(v)})));
+    if (S.view2d && [...pv.used.elevations, ...pv.used.plans].includes(S.view2d)) viewSel.value = S.view2d;
+    viewSel.addEventListener("change", () => { S.view2d = viewSel.value; draw2d(host2, path, r, viewSel.value); });
+    // bảng khối: số đo + nhãn nguồn, bấm để sửa
+    const head = el("tr", {}, ["Khối", "Loại", "Rộng", "Sâu", "Cao", "Cao độ chân", "Cánh/ngăn kéo", "Đợt", ""].map(t => el("th", {text: t})));
+    const rows = r.modules.map(m => {
+      const src = pv.modules[m.id] || {user: []};
+      const cell = (k) => {
+        const td = el("td", {class: "ed", title: SRC_TIP[m[k].kind] + " · bấm để sửa"}, fmt(m[k].value), el("span", {class: "src-b src-" + m[k].kind, text: SRC_BADGE[m[k].kind] || m[k].kind}));
+        td.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          const inp = el("input", {type: "number", min: "0", step: "1", value: fmt(m[k].value), "aria-label": `${m.id} ${k}`});
+          fill(td, inp, el("button", {class: "btn-s btn-sm", type: "button", onclick: (e2) => { e2.stopPropagation(); save(`module:${m.id}:${k}`, inp.value); }}, "Lưu"),
+            (src.user || []).includes(k) ? el("button", {class: "link sm", type: "button", onclick: (e2) => { e2.stopPropagation(); save(`module:${m.id}:${k}`, "reset"); }}, "Bỏ sửa") : null);
+          inp.focus();
+        });
+        return td;
+      };
+      const tr = el("tr", {class: S.sel3d === m.id ? "on" : ""}, el("td", {}, b(m.id)), el("td", {text: m.label || m.kind}),
+        cell("w"), cell("d"), cell("h"), cell("z0"), el("td", {text: String(m.fronts)}), el("td", {text: String(m.shelves)}),
+        el("td", {}, el("button", {class: "link sm", type: "button", title: "Nhờ trợ lý AI kiểm khối này và đề xuất sửa (bạn vẫn là người lưu)",
+          onclick: (ev) => { ev.stopPropagation(); askAI(feedbackPrompt(r, m, pv)); }}, "Hỏi trợ lý")));
+      tr.addEventListener("click", () => select3d(m.id));
+      return tr;
+    });
     const gaps = r.gaps.map(g => el("div", {class: "gap3d"}, g.explain ? [
         el("div", {class: "g-title", text: `${g.explain.title} · ${g.explain.where}`}),
         el("div", {class: "g-why", text: "Vì sao: " + g.explain.why}),
         g.fields.length ? el("div", {class: "g-fix", text: "Sửa nhanh tại đây: " + g.explain.fix_here}) : null,
-        el("div", {class: "g-fix", text: "Sửa gốc trong AutoCAD: " + g.explain.fix_cad}),
-        (g.explain.views || []).length ? el("small", {text: "Hình đang có: " + g.explain.views.join("; ")}) : null]
+        el("div", {class: "g-fix", text: "Sửa gốc trong AutoCAD: " + g.explain.fix_cad})]
       : el("div", {text: g.message}), g.fields.map(f => {
       const inp = f.kind === "choice" ? el("select", {}, el("option", {value: "", text: "— chọn —"}), f.options.map(o => el("option", {value: o, text: (f.labels && f.labels[o]) || o})))
                                       : el("input", {type: "number", min: "0", step: "any", "aria-label": f.label});
@@ -1287,20 +1388,112 @@
       el("span", {text: `${p.key} = ${p.value}${p.reason ? " — " + p.reason : ""}`}), " ",
       el("button", {type: "button", class: "btn", text: "Xác nhận", onclick: () => save(p.key, p.value)})));
     const room = r.room.ceiling ? `Cao sàn–trần ${fmt(r.room.ceiling)} · ${r.room.src}` : "Chưa có cao sàn–trần";
-    fill(sheet,
-      el("div", {class: "sheet-note"}, "Hạng mục ", sel, " ", el("label", {}, ceil, " hiện trần"), " ", dl, " ", el("small", {text: `mã cảnh ${r.scene_hash}`})),
-      cv,
-      el("div", {class: "sheet-note"}, r.readiness ? el("div", {class: "ready3d"}, b(`Sẵn sàng: ${r.readiness.level}`),
-          ` · ${r.readiness.modules} khối, ${r.readiness.complete} đủ 4 số đo · ${r.readiness.from_dimension_pct}% số đo lấy từ kích thước ghi trên bản vẽ (còn lại đo trên hình) · ${r.readiness.gaps} phần thiếu`,
-          r.gaps.length ? el("div", {text: `Bổ sung ${r.gaps.length} phần thiếu bên dưới để dựng đủ hạng mục.`}) : null) : null,
-        el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), gaps.length ? el("div", {class: "sub-h", text: "Phần thiếu và cách bổ sung"}) : null, gaps, props,
-        r.notes.map(n => el("small", {text: n}))));
-    S.v3d = makeViewer(cv);
-    const show = () => S.v3d.set(r.boxes.filter(b => ceil.checked || b.k !== "ceiling"));
-    ceil.addEventListener("change", show);
-    show();
+    const ceil = el("input", {type: "checkbox", "aria-label": "Hiện trần"});
+    const dl = el("button", {type: "button", class: "btn-s btn-sm", text: "Tải GLB", onclick: async () => {
+      try {
+        const g = await api("/api/scene/glb", {file: path, item: r.item});
+        const bin = Uint8Array.from(atob(g.b64), c => c.charCodeAt(0));
+        el("a", {href: URL.createObjectURL(new Blob([bin], {type: "model/gltf-binary"})), download: g.name}).click();
+      } catch (e) { fail(e, "Tải GLB"); }
+    }});
+    const bottom = el("div", {class: "v3d-bottom"},
+      r.readiness ? el("div", {class: "ready3d"}, b(`Sẵn sàng: ${r.readiness.level}`),
+        ` · ${r.readiness.modules} khối, ${r.readiness.complete} đủ 4 số đo · ${r.readiness.from_dimension_pct}% số đo lấy từ kích thước ghi trên bản vẽ, ${r.readiness.from_user_pct}% bạn đã sửa · ${r.readiness.gaps} phần thiếu`) : null,
+      el("div", {class: "bar-act"}, mode !== "3d" ? [el("span", {text: "Hình 2D: "}), viewSel] : null, el("label", {}, ceil, " hiện trần"), dl, el("small", {text: ` mã cảnh ${r.scene_hash}`})),
+      el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), cutlistBox(r),
+      gaps.length ? el("div", {class: "sub-h", text: "Phần thiếu và cách bổ sung"}) : null, gaps, props,
+      r.notes.map(n => el("small", {text: n})));
+    fill(sheet, el("div", {class: "v3d"}, srcBar, stage, bottom));
+    if (S.v3d) { S.v3d.stop(); S.v3d = null; }
+    if (mode !== "2d") {
+      S.v3d = makeViewer(cv);
+      const show = () => S.v3d.set(boxesFor(r).filter(bx => ceil.checked || bx.k !== "ceiling"));
+      ceil.addEventListener("change", show);
+      show();
+    }
+    if (mode !== "3d") draw2d(host2, path, r, viewSel.value || pv.used.elevations[0]);
     S.findings = [];
     renderFinds();
+  }
+  function setBody3d(v) {
+    S.body3d = v;
+    seg("t3Body", v);
+    if (S.r3d && !S.mapOn) render3d2(S.file, S.r3d, true);
+  }
+  async function openConstruction() {
+    let c;
+    try { c = await api("/api/construction"); } catch (e) { fail(e, "Mở hồ sơ kết cấu xưởng"); return; }
+    const d = $("drawer");
+    const inputs = {};
+    const origin = {default: "mặc định", machine: "cả máy", project: "dự án này"};
+    const rows = c.fields.map((f) => {
+      const id = "cons-" + f.key;
+      let inp;
+      if (f.type === "choice") inp = el("select", {id}, Object.entries(f.options).map(([v, t]) => el("option", {value: v, text: t})));
+      else inp = el("input", {id, type: f.type === "number" ? "number" : "text", step: "any", min: f.min, max: f.max});
+      inp.value = c.values[f.key];
+      inputs[f.key] = inp;
+      return el("div", {class: "task"},
+        el("label", {for: id}, b(f.label), f.unit ? ` (${f.unit})` : "", " ", el("span", {class: "src-b " + (c.origin[f.key] === "default" ? "src-default" : "src-user"), text: origin[c.origin[f.key]]})),
+        el("div", {}, inp),
+        f.help ? el("div", {class: "f-d", text: f.help}) : null,
+        f.source ? el("div", {class: "f-d", text: "Nguồn số mặc định: " + f.source}) : null);
+    });
+    const scope = el("select", {"aria-label": "Lưu cho"}, el("option", {value: "machine", text: "Cả máy (mọi dự án)"}), el("option", {value: "project", text: "Riêng dự án này"}));
+    const save = async (reset) => {
+      const values = {};
+      for (const [k, x] of Object.entries(inputs)) values[k] = x.value;
+      try { await api("/api/construction", reset ? {scope: scope.value, reset: true} : {scope: scope.value, values}); }
+      catch (e) { fail(e, "Lưu hồ sơ kết cấu"); return; }
+      toast(reset ? "Đã bỏ hồ sơ đã lưu ở phạm vi này." : "Đã lưu hồ sơ kết cấu xưởng. Tấm ván và danh sách cắt dựng lại theo số mới.");
+      closeDrawer();
+      if (S.file && S.dept && S.dept.view === "scene") load3d(S.file, S.r3d ? S.r3d.item : undefined);
+      else if (S.mapOn) loadMap(false);
+    };
+    const close = el("button", {class: "iconbtn", type: "button", "aria-label": "Đóng", onclick: closeDrawer}, icon("x"));
+    fill(d,
+      el("div", {class: "dr-h"}, el("div", {class: "grow1"}, el("h2", {id: "drTitle", text: "Kết cấu xưởng"}),
+        el("div", {class: "f-d", text: c.confirmed ? "Đã có hồ sơ lưu. Sửa để khớp thực tế xưởng." : "Đang dùng SỐ MẶC ĐỊNH thường gặp. Hãy để người làm kỹ thuật/xưởng kiểm và lưu."})), close),
+      el("div", {class: "dr-b"},
+        el("p", {class: "f-d", text: "Không có chuẩn quốc gia về kết cấu tủ: mỗi xưởng tự khai. Các số này dùng để dựng tấm ván, danh sách cắt, dán cạnh, số bản lề (mô hình tham khảo, không phải dữ liệu chạy máy). Bản vẽ không bị sửa."}),
+        rows),
+      el("div", {class: "dr-f"}, el("label", {}, "Lưu cho ", scope), el("span", {class: "spacer"}),
+        el("button", {class: "btn-s", type: "button", onclick: () => save(true)}, "Về mặc định"),
+        el("button", {class: "btn-p", type: "button", onclick: () => save(false)}, "Lưu")));
+    d.classList.add("on");
+    close.focus();
+  }
+  function cutlistBox(r) {
+    const cl = r.cutlist;
+    if (!cl || !cl.rows.length) return null;
+    const head = el("tr", {}, ["Chi tiết", "Dài", "Rộng", "Dày", "SL", "Vật liệu", "Cạnh dán", "Khối"].map((t) => el("th", {text: t})));
+    const rows = cl.rows.map((x) => el("tr", {}, el("td", {text: x.part}), el("td", {text: String(x.length)}), el("td", {text: String(x.width)}),
+      el("td", {text: String(x.thickness)}), el("td", {text: String(x.qty)}), el("td", {text: x.material}), el("td", {text: String(x.edges)}), el("td", {text: x.modules.join(" ")})));
+    const dl = el("button", {class: "btn-s btn-sm", type: "button", onclick: async () => {
+      try {
+        const f = await api("/api/scene/cutlist", {file: S.file, item: r.item});
+        el("a", {href: URL.createObjectURL(new Blob([f.csv], {type: "text/csv;charset=utf-8"})), download: f.name}).click();
+      } catch (e) { fail(e, "Tải danh sách cắt"); }
+    }}, "Tải CSV (Excel)");
+    return el("details", {open: S.body3d && S.body3d !== "block"},
+      el("summary", {}, b(`Danh sách cắt (tham khảo): ${cl.panels} tấm · ${cl.area_m2} m² ván · ${cl.edge_band_m} m dán cạnh · ${cl.hinges} bản lề`)),
+      el("div", {class: "f-d"}, `Theo hồ sơ kết cấu: ${r.construction.summary}${r.construction.confirmed ? "" : " (SỐ MẶC ĐỊNH, chưa xác nhận)"}. `,
+        el("button", {class: "link sm", type: "button", onclick: openConstruction}, "Sửa kết cấu xưởng"), " · ", dl,
+        " · Vật liệu lấy từ vật liệu theo bộ phận bạn đã Đồng ý ở Bản đồ; chưa có thì ghi “Chưa gán”."),
+      el("table", {class: "tbl3d"}, head, rows));
+  }
+  function boxesFor(r) {
+    const hl = S.sel3d;
+    const src = (S.body3d && S.body3d !== "block" && r.panels) ? r.panels[S.body3d] || r.boxes : r.boxes;
+    return src.map(bx => (hl && bx.n && (bx.n === hl || bx.n.startsWith(hl + ".") || bx.n.startsWith(hl + ":"))) ? {...bx, c: [0.15, 0.39, 0.92]} : bx);
+  }
+  function feedbackPrompt(r, m, pv) {
+    const src = pv.modules[m.id] || {};
+    const vals = ["w", "d", "h", "z0"].map(k => `${{w: "rộng", d: "sâu", h: "cao", z0: "cao độ chân"}[k]} ${Math.round(m[k].value)} mm (${SRC_TIP[m[k].kind]})`).join("; ");
+    return `Kiểm giúp khối ${m.id} (${m.label || m.kind}) của hạng mục “${pv.item_name || r.item}” trong bản vẽ ${S.file}. ` +
+      `CAD Guard dựng nó từ ${(pv.views[src.elevation] || {}).label || "?"} và ${(pv.views[src.plan] || {}).label || "?"}. Số đo hiện tại: ${vals}. ` +
+      `Dùng công cụ get_scene/get_drawing_graph/query_model để đối chiếu với kích thước ghi trên bản vẽ. Nếu thấy sai, chỉ ra số đúng và lấy từ kích thước/hình nào; ` +
+      `tôi sẽ tự sửa trong bảng 3D. Ghi rõ đâu là nhận xét của AI.`;
   }
 
   // Trình xem 3D canvas 2D (chuyển từ scene/viewer.py, gắn sự kiện bằng addEventListener).
@@ -1583,7 +1776,7 @@
         ev.target.disabled = true;
         toast("Đang dịch… (LLM đề xuất, code kiểm số/đơn vị/mã)");
         try {
-          const r = await api("/api/translate", {file: S.file, to: lang.value, sheet: S.sheetSel || null});
+          const r = await api("/api/translate", {file: S.file, to: lang.value, sheet: S.sheetSel || null, engine: S.engine ? S.engine.name : null});
           const rp = r.report;
           toast(`Nguồn: ${rp.source_language.language_name}. ${rp.translated}/${rp.strings} chuỗi có bản dịch, ${rp.untranslated} chưa dịch, ${rp.issue_count} cần xem.`);
           if (r.preview) { S.preview = r.preview; renderChg(); loadChangesets(); }
@@ -2714,7 +2907,7 @@
     S.lastPropose = () => toolTranslate(lang, btn);
     const bz = busy("Đang dịch…", "AI đề xuất bản dịch, CAD Guard kiểm số/đơn vị/mã. Bản vẽ lớn có thể mất vài phút; muốn nhanh hãy chọn một tờ ở thanh Tờ rồi bấm Dịch.");
     try {
-      const r = await api("/api/translate", {file: S.file, to: lang, sheet: S.sheetSel || null, mode: mode || "copy"});
+      const r = await api("/api/translate", {file: S.file, to: lang, sheet: S.sheetSel || null, mode: mode || "copy", engine: S.engine ? S.engine.name : null});
       const rp = r.report;
       const summary = `Ngôn ngữ gốc: ${rp.source_language.language_name}. Có bản dịch ${rp.translated}/${rp.strings} chuỗi, chưa dịch ${rp.untranslated}, cần xem ${rp.issue_count}.`;
       if (!rp.llm || rp.untranslated > rp.translated) {
@@ -2831,6 +3024,7 @@
     unicode: () => toolUnicode(),
     bulk: () => toolBulk(),
     open3d: (a) => load3d(S.file, a.item),
+    construction: () => openConstruction(),
     sheet: (a) => {
       if (S.dept && S.dept.view === "scene") {  // phòng 3D không có màn tờ: chuyển sang phòng có xem tờ rồi mở đúng tờ
         const to = deptById("ky-thuat") || (S.session ? S.session.departments.find((x) => x.view !== "scene") : null);
@@ -2862,7 +3056,7 @@
     const label = {ok: "Đủ", partial: "Chưa đủ", blocked: "Chưa mở"};
     const actBtn = (a) => {
       if (!a || !MAP_ACTIONS[a.id]) return null;
-      const txt = {unicode: "Chuyển Unicode", bulk: "Sửa hàng loạt", open3d: "Mở 3D hạng mục", sheet: "Xem tờ"}[a.id];
+      const txt = {unicode: "Chuyển Unicode", bulk: "Sửa hàng loạt", open3d: "Mở 3D hạng mục", sheet: "Xem tờ", construction: "Kết cấu xưởng"}[a.id];
       return el("button", {class: "btn-s btn-sm", type: "button", onclick: () => MAP_ACTIONS[a.id](a)}, txt);
     };
     const gates = g.gates.map((gt) => el("div", {class: "gate " + gt.status},
@@ -2982,7 +3176,7 @@
     const bz = busy(ai ? "Đang nhờ AI đề xuất…" : "Đang tìm đề xuất bằng code…",
       ai ? "4 việc: loại hình, ghép hình, vật liệu, soát nhất quán. Có thể mất vài phút; bạn vẫn dùng ứng dụng bình thường." : "");
     let job;
-    try { job = await api("/api/graph/suggest", {file: path, ai}); } catch (e) { bz.done(); fail(e, "Đề xuất bổ sung"); return; }
+    try { job = await api("/api/graph/suggest", {file: path, ai, engine: S.engine ? S.engine.name : null}); } catch (e) { bz.done(); fail(e, "Đề xuất bổ sung"); return; }
     if (job.note) toast(job.note);
     const msg = document.querySelector("#notices .notice.busy .n-msg");
     while (job.state === "running") {
@@ -3118,6 +3312,9 @@
     $("toolTemplate").addEventListener("click", toolTemplate);
     $("toolBulk").addEventListener("click", toolBulk);
     $("toolMap").addEventListener("click", () => loadMap(false));
+    for (const x of $$("#t3Mode button")) x.addEventListener("click", () => { S.mode3d = x.dataset.v; seg("t3Mode", S.mode3d); if (S.r3d && !S.mapOn) render3d2(S.file, S.r3d, true); });
+    for (const x of $$("#t3Body button")) x.addEventListener("click", () => setBody3d(x.dataset.v));
+    $("t3Construct").addEventListener("click", () => openConstruction());
     $("zoomIn").addEventListener("click", () => (S.v3d ? S.v3d.zoom(1.25) : zoomButton(0.8)));
     $("zoomOut").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0.8) : zoomButton(1.25)));
     $("zoomFit").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0) : zoomButton(0)));

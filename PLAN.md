@@ -72,6 +72,7 @@ Phạm vi kết nối AutoCAD đã duyệt:
 - **P0 xong:** kiểm tệp ra đúng trên bản vẽ thật (Unicode/Dịch trước đây không bao giờ ra tệp), xem trước ở phòng 3D, thông báo lỗi không tự tắt kèm "vì sao / làm gì" (`app/guidance.py`), phần thiếu 3D nói rõ tờ nào và cách sửa, **Sửa hàng loạt** bắt buộc sao lưu (`app/bulkfix.py`).
 - **P1 xong (11/11):** đồ thị tri thức bản vẽ `cg.drawing-graph/1` (`cadguard graph`, nút Bản đồ) + cổng sẵn sàng có việc cần làm; Sửa hàng loạt tự chia nhỏ và chạy cả thư mục.
 - **P2 xong (11/11):** đề xuất bổ sung bản đồ (code + AI, harness kiểm bằng chứng, người dùng Đồng ý mới ghi), công cụ trợ lý `get_drawing_graph`; AI tự chuyển khi một AI hết tín dụng.
+- **P3 xong với số mặc định (11/11):** hồ sơ kết cấu xưởng chỉnh trên giao diện, tấm ván / tách lớp / xuyên thấu, danh sách cắt + bản lề; màn 3D đối chiếu 2D song song, nguồn từng số đo, sửa số có lưu vết; thanh công cụ theo phòng; AI theo trợ lý người dùng chọn.
 - **Tiếp theo:** P3–P5 mô hình tấm, cut list, exploded/X-ray, cánh/bản lề/ray, bóc tách vật tư. Nghiên cứu ngành: `docs/research/3d-san-xuat-noi-that.md`.
 
 ## 4. Quyết định còn mở
