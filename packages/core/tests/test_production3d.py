@@ -48,7 +48,7 @@ def test_construction_defaults_save_validate_scope_and_reset(cfg, tmp_path):
 def test_panels_cutlist_hinges_and_view_modes(kitchen):
     _root, m = kitchen
     sc = build_item_scene(read_drawing(m), "SYN.10")
-    c = construction.defaults()
+    c = {**construction.defaults(), "base_top": "full"}  # thanh giằng tủ dưới kiểm riêng ở test_structure.py
     ps = panels_for(sc, c)
     parts = {p.part for p in ps}
     assert {"side_l", "side_r", "top", "bottom", "back", "door"} <= parts

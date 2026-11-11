@@ -736,3 +736,12 @@ body.acad-panel .tabs{overflow-x:auto}
 .notice .tbl3d{font-size:12px;margin-top:6px}
 .v3d-stage svg .cut-ok{stroke:#15803d}
 .v3d-stage svg .cut-prop{stroke:#f59e0b;stroke-dasharray:40 25}
+.struct3d{border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12.5px;background:var(--bg)}
+.struct3d summary{cursor:pointer}
+.pipe td.pst{text-align:center;font-weight:600}
+.pipe td.ok{color:#15803d}
+.pipe td.needs_review{color:#2563eb}
+.pipe td.warn{color:#c2410c}
+.pipe td.error{color:#b91c1c}
+.pipe td.skipped{color:var(--text3)}
+.pipe-row{cursor:pointer}

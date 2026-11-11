@@ -14,12 +14,13 @@ import io
 from dataclasses import dataclass, field
 
 PART_VI = {"side_l": "Hông trái", "side_r": "Hông phải", "top": "Nóc", "bottom": "Đáy", "back": "Hậu", "shelf": "Đợt",
-           "door": "Cánh", "drawer": "Mặt ngăn kéo", "panel": "Tấm ốp", "filler": "Tấm bù (đo thực tế)"}
+           "door": "Cánh", "drawer": "Mặt ngăn kéo", "panel": "Tấm ốp", "filler": "Tấm bù (đo thực tế)",
+           "partition": "Vách ngăn", "rail": "Thanh giằng"}
 GROUP_OF = {"side_l": "thùng", "side_r": "thùng", "top": "thùng", "bottom": "thùng", "shelf": "đợt", "back": "hậu",
-            "door": "cánh", "drawer": "cánh", "panel": "ốp", "filler": "ốp"}
+            "door": "cánh", "drawer": "cánh", "panel": "ốp", "filler": "ốp", "partition": "thùng", "rail": "thùng"}
 COLORS = {"side_l": (0.80, 0.70, 0.55), "side_r": (0.80, 0.70, 0.55), "top": (0.74, 0.64, 0.50), "bottom": (0.74, 0.64, 0.50),
           "back": (0.62, 0.60, 0.58), "shelf": (0.86, 0.78, 0.62), "door": (0.93, 0.89, 0.80), "drawer": (0.90, 0.84, 0.72),
-          "panel": (0.88, 0.82, 0.70), "filler": (0.80, 0.80, 0.78)}
+          "panel": (0.88, 0.82, 0.70), "filler": (0.80, 0.80, 0.78), "partition": (0.70, 0.60, 0.46), "rail": (0.74, 0.64, 0.50)}
 
 
 @dataclass
@@ -72,26 +73,43 @@ def panels_for(scene, c: dict) -> list[Panel]:
             gd = float(c["groove_depth"])
             yk = yb - float(c["back_inset"])
             P("back", x0 + t - gd, yk - bt, z0 + t - gd, x1 - t + gd, yk, z1 - t + gd, 0)
+        rails = m.kind == "base" and c.get("base_top", "rails") == "rails"  # tủ dưới đỡ mặt đá: 2 thanh giằng
+        rw = float(c.get("rail_width", 100))
+
+        def top(a, b, edges):
+            if rails:
+                P("rail", a, yf, z1 - t, b, yf + rw, z1, edges, n="_f")
+                P("rail", a, yc - rw, z1 - t, b, yc, z1, edges, n="_b")
+            else:
+                P("top", a, yf, z1 - t, b, yc, z1, edges)
+
         if c["joint"] == "side_over":
             P("side_l", x0, yf, z0, x0 + t, yc, z1, 1)
             P("side_r", x1 - t, yf, z0, x1, yc, z1, 1)
-            P("top", x0 + t, yf, z1 - t, x1 - t, yc, z1, 1)
+            top(x0 + t, x1 - t, 1)
             P("bottom", x0 + t, yf, z0, x1 - t, yc, z0 + t, 1)
         else:
-            P("top", x0, yf, z1 - t, x1, yc, z1, 3)
+            top(x0, x1, 3)
             P("bottom", x0, yf, z0, x1, yc, z0 + t, 3)
             P("side_l", x0, yf, z0 + t, x0 + t, yc, z1 - t, 1)
             P("side_r", x1 - t, yf, z0 + t, x1, yc, z1 - t, 1)
+        hinges = hinge_sides(m.fronts, x0, x1)
+        from .structure import plan_module
+
+        parts = plan_module(m, hinges, c)  # vách ngăn bắt buộc theo kết cấu (bản lề, ray, nhịp đợt)
+        for i, pt in enumerate(parts, 1):
+            P("partition", pt["x"] - t / 2, yf, z0 + t, pt["x"] + t / 2, yc, z1 - t, 1, n=i, auto=True, reason=pt["reason"])
         n = int(m.shelves or 0)
         if n > 0:
             inner0, inner1 = z0 + t, z1 - t
             step = (inner1 - inner0) / (n + 1)
             ys = yf + float(c["shelf_setback"])
             yback = (yb - bt) if c["back_type"] == "screw" else (yb - float(c["back_inset"]) - bt)
-            for i in range(1, n + 1):
-                zs = inner0 + i * step - t / 2
-                P("shelf", x0 + t, ys, zs, x1 - t, yback, zs + t, 1, n=i)
-        hinges = hinge_sides(m.fronts, x0, x1)
+            walls = [x0 + t] + [v for pt in parts for v in (pt["x"] - t / 2, pt["x"] + t / 2)] + [x1 - t]
+            for k, (a, b) in enumerate(zip(walls[::2], walls[1::2]), 1):  # đợt theo từng khoang giữa các vách
+                for i in range(1, n + 1):
+                    zs = inner0 + i * step - t / 2
+                    P("shelf", a, ys, zs, b, yback, zs + t, 1, n=f"{k}.{i}" if len(parts) else i)
         for j, f in enumerate(m.fronts, 1):
             if c["door_overlay"] == "inset":
                 fx0, fx1, fz0, fz1 = max(f.x0, x0 + t) + gap / 2, min(f.x1, x1 - t) - gap / 2, max(f.z0, z0 + t) + gap / 2, min(f.z1, z1 - t) - gap / 2

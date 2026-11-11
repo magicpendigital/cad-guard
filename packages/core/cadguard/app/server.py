@@ -26,7 +26,7 @@ from ..privacy import effective as privacy_effective, label as privacy_label, se
 from .. import __version__
 from ..review.types import ReviewError, LOCAL
 from ..standard import ProfileError, find_standards_dir, load_profile
-from . import api, bulkfix, connect, drafting_api, graph_api, history, scene_ai
+from . import api, bulkfix, connect, drafting_api, graph_api, history, pipeline_api, scene_ai
 from .api import DEPARTMENTS_FILE, NAME_RE, ApiError, AppConfig, AppData, load_departments
 from .chat import Assistant
 from .project import DialogBusy, check_profile_file, check_project_dir, dialog_available, run_dialog
@@ -421,6 +421,11 @@ class CadGuardApp:
                                                                    self.assistant.effective()["experimental"], self.preferred_engine(b)),
             ("POST", "/api/scene/ai/status"): lambda q, b: scene_ai.status(b.get("job")),
             ("POST", "/api/drafting"): lambda q, b: drafting_api.view(d(), b.get("file")),
+            ("POST", "/api/pipeline/run"): lambda q, b: pipeline_api.start(d(), b.get("file"), b.get("ai"), b.get("force"),
+                                                                           self.translate_backend, self.assistant.effective()["experimental"],
+                                                                           self.preferred_engine(b)),
+            ("POST", "/api/pipeline/status"): lambda q, b: pipeline_api.status(b.get("job")),
+            ("POST", "/api/pipeline/history"): lambda q, b: pipeline_api.item_history(d(), b.get("file"), b.get("item")),
             ("POST", "/api/drafting/save"): lambda q, b: drafting_api.save(d(), b),
             ("POST", "/api/drafting/propose"): lambda q, b: drafting_api.start(d(), b.get("file"), b.get("ai"), self.translate_backend,
                                                                                self.assistant.effective()["experimental"],

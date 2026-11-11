@@ -71,3 +71,18 @@ sẽ chỉ ra nút nào bỏ sót, rồi sửa code nút đó trước, chỉ d�
 2. Bộ chạy luồng + lịch sử chạy; chuyển các nút sẵn có vào luồng; đo bằng bộ đáp án sau mỗi thay đổi.
 3. Sub-agent đọc số theo loại (sâu, cao, cao độ, trần) có leo thang từ code, và sub-agent nhìn ảnh vùng.
 4. Màn "lịch sử chạy" cho người dùng.
+
+## 7. Đã làm (11/11/2026)
+
+- **Bộ chạy luồng** `cadguard/pipeline.py` (`cg.pipeline-run/1`): mỗi hạng mục chạy các bước đọc theo hồ sơ → ghép hình →
+  dựng khối → chia khối → đọc số còn thiếu → AI (chỉ khi code còn phần thiếu/đề xuất và người dùng bấm "Chạy có AI") →
+  kiểm kết cấu → người duyệt. Ghi lịch sử 20 lần gần nhất ở `.cadguard/runs/<băm>/<hạng mục>.json`; khoá đầu vào (băm tệp +
+  số người nhập + hồ sơ trình bày + kết cấu xưởng) không đổi thì dùng lại kết quả.
+- App: nút "Luồng xử lý" ở thanh công cụ 3D: bảng hạng mục × bước (✓ xong, ✋ chờ duyệt, ⚠ cần xem, – bỏ qua, ✗ lỗi), bấm
+  một dòng để mở hạng mục (`/api/pipeline/run|status|history`).
+- **Kết cấu thùng tủ** `scene/structure.py` + Kết cấu xưởng (tự thêm vách ngăn, nhịp đợt tối đa, cánh rộng tối đa, nóc tủ
+  dưới bằng thanh giằng): vách bắt buộc ở đường ráp mà cánh bắt bản lề vào, cạnh cột ngăn kéo, khoang có đợt quá nhịp (chỉ
+  tại đường ráp cánh); kiểm cánh rộng > 600 / rộng hơn cao (Blum). Màn 3D: mục "Kiểm kết cấu"; danh sách cắt có "Vách ngăn",
+  "Thanh giằng". Skill trợ lý `knowledge/skills/ket-cau-tu/SKILL.md` (kèm nguồn).
+
+Chưa làm: sub-agent đọc số tách riêng theo từng loại số; sub-agent nhìn ảnh vùng hình chiếu; chạy song song nhiều hạng mục.

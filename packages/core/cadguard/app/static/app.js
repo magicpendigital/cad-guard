@@ -1407,6 +1407,50 @@
     const dx = x - m.pivot[0], dy = y - m.pivot[1];
     return [m.pivot[0] + dx * c - dy * s, m.pivot[1] + dx * s + dy * c];
   }
+  // Luồng xử lý (n8n-style "lịch sử chạy"): mỗi hạng mục một dòng các bước, trạng thái từng bước, bấm để mở hạng mục.
+  const STEP_ICON = {ok: "✓", warn: "⚠", needs_review: "✋", skipped: "–", error: "✗", running: "…"};
+  async function openPipeline(result) {
+    if (!S.file) { toast("Mở một bản vẽ trước."); return; }
+    const path = S.file;
+    const d = $("drawer");
+    const run = async (ai, force) => {
+      const bz = busy(ai ? "Đang chạy luồng xử lý (có AI)…" : "Đang chạy luồng xử lý…", "Code chạy trước; AI chỉ nhận phần code chưa giải được.");
+      let job;
+      try { job = await api("/api/pipeline/run", {file: path, ai, force, engine: S.engine ? S.engine.name : null}); } catch (e) { bz.done(); fail(e, "Luồng xử lý"); return; }
+      if (job.note) toast(job.note);
+      const msg = document.querySelector("#notices .notice.busy .n-msg");
+      while (job.state === "running") {
+        await new Promise((res) => setTimeout(res, 1500));
+        try { job = await api("/api/pipeline/status", {job: job.id}); } catch (e) { bz.done(); fail(e, "Luồng xử lý"); return; }
+        if (msg && job.now) msg.textContent = `Đang làm: ${job.now[0]} · ${job.now[1]}`;
+      }
+      bz.done();
+      if (job.state === "error") { fail(new Error(job.error || "Lỗi khi chạy luồng."), "Luồng xử lý"); return; }
+      openPipeline(job.result);
+    };
+    const close = el("button", {class: "iconbtn", type: "button", "aria-label": "Đóng", onclick: closeDrawer}, icon("x"));
+    const body = el("div", {class: "dr-b"},
+      el("p", {class: "f-d", text: "Mỗi hạng mục đi qua các bước: đọc theo hồ sơ trình bày → ghép hình → dựng khối → chia khối → đọc số còn thiếu → AI (chỉ phần code chưa giải được) → kiểm kết cấu → người duyệt. Kết quả lưu lại; bản vẽ và số không đổi thì không chạy lại."}),
+      el("div", {class: "w-act"},
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: () => run(false, false)}, "Chạy (code)"),
+        el("button", {class: "btn-p btn-sm", type: "button", onclick: () => run(true, false)}, "Chạy có AI"),
+        el("button", {class: "link sm", type: "button", onclick: () => run(false, true)}, "Chạy lại từ đầu")));
+    if (result) {
+      body.append(el("div", {class: "f-d", text: `${result.items} hạng mục · ${result.needs_review} hạng mục chờ bạn duyệt`}),
+        el("table", {class: "tbl3d pipe"}, el("tr", {}, el("th", {text: "Hạng mục"}), result.steps.map(s => el("th", {text: s.label.split(" (")[0], title: s.label}))),
+          result.rows.map(r => el("tr", {class: "pipe-row", title: "Bấm để mở hạng mục này",
+            onclick: () => { closeDrawer(); load3d(path, r.item); }},
+            el("td", {}, b(r.name || r.item), r.cached ? el("small", {class: "muted", text: " (kết quả lưu)"}) : null),
+            result.steps.map(s => {
+              const st = (r.steps || []).find(x => x.id === s.id);
+              return el("td", {class: "pst " + (st ? st.status : ""), title: st ? `${st.status} · ${st.summary} · ${st.ms} ms` : ""}, st ? STEP_ICON[st.status] || st.status : "");
+            })))),
+        el("p", {class: "f-d", text: "✓ xong · ✋ chờ bạn duyệt · ⚠ cần xem · – bỏ qua · ✗ lỗi. Rê chuột lên ô để xem tóm tắt từng bước."}));
+    }
+    fill(d, el("div", {class: "dr-h"}, el("div", {class: "grow1"}, el("h2", {id: "drTitle", text: "Luồng xử lý"})), close), body);
+    d.classList.add("on");
+    close.focus();
+  }
   async function showBench() {
     const bz = busy("Đang chấm điểm dựng 3D…", "Dựng lại từng hạng mục có đáp án theo từng cách đọc.");
     let r;
@@ -1641,7 +1685,14 @@
       el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), cutlistBox(r),
       r.notes.map(n => el("small", {text: n})));
     S.warn3d = new Set(warnMods.map(m => m.id));
-    fill(sheet, el("div", {class: "v3d"}, srcBar, splitBar, banner, stage, bottom));
+    const st = r.structure || [];
+    const LV = {auto: ["src-geometry", "Tự thêm"], warn: ["src-default", "Cần xem"], info: ["src-user", "Gợi ý"]};
+    const structBox = st.length ? el("details", {class: "struct3d", open: st.some(x => x.level === "warn")},
+      el("summary", {}, b(`Kiểm kết cấu · ${st.filter(x => x.level === "auto").length} vách tự thêm · ${st.filter(x => x.level === "warn").length} cần xem`),
+        " (hồi, nóc, đáy, hậu, vách ngăn, đợt, cánh — theo Kết cấu xưởng)"),
+      st.map(x => el("div", {class: "gap3d"}, el("span", {class: "src-b " + LV[x.level][0], text: LV[x.level][1]}), " ", b(x.title),
+        el("div", {class: "g-why", text: "Vì sao: " + x.why}), el("div", {class: "g-fix", text: x.fix})))) : null;
+    fill(sheet, el("div", {class: "v3d"}, srcBar, splitBar, banner, structBox, stage, bottom));
     if (S.v3d) { S.v3d.stop(); S.v3d = null; }
     if (mode !== "2d") {
       S.v3d = makeViewer(cv);
@@ -3834,6 +3885,7 @@
     for (const x of $$("#t3Body button")) x.addEventListener("click", () => setBody3d(x.dataset.v));
     $("t3Construct").addEventListener("click", () => openConstruction());
     $("t3Drafting").addEventListener("click", () => openDrafting());
+    $("t3Pipeline").addEventListener("click", () => openPipeline());
     $("zoomIn").addEventListener("click", () => (S.v3d ? S.v3d.zoom(1.25) : zoomButton(0.8)));
     $("zoomOut").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0.8) : zoomButton(1.25)));
     $("zoomFit").addEventListener("click", () => (S.v3d ? S.v3d.zoom(0) : zoomButton(0)));
