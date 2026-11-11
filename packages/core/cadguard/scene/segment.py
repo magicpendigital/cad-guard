@@ -41,7 +41,7 @@ def box_of(items: list[Item]) -> Box:
     return (min(i[0][0] for i in items), min(i[0][1] for i in items), max(i[0][2] for i in items), max(i[0][3] for i in items))
 
 
-def _cuts(items: list[Item], axis: int) -> list[list[Item]]:
+def _cuts(items: list[Item], axis: int, keep: tuple = ()) -> list[list[Item]]:
     """Chia theo trục (0: đường cắt dọc, 1: đường cắt ngang) ở chỗ không nét nào đi qua; gộp mảnh mỏng."""
     iv = sorted(items, key=lambda t: (t[0][axis], t[0][axis + 2]))
     pieces: list[list[Item]] = [[iv[0]]]
@@ -78,7 +78,9 @@ def _cuts(items: list[Item], axis: int) -> list[list[Item]]:
 
     i = 0
     while len(pieces) > 1 and i < len(pieces):
-        if size(pieces[i]) < PIECE_MIN:
+        pb = box_of(pieces[i])
+        kept = axis == 0 and any(pb[0] - 1 <= x <= pb[2] + 1 for x in keep)  # có ghi chú "tấm fix": tấm bù hẹp, không gộp
+        if size(pieces[i]) < PIECE_MIN and not kept:
             thin = pieces.pop(i)  # tấm mỏng nhập vào mảnh trước (hông phải của tủ trái); mảnh đầu nhập mảnh sau
             pieces[i - 1 if i > 0 else 0] += thin
             i = 0
@@ -99,14 +101,14 @@ def _same_levels(a: list[float], b: list[float]) -> bool:
     return bool(a) and len(a) == len(b) and all(abs(x - y) <= 5.0 for x, y in zip(a, b))
 
 
-def split_blocks(items: list[Item], depth: int = 0) -> list[list[Item]]:
+def split_blocks(items: list[Item], depth: int = 0, keep: tuple = ()) -> list[list[Item]]:
     """Cắt XY đệ quy. Trả các nhóm nét, mỗi nhóm một khối."""
     if depth > 12 or len(items) < 2:
         return [items]
     for axis in (0, 1):
-        ps = _cuts(items, axis)
+        ps = _cuts(items, axis, keep)
         if len(ps) > 1:
-            return [leaf for p in ps for leaf in split_blocks(p, depth + 1)]
+            return [leaf for p in ps for leaf in split_blocks(p, depth + 1, keep)]
     box = box_of(items)
     w = box[2] - box[0]
     caps = [it for it in items if (it[0][3] - it[0][1]) <= BOARD_MAX and (it[0][2] - it[0][0]) >= 0.9 * w
@@ -179,10 +181,10 @@ def _same(a: Box, b: Box, tol: float = 3.0) -> bool:
 
 def fronts(d: Drawing2D, body: list[Item], marks: list[Item], box: Box, symbols_only: bool = False) -> list[tuple[Box, str]]:
     """Mặt trước (cánh, ngăn kéo) của một khối: [(khung, handle)]."""
-    area = (box[2] - box[0]) * (box[3] - box[1])
     rects = [(r, h) for _b, h, _r in body if h and (r := rect_of(d.entities[h]))]
     boards = [r for r, _h in rects if min(r[2] - r[0], r[3] - r[1]) <= BOARD_MAX]
-    cands = [(r, h) for r, h in rects if (r[2] - r[0]) >= FRONT_MIN and (r[3] - r[1]) >= FRONT_MIN and (r[2] - r[0]) * (r[3] - r[1]) < 0.9 * area]
+    # loại đường bao trùng khung khối (lệch ≤ 5 mm); cánh/ngăn kéo đơn phủ gần hết mặt khối vẫn là mặt trước
+    cands = [(r, h) for r, h in rects if (r[2] - r[0]) >= FRONT_MIN and (r[3] - r[1]) >= FRONT_MIN and not _same(r, box, 5.0)]
     segs = _segments(d, body)
     if symbols_only:  # hình "bỏ cánh": hình chữ nhật là khoang/ngăn trong, chỉ nhận ô có ký hiệu mở cánh
         cands = []

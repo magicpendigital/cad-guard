@@ -1,5 +1,5 @@
 """Dòng lệnh: cadguard audit | stats | rules | profile | fixtures | mcp | propose | apply | undo | diff | validate
-| ask | chat | engines | keys | app | scene | scene-assess | space | bench3d | studio | review | watch | doctor | mcp-config | autocad.
+| ask | chat | engines | keys | app | scene | scene-assess | space | bench3d | synth | studio | review | watch | doctor | mcp-config | autocad.
 
 Mã thoát của `audit`: 0 = không có lỗi mức E; 1 = có lỗi mức E; 2 = không đọc được đầu vào/chuẩn.
 `propose`/`validate`: 0 = đạt, 1 = kiểm không đạt, 2 = lỗi/từ chối. `apply`/`undo`: 0 = xong, 2 = từ chối/lỗi.
@@ -1119,6 +1119,30 @@ def cmd_bench3d(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_synth(args: argparse.Namespace) -> int:
+    """Sinh bộ dữ liệu MÔ PHỎNG (bản vẽ DXF nhiều kiểu trình bày + đáp án) để chấm bằng bench3d."""
+    from .synth import STYLES, design_specs, design_specs_ai, generate
+
+    specs = design_specs(args.n, args.seed)
+    if args.brief:
+        from .studio.llm import all_backends
+
+        backend = all_backends(allow_codex=True)
+        if backend is None:
+            print("Không có AI dùng được: chỉ dùng agent thiết kế bằng code.")
+        else:
+            ok, bad = design_specs_ai(backend, args.brief)
+            specs += ok
+            for b in bad:
+                print(f"  AI đề xuất bị loại ({b.get('name', '?')}): {'; '.join(b['errors'])}")
+    r = generate(Path(args.out), seed=args.seed, specs=specs)
+    print(f"Đã sinh {len(r['items'])} hạng mục mô phỏng vào {r['dir']}")
+    for x in r["items"]:
+        print(f"  - {x['file']}: {x['modules']} khối · kiểu {', '.join(STYLES[k]['label'] for k in x['styles'])}")
+    print(f"Chấm: cadguard bench3d --workspace \"{r['dir']}\"")
+    return 0
+
+
 def cmd_studio(args: argparse.Namespace) -> int:
     from .studio.llm import AnthropicBackend, ClaudeCliBackend, LlmError, auto_backend
     from .studio.server import serve
@@ -1373,6 +1397,12 @@ def main(argv: list[str] | None = None) -> int:
     bn.add_argument("--ai", action="store_true", help="chấm thêm cách đọc code + AI (gửi nội dung bản vẽ cho AI)")
     bn.add_argument("--json", action="store_true")
     bn.set_defaults(fn=cmd_bench3d)
+    sy = sub.add_parser("synth", help="sinh bộ dữ liệu mô phỏng (DXF nhiều kiểu trình bày + đáp án) để đo độ chính xác dựng 3D")
+    sy.add_argument("--out", required=True, help="thư mục ghi bản vẽ mô phỏng (ngoài repo)")
+    sy.add_argument("--n", type=int, default=12, help="số hạng mục do agent thiết kế bằng code tạo")
+    sy.add_argument("--seed", type=int, default=1)
+    sy.add_argument("--brief", action="append", help="yêu cầu bằng lời cho AI thiết kế thêm (lặp lại được), vd. 'tủ áo 3 buồng có ngăn kéo'")
+    sy.set_defaults(fn=cmd_synth)
 
     st = sub.add_parser("studio", help="ứng dụng web cục bộ: trao đổi với LLM, xem 3D, bổ sung dữ liệu thiếu")
     st.add_argument("--port", type=int, default=8770)

@@ -65,7 +65,12 @@ def _overlap(a0, a1, b0, b1) -> float:
 
 
 def score(pred: list[dict], ans: list[dict], tol: float = TOL) -> dict:
-    """So khối dự đoán với khối đáp án (cùng toạ độ của hạng mục)."""
+    """So khối dự đoán với khối đáp án. Gốc X của hai bên có thể khác (đáp án mô phỏng tính từ mép trái hạng mục, bản dựng
+    tính từ góc mặt bằng): dời cả hai về mép trái nhỏ nhất trước khi ghép."""
+    if pred and ans:
+        px, ax = min(p["x"] for p in pred), min(a["x"] for a in ans)
+        pred = [{**p, "x": p["x"] - px} for p in pred]
+        ans = [{**a, "x": a["x"] - ax} for a in ans]
     pairs, used = [], set()
     for i, a in enumerate(ans):
         best, bj = 0.0, None

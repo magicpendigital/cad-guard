@@ -271,6 +271,21 @@ def _note_meaning(d: Drawing2D, e: View, box) -> str | None:
     return None
 
 
+def _filler_notes(d: Drawing2D, e: View) -> list[float]:
+    if not getattr(d, "keywords", None):
+        return []
+    from ..drafting import meaning_of
+    from .explain import _vi
+
+    out = []
+    for h in e.handles:
+        t = d.entities[h]
+        p = t.pos or t.insert
+        if t.type in ("TEXT", "MTEXT") and t.text and p and meaning_of(_vi(t.text), d.keywords) == "filler":
+            out.append(p[0])
+    return out
+
+
 def _crop_to_dim(d: Drawing2D, e: View, refs: list[str], sc: Scene2) -> View:
     """Một khung tiêu đề chứa nhiều bản vẽ cạnh nhau (mặt đứng có cánh + bỏ cánh + mặt bên), cách nhau bằng khe trống:
     chỉ giữ cụm nét chứa kích thước dùng để ghép với mặt bằng."""
@@ -374,16 +389,17 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
 
     comps: list[Component] = components(d, e, furn, min_size=200.0)
     hidden = seg.items_in(d, e.handles, HIDDEN)
+    fill_x = tuple(_filler_notes(d, e))  # vị trí ghi chú "tấm fix" (hồ sơ trình bày): giữ tấm bù hẹp thành khối riêng
     blocks: list[tuple] = []  # (khung khối trên mặt đứng, handles, mặt trước [(box, handle)], dạng)
     for c in comps:
         cb = c.box
         inside = [it for it in hidden if it[0][0] >= cb[0] - 1 and it[0][2] <= cb[2] + 1 and it[0][1] >= cb[1] - 1 and it[0][3] <= cb[3] + 1]
-        for leaf in seg.split_blocks(seg.items_in(d, c.handles, furn) + inside):
+        for leaf in seg.split_blocks(seg.items_in(d, c.handles, furn) + inside, keep=fill_x):
             body = [it for it in leaf if it[2] in furn]
             if not body:
                 continue
             box = seg.box_of(body)
-            if (box[2] - box[0]) < 100.0 or (box[3] - box[1]) < 100.0:
+            if ((box[2] - box[0]) < 100.0 and not any(box[0] - 1 <= x <= box[2] + 1 for x in fill_x)) or (box[3] - box[1]) < 100.0:
                 continue
             # hình "bỏ cánh": tiêu đề có thể đặt nhầm (người vẽ chép tiêu đề) -> vẫn nhận ô có ký hiệu mở cánh
             fr = seg.fronts(d, body, [it for it in leaf if it[2] in HIDDEN], box, symbols_only="no_doors" in e.flags)

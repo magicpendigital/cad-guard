@@ -86,3 +86,22 @@ sẽ chỉ ra nút nào bỏ sót, rồi sửa code nút đó trước, chỉ d�
   "Thanh giằng". Skill trợ lý `knowledge/skills/ket-cau-tu/SKILL.md` (kèm nguồn).
 
 Chưa làm: sub-agent đọc số tách riêng theo từng loại số; sub-agent nhìn ảnh vùng hình chiếu; chạy song song nhiều hạng mục.
+
+## 8. Bộ dữ liệu mô phỏng thay cho người ghi đáp án (11/11/2026)
+
+Chưa có người kỹ thuật ghi đáp án nên dùng **agent thiết kế + bộ vẽ bằng code** (`cadguard/synth.py`, lệnh
+`cadguard synth --out <thư mục> --n 36 --seed 7 [--brief "tủ áo 3 buồng có ngăn kéo"]`):
+
+- Agent thiết kế tạo THÔNG SỐ đồ (`cg.furniture-spec/1`: tủ áo, tủ bếp hai hàng, kệ TV) theo luật kết cấu (cánh ≤ 600, cặp
+  cánh, cột ngăn kéo, tấm bù); tuỳ chọn AI thiết kế theo yêu cầu bằng lời, qua `validate_spec` (sai luật thì loại).
+- Bộ vẽ dựng DXF từ thông số theo 9 kiểu trình bày (chuẩn; layer THAY; khung không số; ngăn kéo vẽ LINE; liền thân; hình bỏ
+  cánh riêng; một tiêu đề chung cho hai hình; mặt bằng không đường bao; chiều sâu chỉ ở mặt cắt) và ghi đáp án đúng 100 %
+  (máy vẽ ra), không phụ thuộc kết quả đọc của CAD Guard.
+- Chấm: `cadguard bench3d --workspace <thư mục>`. Lần đầu bộ dữ liệu tìm ra 3 lỗi thật của CAD Guard, đã sửa: (1) cánh/ngăn
+  kéo đơn phủ > 90 % mặt khối bị bỏ (nhận nhầm là tấm ốp); (2) đề xuất chia tủ treo theo hồi của tủ dưới (vách phải thuộc
+  đúng khối); (3) tấm bù hẹp < 150 mm bị gộp vào tủ cạnh (giữ theo ghi chú "tấm fix" của hồ sơ trình bày).
+- Kết quả 36 hạng mục (hạt giống 11): chỉ code 86 % (sai chiều sâu khi số sâu chỉ ghi ở mặt cắt), code + gợi ý tự áp 100 %.
+  Bộ 40 tờ thật không đổi.
+
+Giới hạn: dữ liệu tổng hợp đều đặn hơn bản vẽ thật; dùng để kiểm hồi quy và đo từng kiểu trình bày. Thêm kiểu mới mỗi khi
+gặp một cách vẽ lạ ở bản vẽ thật; vẫn nên có vài đáp án thật để kiểm chéo.

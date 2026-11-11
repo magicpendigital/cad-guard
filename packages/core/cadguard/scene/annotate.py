@@ -120,12 +120,13 @@ def _all_boards(d: Drawing2D, sc) -> list[dict]:
     out = []
     for m in mods:
         for a, b, h in boards(d, main.handles, m.ebox):
-            out.append({"x0": a, "x1": b, "handle": h, "source": "main"})
+            out.append({"x0": a, "x1": b, "handle": h, "source": "main", "module": m.id})
     for c in companions(d, sc):
         zlo, zhi = _zrange(d, c["handles"])
         for m in mods:
             for a, b, h in boards(d, c["handles"], (m.ebox[0] - c["offset"], zlo, m.ebox[2] - c["offset"], zhi)):
-                out.append({"x0": a + c["offset"], "x1": b + c["offset"], "handle": h, "source": "companion", "view": c["view"]})
+                out.append({"x0": a + c["offset"], "x1": b + c["offset"], "handle": h, "source": "companion", "view": c["view"],
+                            "module": m.id})
     return out
 
 
@@ -164,7 +165,8 @@ def check_split(d: Drawing2D, sc, x: float, evidence: list[str] | None = None) -
     for a, b in _fronts_draw(m):
         if a + 5 < x < b - 5:
             return False, "đường chia cắt qua cánh/ngăn kéo"
-    bs = [b for b in _all_boards(d, sc) if b["x0"] - NEAR <= x <= b["x1"] + NEAR]
+    # vách phải thuộc chính khối này (chồng theo chiều cao): hồi của tủ dưới không phải vách của tủ treo phía trên
+    bs = [b for b in _all_boards(d, sc) if b.get("module") == m.id and b["x0"] - NEAR <= x <= b["x1"] + NEAR]
     if not bs:
         return False, "không có vách đứng (tấm ván cao gần suốt khối) ở vị trí này trên hình chính hoặc hình bỏ cánh"
     ev = {str(h).upper() for h in evidence or []}
