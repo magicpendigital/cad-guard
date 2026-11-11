@@ -121,7 +121,7 @@ Không làm trong v1: render ảnh thực (vật liệu PBR, ánh sáng), G-code
 | --- | --- | --- |
 | P0 ✅ 11/11 | Kiểm tệp ra trên bản vẽ thật, xem trước ở phòng 3D, thông báo bền có hướng dẫn, phần thiếu 3D nói rõ cách sửa, Sửa hàng loạt có sao lưu | Unicode/Dịch/Sửa hàng loạt ra tệp mới ĐẠT trên bản sao tệp phiên 01; test chặn hồi quy |
 | P1 ✅ 11/11 | Đồ thị khung tất định `cg.drawing-graph/1` + màn "Bản đồ bản vẽ" + cổng sẵn sàng; Sửa hàng loạt cả thư mục, tự chia nhỏ khi không đạt | Đồ thị phiên 01: 40 tờ, 11 hạng mục, ≥ 90 % hình có loại; mỗi cổng có danh sách việc cần làm |
-| P2 | Agent làm giàu đồ thị: 4 sub-agent, công cụ đồ thị trong `agent/registry.py`, đầu ra `cg.graph-proposals/1`, harness, màn xác nhận | Trên phiên 01: ghép được ≥ 2/3 mặt đứng đang thiếu ghép; 0 đề xuất không có bằng chứng lọt qua harness |
+| P2 ✅ 11/11 | Agent làm giàu đồ thị: 4 sub-agent, công cụ đồ thị trong `agent/registry.py`, đầu ra `cg.graph-proposals/1`, harness, màn xác nhận | Trên phiên 01: ghép được ≥ 2/3 mặt đứng đang thiếu ghép; 0 đề xuất không có bằng chứng lọt qua harness |
 | P3 | Hồ sơ kết cấu công ty + mô hình tấm + exploded/X-ray/mặt cắt + danh sách cắt/dán cạnh | Mọi khối có tấm; cut list CSV khớp tổng diện tích ván ± 1 % |
 | P4 | Cánh/bản lề/ngăn kéo theo bảng hãng có phiên bản, hoạt cảnh mở, va chạm, công thái học `info` | Số bản lề/ray khớp bảng hãng trên bộ ca tổng hợp |
 | P5 | Bóc tách vật tư theo vật liệu từ đồ thị; xuất dữ liệu sản xuất tham khảo; tái cấu trúc theo đồ thị qua Sửa hàng loạt | Bảng vật tư theo hạng mục; changeset chuẩn hoá ĐẠT |
@@ -136,6 +136,31 @@ Không làm trong v1: render ảnh thực (vật liệu PBR, ánh sáng), G-code
 - Sửa hàng loạt: gộp không đạt thì tự chia đôi tìm nhóm gây lỗi (tối đa 8 lần chạy khô), giữ phần đạt; **Sửa cả thư mục** chạy nền có
   tiến độ, mỗi tệp một bản sao lưu + một tệp mới, tệp lỗi không dừng cả lượt.
 - Chưa làm (chuyển P2): công cụ đồ thị cho trợ lý (phải lọc ẩn danh), đề xuất AI + màn xác nhận, gắn phát hiện của luật vào đồ thị trong ứng dụng.
+
+## 5c. Kết quả P2 (11/11/2026)
+
+- `graph_ai.py` (`cg.graph-proposals/1`): 4 agent hẹp — `views` (loại hình chưa tiêu đề), `links` (ghép mặt đứng–mặt bằng),
+  `materials` (vật liệu theo bộ phận), `review` (soát nhất quán + hạng mục không phải đồ nội thất). Mỗi agent có gợi ý **code**
+  (chạy cả khi không có AI/ẩn danh) và gợi ý **AI** (gói ngữ cảnh hẹp, JSON).
+- Gợi ý code đáng chú ý: ký hiệu "triển khai diện tường" trên mặt bằng mang nhãn a/b/c → ghép mặt đứng hướng B/C; tờ tên
+  "MẶT ĐỨNG" chỉ có một hình chưa tiêu đề → mặt đứng; mặt bằng > 10 m không có tủ → hồ sơ kiến trúc; ghi chú vật liệu tách theo
+  vế ("KHUNG NHÔM, CÁNH KÍNH" → khung: Nhôm, cánh: Kính; so khớp giữ dấu để "CẠNH" ≠ "CÁNH").
+- **Harness**: bằng chứng phải là handle/mã hình có thật đúng chỗ; ghép hình phải cùng hạng mục, lệch chiều ngang > 15 % thì gắn
+  cảnh báo; vật liệu phải dẫn chứng bằng ghi chú trên tờ của hạng mục; đề xuất trái nhau cho cùng mục bị đánh dấu "mâu thuẫn";
+  AI và code cùng ý thì gộp một thẻ (giữ thông số chi tiết AI đọc được).
+- Chỉ ghi khi người dùng bấm **Đồng ý** (từng thẻ, hoặc "Đồng ý các đề xuất chắc chắn" tin cậy ≥ 75 % không cảnh báo). Ghép hình →
+  phần bổ sung 3D; loại hình, vật liệu, phạm vi → `.cadguard/graph/<băm>.overrides.json`. 3D và Bản đồ cùng đọc.
+- AI: `studio/llm.all_backends` thử lần lượt khoá API → CLI claude → CLI Codex (chỉ khi người dùng đã bật thử nghiệm Codex);
+  một AI lỗi (hết tín dụng…) thì sang AI sau. Dự án ẩn danh: chỉ chạy gợi ý code. Công cụ trợ lý `get_drawing_graph` (lọc ẩn danh).
+- Số đo trên bản sao tệp phiên 01:
+  - Chỉ code (0,1 s): 2 loại hình, 2 ghép hình, 1 hạng mục kiến trúc, 33 vật liệu theo bộ phận; 0 bị harness loại.
+    Đồng ý hết: hình có loại 98 % → 100 %, việc cần làm của Dựng 3D 15 → 8, hạng mục "d" (định vị cửa cả tầng) ra khỏi đếm.
+  - Code + AI thật (CLI claude hết tín dụng → tự chuyển Codex CLI, 114 s cho 4 agent): cả 4 mặt đứng đồ nội thất chưa ghép
+    đều có đề xuất (2 code + AI cùng ý; 2 AI thêm, có cảnh báo lệch 20 % và 69 %), 43 thẻ vật liệu (17 gộp code + AI, kèm
+    thông số như "MDF 17MM chống ẩm phủ laminate Formica mã 0871"), 1 đề xuất loại hình mâu thuẫn với code (AI: mặt cắt X1
+    theo chữ cạnh hình; code: mặt đứng theo tên tờ), 4 đề xuất bị harness loại (bằng chứng không có trong bản vẽ).
+- Còn mở: căn vị trí ngang khi mặt đứng chỉ là một đoạn của mặt bằng (đang căn mép trái, có cảnh báo); mặt bên (theo chiều sâu)
+  chưa dùng để dựng; agent `review` chưa đưa nhận xét nào trên tệp này.
 
 ## 6. Cần khách trả lời trước P3
 

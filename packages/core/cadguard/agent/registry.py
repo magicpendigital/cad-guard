@@ -26,7 +26,7 @@ MAX_DIFF_ITEMS = 500
 MAX_PROPOSE_OPS = 50
 
 READ_TOOLS = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff", "get_scene", "measure",
-              "list_ergonomic_checks")
+              "list_ergonomic_checks", "get_drawing_graph")
 SCENE_TOOLS = ("get_scene", "measure", "list_ergonomic_checks")  # 3D cg.scene/2 + công thái học (Luồng 2)
 PROPOSE_TOOL = "propose_changeset"
 TRANSLATE_TOOL = "propose_translation"  # cùng cờ allow_propose; không có khi ẩn danh (dự án NDA)
@@ -306,12 +306,23 @@ def _ergonomic_checks() -> ToolDef:
     )
 
 
+def _drawing_graph() -> ToolDef:
+    return ToolDef(
+        "get_drawing_graph", "read",
+        lambda o: "Bản đồ bản vẽ cg.drawing-graph/1 (tất định + điều người dùng đã xác nhận): số tờ/hình/hạng mục/khối/vật "
+                  "liệu, cổng sẵn sàng (cấu trúc hồ sơ, dựng 3D, bóc tách vật tư, dữ liệu sản xuất) kèm việc cần làm, bảng "
+                  "hạng mục. Dùng để trả lời 'bản vẽ đã đủ để dựng 3D/bóc tách chưa, còn thiếu gì, sửa ở đâu'.",
+        lambda o: _obj({"file": _FILE}, ["file"]),
+        lambda ctx, a, o: _scene_tools().get_drawing_graph(ctx, a["file"]),
+    )
+
+
 _READ_DEFS: tuple[Callable[[], ToolDef], ...] = (_list_drawings, _audit, _explain_rule, _summary, _query, _diff,
-                                                 _get_scene, _measure, _ergonomic_checks)
+                                                 _get_scene, _measure, _ergonomic_checks, _drawing_graph)
 
 
 def tool_defs(o: SpecOptions) -> list[ToolDef]:
-    """Công cụ của một phiên theo thứ tự cố định: 9 công cụ đọc (6 bản vẽ + 3 cảnh 3D/công thái học); + bản không hồ sơ khi so sánh; + propose khi bật."""
+    """Công cụ của một phiên theo thứ tự cố định: 10 công cụ đọc (6 bản vẽ + 3 cảnh 3D/công thái học + bản đồ bản vẽ); + bản không hồ sơ khi so sánh; + propose khi bật."""
     out = [f() for f in _READ_DEFS]
     if o.compare_without_profile:
         out.append(_baseline())

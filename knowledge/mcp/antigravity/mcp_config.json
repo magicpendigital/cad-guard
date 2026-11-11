@@ -3,14 +3,14 @@
     "cad-guard": {
       "command": "<PYTHON>",
       "args": ["-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>"],
-      "enabledTools": ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff", "get_scene", "measure", "list_ergonomic_checks"],
+      "enabledTools": ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff", "get_scene", "measure", "list_ergonomic_checks", "get_drawing_graph"],
       "timeoutSeconds": 120,
       "disabled": false
     },
     "cad-guard-ho-so": {
       "command": "<PYTHON>",
       "args": ["-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>", "--profile", "<HO_SO_CONG_TY>"],
-      "enabledTools": ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff", "get_scene", "measure", "list_ergonomic_checks"],
+      "enabledTools": ["list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff", "get_scene", "measure", "list_ergonomic_checks", "get_drawing_graph"],
       "timeoutSeconds": 120,
       "disabled": true
     }

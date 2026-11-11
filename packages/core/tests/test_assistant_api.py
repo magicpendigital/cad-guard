@@ -120,7 +120,7 @@ def test_anthropic_tool_loop_uses_cadguard_tools_and_anonymizes(provider, ws):
     assert first["body"]["model"] == "claude-sonnet-5-5" and "temperature" not in first["body"]
     names = [t["name"] for t in first["body"]["tools"]]
     assert set(names) == {"list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff", "get_scene",
-                          "measure", "list_ergonomic_checks"}
+                          "measure", "list_ergonomic_checks", "get_drawing_graph"}
     assert not [n for n in names if "apply" in n]
     # Khối thinking của lượt trước được gửi lại nguyên vẹn.
     assert p.requests[1]["body"]["messages"][1]["content"][0]["type"] == "thinking"

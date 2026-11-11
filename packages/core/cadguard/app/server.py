@@ -26,7 +26,7 @@ from ..privacy import effective as privacy_effective, label as privacy_label, se
 from .. import __version__
 from ..review.types import ReviewError, LOCAL
 from ..standard import ProfileError, find_standards_dir, load_profile
-from . import api, bulkfix, connect, history
+from . import api, bulkfix, connect, graph_api, history
 from .api import DEPARTMENTS_FILE, NAME_RE, ApiError, AppConfig, AppData, load_departments
 from .chat import Assistant
 from .project import DialogBusy, check_profile_file, check_project_dir, dialog_available, run_dialog
@@ -388,6 +388,11 @@ class CadGuardApp:
             ("GET", "/api/changesets"): lambda q, b: api.list_changesets(d()),
             ("POST", "/api/changeset/apply"): lambda q, b: api.apply_changeset(d(), b.get("changeset_id"), b.get("confirm")),
             ("POST", "/api/graph"): lambda q, b: api.drawing_graph(d(), b.get("file"), b.get("refresh")),
+            ("POST", "/api/graph/suggest"): lambda q, b: graph_api.start(d(), b.get("file"), b.get("ai"), self.translate_backend,
+                                                                           self.assistant.effective()["experimental"]),
+            ("POST", "/api/graph/suggest/status"): lambda q, b: graph_api.status(b.get("job")),
+            ("POST", "/api/graph/proposals"): lambda q, b: graph_api.proposals(d(), b.get("file")),
+            ("POST", "/api/graph/decide"): lambda q, b: graph_api.decide(d(), b.get("file"), b.get("id"), b.get("accept")),
             ("POST", "/api/fix/bulk/plan"): lambda q, b: bulkfix.plan(d(), b.get("file"), self.dept_standards(b.get("dept")),
                                                                       unicode=b.get("unicode") is not False),
             ("POST", "/api/fix/bulk/folder"): lambda q, b: bulkfix.folder_start(d(), self.dept_standards(b.get("dept")),

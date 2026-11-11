@@ -52,7 +52,9 @@ def _drawing(model):
 
 
 def build(model, root: Path, item: str | None):
-    d = _drawing(model)
+    from ..graph_ai import apply_overrides, load_overrides
+
+    d = apply_overrides(_drawing(model), load_overrides(root, model.file_hash))  # loại hình người dùng đã xác nhận
     supp = read_supplement(root, model.file_hash)
     g = item if item in d.groups else best_item(d)
     if g is None:

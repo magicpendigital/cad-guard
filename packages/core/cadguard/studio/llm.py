@@ -4,6 +4,8 @@
   khoá lấy bằng `assistant.keys.get_key("anthropic")`: biến môi trường ANTHROPIC_API_KEY, rồi kho khoá hệ điều hành
   (`cadguard keys set anthropic`). Không ghi khoá ra tệp; lỗi HTTP đã che khoá.
 - ClaudeCliBackend: chạy nguyên bản CLI `claude -p` trong thư mục rỗng, TẮT mọi công cụ file/shell; người dùng tự đăng nhập.
+- CodexCliBackend: `codex exec` trong thư mục rỗng, sandbox chỉ đọc, tắt shell/ảnh/web. THỬ NGHIỆM (điều khoản OpenAI cho
+  ứng dụng bên thứ ba chưa rõ, xem `assistant/cli_engines.py`): chỉ dùng khi người dùng đã bật thử nghiệm Codex.
 - FakeBackend: cho test, trả kịch bản có sẵn.
 """
 
@@ -91,11 +93,20 @@ class ClaudeCliBackend:
         with tempfile.TemporaryDirectory(prefix="cadguard-llm-") as empty:  # thư mục rỗng: CLI không có gì khác để đọc
             p = subprocess.run(cmd, input=convo, capture_output=True, text=True, encoding="utf-8", cwd=empty, timeout=300)
         if p.returncode != 0:
-            why = p.stderr.strip()
-            try:  # --output-format json: lý do lỗi (vd. hết hạn mức) nằm ở "result" của stdout
-                why = why or str(json.loads(p.stdout).get("result", ""))
+            # Đã có câu trả lời hợp lệ nhưng CLI trả mã lỗi vì việc SAU câu trả lời hỏng (vd. hook SessionEnd của người
+            # dùng lỗi): dùng câu trả lời, không coi cả lượt là thất bại.
+            try:
+                done = json.loads(p.stdout)
+                if isinstance(done, dict) and done.get("is_error") is False and str(done.get("result", "")).strip():
+                    return str(done["result"])
             except (json.JSONDecodeError, AttributeError):
-                why = why or p.stdout.strip()
+                pass
+            why = ""
+            try:  # --output-format json: lý do lỗi thật (vd. hết tín dụng/hạn mức) nằm ở "result" của stdout
+                why = str(json.loads(p.stdout).get("result", "") or "")
+            except (json.JSONDecodeError, AttributeError):
+                pass
+            why = why or p.stderr.strip() or p.stdout.strip()
             raise LlmError(f"CLI claude lỗi (mã {p.returncode}): {why[:300]}")
         try:
             return str(json.loads(p.stdout).get("result", ""))
@@ -103,14 +114,91 @@ class ClaudeCliBackend:
             return p.stdout
 
 
-def auto_backend() -> Backend | None:
-    """Ưu tiên khoá API; không có thì CLI; không có nữa thì None (ứng dụng vẫn chạy, không chat)."""
-    for factory in (AnthropicBackend, ClaudeCliBackend):
+class CodexCliBackend:
+    """`codex exec --json` một lượt, không công cụ, thư mục rỗng; lấy tin nhắn cuối của agent."""
+
+    name = "codex-cli"
+
+    def __init__(self, model: str | None = None) -> None:
+        self.exe = shutil.which("codex")
+        if not self.exe:
+            raise LlmError("Không tìm thấy lệnh `codex` trong PATH.")
+        self.model = model
+
+    def complete(self, system: str, messages: list[dict]) -> str:
+        convo = "\n\n".join(f"[{m['role']}]\n{m['content']}" for m in messages)
+        with tempfile.TemporaryDirectory(prefix="cadguard-llm-") as empty:
+            args = [self.exe, "exec", "--json", "--skip-git-repo-check", "--ephemeral", "--ignore-user-config",
+                    "-C", empty, "-s", "read-only", "-c", 'approval_policy="never"',
+                    "-c", "features.shell_tool=false", "-c", "features.view_image=false", "-c", 'web_search="disabled"']
+            if self.model:
+                args += ["-m", self.model]
+            args.append("-")
+            p = subprocess.run(args, input=f"{system}\n\n{convo}", capture_output=True, text=True, encoding="utf-8",
+                               cwd=empty, timeout=600)
+        texts, err = [], ""
+        for line in p.stdout.splitlines():
+            try:
+                obj = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            item = obj.get("item") or {}
+            if obj.get("type") == "item.completed" and item.get("type") == "agent_message" and item.get("text"):
+                texts.append(item["text"])
+            elif obj.get("type") in ("turn.failed", "error"):
+                e = obj.get("error")
+                err = (e.get("message") if isinstance(e, dict) else None) or obj.get("message") or "lỗi"
+        if texts:
+            return texts[-1]
+        raise LlmError(f"CLI codex lỗi (mã {p.returncode}): {(err or p.stderr.strip())[:300]}")
+
+
+def auto_backend(allow_codex: bool = False) -> Backend | None:
+    """Ưu tiên khoá API; không có thì CLI claude; `allow_codex` (người dùng đã bật thử nghiệm) thì thêm CLI codex."""
+    factories = [AnthropicBackend, ClaudeCliBackend] + ([CodexCliBackend] if allow_codex else [])
+    for factory in factories:
         try:
             return factory()
         except LlmError:
             continue
     return None
+
+
+class FallbackBackend:
+    """Thử lần lượt nhiều backend: cái đầu lỗi (hết tín dụng, chưa đăng nhập…) thì dùng cái sau, nhớ cái dùng được."""
+
+    def __init__(self, backends: list) -> None:
+        self.backends = backends
+        self.name = "+".join(b.name for b in backends)
+        self.errors: list[str] = []
+
+    def complete(self, system: str, messages: list[dict]) -> str:
+        last = None
+        for b in list(self.backends):
+            try:
+                out = b.complete(system, messages)
+                if b is not self.backends[0]:  # lần sau dùng ngay cái này
+                    self.backends.remove(b)
+                    self.backends.insert(0, b)
+                    self.name = "+".join(x.name for x in self.backends)
+                return out
+            except LlmError as exc:
+                last = exc
+                self.errors.append(f"{b.name}: {exc}")
+        raise LlmError("; ".join(self.errors[-len(self.backends):]) if last else "Không có AI.")
+
+
+def all_backends(allow_codex: bool = False) -> Backend | None:
+    """Mọi backend có trên máy, gói trong FallbackBackend (một cái hết tín dụng thì sang cái khác)."""
+    found = []
+    for factory in [AnthropicBackend, ClaudeCliBackend] + ([CodexCliBackend] if allow_codex else []):
+        try:
+            found.append(factory())
+        except LlmError:
+            continue
+    if not found:
+        return None
+    return found[0] if len(found) == 1 else FallbackBackend(found)
 
 
 SYSTEM_PROMPT = """Bạn là kỹ sư thẩm tra bản vẽ kỹ thuật nội thất, làm việc cùng thợ vẽ/kỹ sư của một xưởng sản xuất. Trả lời bằng tiếng Việt.

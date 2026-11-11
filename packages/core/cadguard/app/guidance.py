@@ -99,7 +99,7 @@ _RULES: list[tuple[re.Pattern, dict[str, Any]]] = [
         "steps": ["Mở tab Cài đặt kiểm AutoCAD đã được nhận.",
                   "Hoặc trong AutoCAD: Save As → DXF, rồi mở tệp DXF trong CAD Guard."],
         "actions": [A_SETUP]}),
-    (re.compile(r"Chưa có trợ lý|khoá API|hết lượt|quota|đăng nhập", re.I), {
+    (re.compile(r"Chưa có trợ lý|khoá API|hết lượt|quota|đăng nhập|credit balance|tín dụng", re.I), {
         "title": "Trợ lý AI chưa dùng được",
         "why": "Tính năng cần AI (dịch, giải thích sâu, đề xuất) phải có một CLI đã đăng nhập hoặc khoá API còn lượt.",
         "steps": ["Mở Kết nối AI, bấm 'Kiểm tra' ở trợ lý đang chọn.", "Đăng nhập lại nếu báo hết phiên/hết lượt."],

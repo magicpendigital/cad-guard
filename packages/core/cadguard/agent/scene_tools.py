@@ -95,3 +95,33 @@ def list_ergonomic_checks(ctx: ToolContext, file: str, item: str | None = None) 
 
 
 __all__ = ["get_scene", "list_ergonomic_checks", "measure"]
+
+
+@_safe
+def get_drawing_graph(ctx: ToolContext, file: str) -> dict:
+    """Đồ thị tri thức bản vẽ cg.drawing-graph/1 (P1/P2): tóm tắt, cổng sẵn sàng, hạng mục. Ẩn danh: chỉ số đếm, loại,
+    mã phiên; KHÔNG tên tờ/hình/hạng mục, chữ ghi chú, tên vật liệu tự do hay lời giải thích có tên."""
+    from ..app.scene_api import read_supplement
+    from ..graph import build_graph
+    from ..graph_ai import load_overrides
+
+    path, model = _model(ctx, file)
+    root = ctx.workspace.root
+    g = build_graph(model, supplement=read_supplement(root, model.file_hash), overrides=load_overrides(root, model.file_hash))
+    anon = ctx.anonymizer
+    out = {"schema": g["schema"], "file": _file_id(ctx, path), "stats": g["stats"]}
+    if anon.enabled:
+        out["gates"] = [{"id": x["id"], "status": x["status"], "done": x["done"], "total": x["total"],
+                         "tasks": [{"title": t["title"], "severity": t["severity"]} for t in x["tasks"][:30]]}
+                        for x in g["gates"]]
+        out["items"] = [{"id": anon.token("item", r["id"]), "sheets": r["sheets"], "plans": r["plans"],
+                         "elevations": r["elevations"], "sections": r["sections"], "modules": r["modules"],
+                         "gaps": r["gaps"], "materials": len(r["materials"]), "status": r["status"]} for r in g["items"]]
+        return out
+    out["gates"] = [{k: x[k] for k in ("id", "title", "status", "done", "total", "note")} |
+                    {"tasks": [{k: t[k] for k in ("title", "where", "why", "fix_here", "fix_cad", "severity")}
+                               for t in x["tasks"][:30]]} for x in g["gates"]]
+    out["items"] = g["items"]
+    out["materials"] = [{"name": n["label"], "mentions": n["attrs"].get("mentions", 0), "status": n["status"]}
+                        for n in g["nodes"] if n["type"] == "material"]
+    return out

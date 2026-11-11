@@ -102,10 +102,17 @@ def _texts(model: DrawingModel) -> list[tuple[str, str]]:
 
 
 def build_graph(model: DrawingModel, *, drawing: Drawing2D | None = None, supplement: dict | None = None,
-                findings: list[dict] | None = None, profile: dict | None = None) -> dict:
+                findings: list[dict] | None = None, profile: dict | None = None, overrides: dict | None = None) -> dict:
     """Dựng đồ thị + cổng sẵn sàng. `findings`: [{std, rule_id, severity, count, handles, message}] (tuỳ chọn).
-    `profile`: {"construction": bool} — đã có hồ sơ kết cấu công ty chưa (P3)."""
+    `profile`: {"construction": bool} — đã có hồ sơ kết cấu công ty chưa (P3).
+    `overrides`: điều người dùng đã xác nhận từ đề xuất (P2, `graph_ai.py`): loại hình, vật liệu bộ phận, nhận xét."""
     d = drawing or read_drawing(model)
+    ov = overrides or {}
+    confirmed_views = set((ov.get("view_kind") or {}))
+    if confirmed_views:
+        from .graph_ai import apply_overrides
+
+        apply_overrides(d, ov)
     st = d.structure
     g = _G()
     sheet_name = {s.id: _sheet_name(d, s.id) for s in st.sheets}
@@ -124,9 +131,11 @@ def build_graph(model: DrawingModel, *, drawing: Drawing2D | None = None, supple
             continue
         label = f"{KIND_VI.get(v.kind, 'Hình chưa có tiêu đề' if v.kind == 'untitled' else 'Hình')}" + (
             f" “{_vi(v.title)}”" if v.title else "")
-        g.node(f"view:{v.id}", "view", label, refs=[v.title_handle] if v.title_handle else v.handles[:3],
-               confidence=1.0 if v.kind != "untitled" else 0.3, kind=v.kind, entities=len(v.handles),
-               flags=list(v.flags), sheet=v.sheet_id, item=v.group or None)
+        n = g.node(f"view:{v.id}", "view", label, refs=[v.title_handle] if v.title_handle else v.handles[:3],
+                   confidence=1.0 if v.kind != "untitled" else 0.3, kind=v.kind, entities=len(v.handles),
+                   flags=list(v.flags), sheet=v.sheet_id, item=v.group or None)
+        if v.id in confirmed_views:
+            n.update(source="user", status="confirmed", confidence=1.0)
         g.edge(f"sheet:{v.sheet_id}", f"view:{v.id}", "contains")
         if v.group:
             g.edge(f"view:{v.id}", f"item:{v.group}", "depicts")
@@ -171,6 +180,24 @@ def build_graph(model: DrawingModel, *, drawing: Drawing2D | None = None, supple
                samples=m["samples"])
         for grp, n in m["items"].items():
             g.edge(f"item:{grp}", f"material:{key}", "mentions", confidence=0.8, count=n)
+    for cm in ov.get("materials") or []:  # vật liệu theo bộ phận người dùng đã xác nhận
+        if f"item:{cm.get('item')}" not in g.nodes:
+            continue
+        mid = f"material:{cm['material']}"
+        if mid not in g.nodes:
+            g.node(mid, "material", cm["material"], refs=cm.get("evidence") or [], mentions=0, samples=[])
+        g.nodes[mid].update(source="user", status="confirmed", confidence=1.0)
+        g.edges.append({"from": f"item:{cm['item']}", "to": mid, "type": "made_of", "source": "user",
+                        "status": "confirmed", "confidence": 1.0, "refs": list(cm.get("evidence") or [])[:20],
+                        "attrs": {"component": cm.get("component"), "note": cm.get("note")}})
+    for iss in ov.get("issues") or []:
+        nid = f"issue:{iss.get('proposal')}"
+        g.node(nid, "issue", str(iss.get("message") or "")[:200])
+        g.nodes[nid].update(source="user", status="confirmed")
+        tgt = iss.get("node") or ""
+        tid = tgt if tgt.startswith("module:") else (f"item:{tgt}" if f"item:{tgt}" in g.nodes else f"view:{tgt}")
+        if tid in g.nodes:
+            g.edge(nid, tid, "about")
 
     # --- phát hiện của luật (gắn vào tờ có handle bằng chứng)
     for f in findings or []:
@@ -180,7 +207,11 @@ def build_graph(model: DrawingModel, *, drawing: Drawing2D | None = None, supple
         for sid in sorted({st.sheet_of.get(h) for h in f.get("handles") or []} - {None}):
             g.edge(fid, f"sheet:{sid}", "on")
 
-    gates = _gates(d, g, scenes, fragments, profile or {})
+    excluded = {k for k, v in (ov.get("scope") or {}).items() if v == "architecture"}
+    for k in excluded:
+        if f"item:{k}" in g.nodes:
+            g.nodes[f"item:{k}"]["attrs"]["scope"] = "architecture"
+    gates = _gates(d, g, {k: v for k, v in scenes.items() if k not in excluded}, fragments, profile or {})
     real = [n for n in g.nodes.values() if n["type"] == "view"]
     typed = [n for n in real if n["attrs"]["kind"] in REAL_KINDS]
     stats = {
@@ -191,8 +222,13 @@ def build_graph(model: DrawingModel, *, drawing: Drawing2D | None = None, supple
         "nodes": len(g.nodes), "edges": len(g.edges),
         "sheets_without_item": sum(1 for s in st.sheets if s.id not in d.sheet_group),
     }
+    stats["items_excluded"] = len(excluded)
+    rows = _item_rows(g, scenes)
+    for r in rows:
+        if r["id"] in excluded:
+            r["status"] = "kiến trúc (bỏ khỏi dựng 3D/bóc tách)"
     return {"schema": SCHEMA, "source_hash": model.file_hash, "stats": stats, "gates": gates,
-            "nodes": list(g.nodes.values()), "edges": g.edges, "items": _item_rows(g, scenes)}
+            "nodes": list(g.nodes.values()), "edges": g.edges, "items": rows}
 
 
 def _mention(mats: dict, key: str, h: str, text: str, grp: str | None) -> None:
@@ -241,7 +277,7 @@ def _gates(d: Drawing2D, g: _G, scenes: dict, fragments: list, profile: dict) ->
         if n["attrs"]["kind"] == "untitled":
             t1.append(_task("structure", "Hình chưa có tiêu đề", f"{g.nodes[f'sheet:{n['attrs']['sheet']}']['label']}",
                             f"Cụm {n['attrs']['entities']} đối tượng không có tiêu đề MẶT BẰNG/MẶT ĐỨNG/MẶT CẮT… nên không biết là hình gì.",
-                            "P2: trợ lý AI đề xuất loại hình để bạn xác nhận.",
+                            "Bấm 'Đề xuất bổ sung': CAD Guard/AI đề xuất loại hình để bạn xác nhận.",
                             "Thêm tiêu đề hình ngay dưới hình vẽ (vd. 'MẶT ĐỨNG A TỦ BẾP').", {"id": "sheet", "sheet": n["attrs"]["sheet"]}))
     typed = sum(1 for n in real if n["attrs"]["kind"] in REAL_KINDS)
     out.append(_gate("structure", "Cấu trúc hồ sơ", typed, len(real), t1,
@@ -267,7 +303,7 @@ def _gates(d: Drawing2D, g: _G, scenes: dict, fragments: list, profile: dict) ->
 
     # 3. Bóc tách vật tư: hạng mục có khối + có ghi chú vật liệu
     t3: list[dict] = []
-    has_mat = {e["from"][5:] for e in g.edges if e["type"] == "mentions"}
+    has_mat = {e["from"][5:] for e in g.edges if e["type"] in ("mentions", "made_of")}
     ok_boq = 0
     for grp, sc in scenes.items():
         name = g.nodes[f"item:{grp}"]["label"]
@@ -282,7 +318,7 @@ def _gates(d: Drawing2D, g: _G, scenes: dict, fragments: list, profile: dict) ->
         if grp not in has_mat:
             t3.append(_task("boq", "Chưa thấy ghi chú vật liệu", name,
                             "Không có chữ ghi vật liệu (MFC, MDF, Laminate, kính, đá…) trên các tờ của hạng mục.",
-                            "P2: trợ lý AI gán vật liệu từ ghi chú/bảng vật liệu để bạn xác nhận.",
+                            "Bấm 'Đề xuất bổ sung': CAD Guard/AI gán vật liệu từ ghi chú để bạn xác nhận.",
                             "Ghi chú vật liệu + mã màu trên mặt đứng/mặt cắt (vd. 'MFC chống ẩm An Cường 18mm').",
                             {"id": "sheet", "sheet": (g.nodes[f'item:{grp}']['attrs']['sheets'] or [None])[0]}))
     out.append(_gate("boq", "Bóc tách vật tư", ok_boq, len(scenes), t3,
@@ -304,7 +340,7 @@ def _item_rows(g: _G, scenes: dict) -> list[dict]:
     rows = []
     mats: dict[str, list[str]] = {}
     for e in g.edges:
-        if e["type"] == "mentions":
+        if e["type"] in ("mentions", "made_of"):
             mats.setdefault(e["from"][5:], []).append(g.nodes[e["to"]]["label"])
     for n in g.nodes.values():
         if n["type"] != "item":

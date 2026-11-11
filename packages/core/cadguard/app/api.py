@@ -870,8 +870,11 @@ def drawing_graph(app: AppData, rel: Any, refresh: Any = False) -> dict:
 
     path = app.resolve(rel)
     model = app.model(path)
+    from ..graph_ai import load_overrides, overrides_key
+
     supp = scene_api.read_supplement(app.ws.root, model.file_hash)
-    key = model.file_hash[:16] + "-" + hashlib.sha256(json.dumps(supp, sort_keys=True).encode("utf-8")).hexdigest()[:8]
+    key = (model.file_hash[:16] + "-" + hashlib.sha256(json.dumps(supp, sort_keys=True).encode("utf-8")).hexdigest()[:8]
+           + overrides_key(app.ws.root, model.file_hash))
     cache = app.ws.root / GRAPH_DIR / f"{key}.json"
     if refresh is not True and cache.is_file():
         try:
@@ -880,7 +883,7 @@ def drawing_graph(app: AppData, rel: Any, refresh: Any = False) -> dict:
                 return {"file": app.rel(path), "cached": True, **g}
         except (OSError, ValueError):
             pass
-    g = build_graph(model, supplement=supp)
+    g = build_graph(model, supplement=supp, overrides=load_overrides(app.ws.root, model.file_hash))
     try:
         cache.parent.mkdir(parents=True, exist_ok=True)
         cache.write_text(json.dumps(g, ensure_ascii=False), encoding="utf-8")

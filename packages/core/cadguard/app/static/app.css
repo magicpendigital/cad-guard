@@ -684,3 +684,12 @@ body.acad-panel .tabs{overflow-x:auto}
 .tblmap{border-collapse:collapse;width:100%;font-size:13px}
 .tblmap th,.tblmap td{border-bottom:1px solid var(--border);padding:5px 6px;text-align:left;vertical-align:top}
 .matchips span{display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;border-radius:999px;background:var(--bg2,#f4f4f5);font-size:12px}
+
+.props{display:flex;flex-direction:column;gap:8px}
+.prop{border:1px solid var(--border-strong);border-radius:10px;padding:8px 12px;background:var(--bg);font-size:13px}
+.prop.confirmed{border-left:5px solid #15803d;opacity:.85}
+.prop.dismissed{opacity:.55}
+.prop .p-head{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.prop .p-src{font-size:12px;color:var(--text2)}
+.prop .p-flag{color:#c2410c}
+.prop .p-act{display:flex;gap:6px;margin-top:6px}

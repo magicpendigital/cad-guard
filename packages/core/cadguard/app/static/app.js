@@ -2893,12 +2893,106 @@
       el("div", {class: "m-stats", text: `${s.sheets} tờ · ${s.views} hình (${s.views_typed_pct}% có loại; ${s.fragments} mảnh lẻ bỏ qua) · ${s.items} hạng mục · ${s.modules} khối · ${s.materials} loại vật liệu được ghi chú${g.cached ? " · bản đã lưu" : ""}`}),
       el("h3", {text: "Sẵn sàng cho các bước tiếp theo"}),
       el("div", {class: "gates"}, gates),
+      el("h3", {text: "Đề xuất bổ sung (chờ bạn xác nhận)"}),
+      el("div", {class: "f-d", text: "Phần code chưa đọc được: loại hình chưa tiêu đề, ghép mặt đứng–mặt bằng, vật liệu theo bộ phận, hạng mục không phải đồ nội thất. Mỗi đề xuất đã qua bước kiểm bằng chứng; chỉ thành dữ liệu khi bạn bấm Đồng ý. Bản vẽ không bị sửa."}),
+      el("div", {class: "bar-act"},
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: () => suggestGraph(false)}, "Đề xuất bằng code"),
+        el("button", {class: "btn-p btn-sm", type: "button", onclick: () => suggestGraph(true)}, "Đề xuất thêm bằng AI")),
+      el("div", {id: "graphProps", class: "props"}, el("div", {class: "f-d", text: "Đang tải đề xuất…"})),
       el("h3", {text: "Hạng mục"}),
       el("table", {class: "tblmap"}, head, rows),
       mats.length ? [el("h3", {text: "Vật liệu được ghi chú"}), el("div", {class: "matchips"},
         mats.map((m) => el("span", {title: m.attrs.samples.join("\n")}, `${m.label} · ${m.attrs.mentions}`)))] : null,
       el("p", {class: "f-d", text: "Bản đồ do code đọc từ bản vẽ (tất định). Bước sau: trợ lý AI đề xuất phần code chưa đọc được (hình chưa có tiêu đề, ghép mặt đứng–mặt bằng, gán vật liệu) để bạn xác nhận."})));
     $("cvInfo").textContent = `Bản đồ · ${s.nodes} nút · ${s.edges} quan hệ`;
+    loadProps();
+  }
+
+  // ---------- P2: đề xuất bổ sung bản đồ (code + AI, qua harness, người dùng xác nhận) ----------
+  const PROP_KIND = {view_kind: "Loại hình", link_views: "Ghép mặt đứng – mặt bằng", item_material: "Vật liệu theo bộ phận",
+    item_scope: "Phạm vi hạng mục", issue: "Nhận xét"};
+  const VIEW_KIND_VI = {plan: "mặt bằng", elevation: "mặt đứng", section: "mặt cắt", detail: "chi tiết", ceiling: "mặt bằng trần", image: "ảnh/phối cảnh"};
+  function propText(p) {
+    const v = p.value;
+    if (p.kind === "view_kind") return `${p.target_label} → ${VIEW_KIND_VI[v.kind] || v.kind}${v.title ? ` (“${v.title}”)` : ""}`;
+    if (p.kind === "link_views") return `${p.target_label} ↔ ${p.value_label}`;
+    if (p.kind === "item_material") return `${p.target_label}: ${v.component ? v.component + " — " : ""}${v.material}${v.spec ? ` (AI đọc: ${v.spec})` : ""}`;
+    if (p.kind === "item_scope") return `${p.target_label}: ${v.scope === "architecture" ? "hồ sơ kiến trúc, bỏ khỏi dựng 3D/bóc tách" : "đồ nội thất"}`;
+    return `${p.target_label}: ${v.message}`;
+  }
+  async function loadProps() {
+    const box = $("graphProps");
+    if (!box || !S.file) return;
+    let r;
+    try { r = await api("/api/graph/proposals", {file: S.file}); } catch (e) { fill(box, el("div", {class: "f-d", text: e.message})); return; }
+    if (!$("graphProps")) return;
+    S.props = r;
+    renderProps();
+  }
+  function renderProps() {
+    const box = $("graphProps"), r = S.props;
+    if (!box || !r) return;
+    if (!r.items.length) {
+      fill(box, el("div", {class: "f-d", text: r.updated ? "Chưa có đề xuất nào cho bản vẽ này." : "Chưa chạy đề xuất. Bấm “Đề xuất bằng code” (vài giây, không dùng AI)."}));
+      return;
+    }
+    const pend = r.items.filter((p) => p.status === "proposed");
+    const sure = pend.filter((p) => p.confidence >= 0.75 && !(p.flags || []).length);
+    const runs = (r.runs || []).filter((x) => !x.ok).map((x) => `${x.agent}: ${x.error}`);
+    const card = (p) => el("div", {class: "prop " + p.status},
+      el("div", {class: "p-head"}, b(PROP_KIND[p.kind] || p.kind),
+        el("span", {class: "p-src", text: `${(p.sources || []).map((s) => s === "code" ? "code" : "AI").join(" + ")} · tin cậy ${Math.round(p.confidence * 100)}%` +
+          (p.status === "confirmed" ? " · đã đồng ý" : p.status === "dismissed" ? " · đã bỏ" : "")})),
+      el("div", {text: propText(p)}),
+      el("div", {class: "f-d", text: "Vì sao: " + p.reason + ((p.evidence || []).length ? ` · ${p.evidence.length} bằng chứng trên bản vẽ` : "")}),
+      (p.flags || []).map((f) => el("div", {class: "p-flag", text: "⚠ " + f})),
+      p.status === "proposed" ? el("div", {class: "p-act"},
+        el("button", {class: "btn-p btn-sm", type: "button", onclick: () => decideProp(p, true)}, "Đồng ý"),
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: () => decideProp(p, false)}, "Bỏ")) : null);
+    fill(box,
+      el("div", {class: "f-d", text: `${r.counts.proposed} chờ xác nhận · ${r.counts.confirmed} đã đồng ý · ${r.counts.dismissed} đã bỏ` +
+        (r.rejected.length ? ` · ${r.rejected.length} đề xuất bị bước kiểm loại (thiếu bằng chứng)` : "")}),
+      runs.length ? el("div", {class: "p-flag", text: "Một số lượt AI lỗi: " + runs.join("; ")}) : null,
+      sure.length > 1 ? el("div", {class: "bar-act"}, el("button", {class: "btn-s btn-sm", type: "button", onclick: () => acceptMany(sure)},
+        `Đồng ý ${sure.length} đề xuất chắc chắn (tin cậy ≥ 75%, không cảnh báo)`)) : null,
+      pend.map(card), r.items.filter((p) => p.status !== "proposed").slice(0, 30).map(card));
+  }
+  async function decideProp(p, accept) {
+    try { await api("/api/graph/decide", {file: S.file, id: p.id, accept}); }
+    catch (e) { fail(e, accept ? "Đồng ý đề xuất" : "Bỏ đề xuất"); return; }
+    toast(accept ? "Đã ghi vào bản đồ. Bản vẽ không bị sửa." : "Đã bỏ đề xuất.");
+    await loadMap(false);
+  }
+  async function acceptMany(list) {
+    const ok = await confirmDialog({title: `Đồng ý ${list.length} đề xuất?`,
+      body: ["Chỉ các đề xuất tin cậy ≥ 75% và không có cảnh báo. Ghi vào bản đồ bản vẽ (và phần bổ sung 3D nếu là ghép hình); bản vẽ không bị sửa.",
+        "Bỏ được từng mục sau (xoá trong .cadguard/graph nếu cần làm lại)."], yes: "Đồng ý tất cả", no: "Chưa"});
+    if (!ok) return;
+    const bz = busy(`Đang ghi ${list.length} đề xuất…`, "");
+    for (const p of list) {
+      try { await api("/api/graph/decide", {file: S.file, id: p.id, accept: true}); } catch (e) { bz.done(); fail(e, "Đồng ý đề xuất"); return; }
+    }
+    bz.done();
+    toast(`Đã đồng ý ${list.length} đề xuất.`);
+    await loadMap(false);
+  }
+  async function suggestGraph(ai) {
+    if (!S.file) return;
+    const path = S.file;
+    const bz = busy(ai ? "Đang nhờ AI đề xuất…" : "Đang tìm đề xuất bằng code…",
+      ai ? "4 việc: loại hình, ghép hình, vật liệu, soát nhất quán. Có thể mất vài phút; bạn vẫn dùng ứng dụng bình thường." : "");
+    let job;
+    try { job = await api("/api/graph/suggest", {file: path, ai}); } catch (e) { bz.done(); fail(e, "Đề xuất bổ sung"); return; }
+    if (job.note) toast(job.note);
+    const msg = document.querySelector("#notices .notice.busy .n-msg");
+    while (job.state === "running") {
+      await new Promise((res) => setTimeout(res, 2000));
+      try { job = await api("/api/graph/suggest/status", {job: job.id}); } catch (e) { bz.done(); fail(e, "Đề xuất bổ sung"); return; }
+      if (msg && job.agent) msg.textContent = `Đang làm: ${{views: "loại hình", links: "ghép hình", materials: "vật liệu", review: "soát nhất quán"}[job.agent] || job.agent}`;
+    }
+    bz.done();
+    if (job.state === "error") { fail(new Error(job.error || "Lỗi khi đề xuất."), "Đề xuất bổ sung"); return; }
+    if (S.file === path && S.mapOn) loadProps();
   }
 
   // ---------- GIẢI THÍCH CHUYÊN SÂU BẰNG AI ----------
