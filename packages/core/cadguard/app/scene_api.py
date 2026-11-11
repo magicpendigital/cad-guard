@@ -34,6 +34,20 @@ def _paths(root: Path, file_hash: str) -> tuple[Path, Path]:
     return d / f"{file_hash[:16]}.cgsup.json", d / f"{file_hash[:16]}.proposals.json"
 
 
+SCOPED = ("module:", "label:", "room:")  # khoá theo khối/phòng: mã khối M1… lặp lại giữa các hạng mục -> lưu kèm mã hạng mục
+
+
+def scoped_key(key: str, item: str) -> str:
+    return f"{item}|{key}" if key.startswith(SCOPED) else key
+
+
+def item_supp(raw: dict, item: str) -> dict:
+    """Số bổ sung áp cho một hạng mục: khoá chung (cũ, không kèm mã) rồi khoá riêng của hạng mục đè lên."""
+    out = {k: v for k, v in raw.items() if "|" not in k}
+    out.update({k.split("|", 1)[1]: v for k, v in raw.items() if k.startswith(item + "|")})
+    return out
+
+
 def read_supplement(root: Path, file_hash: str) -> dict:
     sp, _ = _paths(root, file_hash)
     if not sp.is_file():
@@ -55,10 +69,11 @@ def build(model, root: Path, item: str | None):
     from ..graph_ai import apply_overrides, load_overrides
 
     d = apply_overrides(_drawing(model), load_overrides(root, model.file_hash))  # loại hình người dùng đã xác nhận
-    supp = read_supplement(root, model.file_hash)
+    raw = read_supplement(root, model.file_hash)
     g = item if item in d.groups else best_item(d)
     if g is None:
-        return None, d, supp
+        return None, d, raw
+    supp = item_supp(raw, g)
     sc = build_item_scene(d, g, supp)
     sc.source_hash = model.file_hash
     sc.scene_hash = sc.compute_hash()
@@ -267,7 +282,7 @@ def set_value(model, root: Path, item: Any, key: Any, value: Any) -> dict:
     sval = str(value).strip()
     if sval == "reset" and f in ("dim", "main"):  # bỏ giá trị người dùng đã sửa: quay về số đo từ bản vẽ
         sp, _ = _paths(root, model.file_hash)
-        vals = {k: v for k, v in supp.items() if k != key}
+        vals = {k: v for k, v in read_supplement(root, model.file_hash).items() if k not in (key, scoped_key(key, sc.item))}
         _write(sp, {"schema": SUPPLEMENT_SCHEMA, "source_hash": model.file_hash, "origin": "user", "values": vals})
         return view(model, root, sc.item)
     if f == "main":
@@ -301,8 +316,9 @@ def set_value(model, root: Path, item: Any, key: Any, value: Any) -> dict:
             raise SceneApiError("Giá trị ngoài khoảng hợp lệ (mm).")
         sval = f"{num:g}"
     sp, _ = _paths(root, model.file_hash)
-    vals = dict(supp)
-    vals[key] = sval
+    vals = read_supplement(root, model.file_hash)
+    vals.pop(key, None) if key.startswith(SCOPED) else None  # khoá chung cũ: thay bằng khoá riêng của hạng mục
+    vals[scoped_key(key, sc.item)] = sval
     _write(sp, {"schema": SUPPLEMENT_SCHEMA, "source_hash": model.file_hash, "origin": "user", "values": vals})
     return view(model, root, sc.item)
 
@@ -339,4 +355,67 @@ def glb(model, root: Path, item: Any) -> dict:
             "b64": base64.b64encode(build_glb2(sc)).decode("ascii")}
 
 
-__all__ = ["SceneApiError", "add_proposals", "glb", "has_items", "prompt", "read_supplement", "set_value", "view"]
+# ---------------- cả tầng (cg.space/1) ----------------
+
+def _space(model, root: Path) -> dict:
+    from ..graph_ai import apply_overrides, load_overrides
+    from ..scene.space import build_space
+
+    d = apply_overrides(_drawing(model), load_overrides(root, model.file_hash))
+    raw = read_supplement(root, model.file_hash)
+    return build_space(model, d, lambda g: item_supp(raw, g), raw), d
+
+
+def space_view(model, root: Path) -> dict:
+    """Cả tầng: khung phòng + hạng mục đã đặt + đồ rời + cửa; hộp cho trình xem; việc cần làm."""
+    from ..scene.space import space_boxes
+
+    sp, d = _space(model, root)
+    for it in sp["items"]:
+        it["sheet_names"] = _sheet_names(d, it["item"])
+    bx = space_boxes(sp)
+    plan = sp.get("plan") or {}
+    return {**sp, "plan": {**plan, "label": _view_vi(d, plan["id"]) if plan.get("id") else ""},
+            "boxes": [{"b": [list(p) for p in b["b"]], "z0": b["z0"], "z1": b["z1"], "c": list(color_for(b["m"])), "k": b["k"], "n": b["n"]}
+                      for b in bx[:MAX_BOXES]], "truncated": len(bx) > MAX_BOXES}
+
+
+def space_set(model, root: Path, key: Any, value: Any) -> dict:
+    """Khoá cả tầng: `place:<mã>` = 0|90|180|270|reset (góc xoay hạng mục), `space:ceiling`, `space:door_h` (mm|reset)."""
+    if not isinstance(key, str) or not isinstance(value, (str, int, float)) or len(str(value)) > 20:
+        raise SceneApiError("Thiếu khoá hoặc giá trị.")
+    sval = str(value).strip()
+    raw = read_supplement(root, model.file_hash)
+    d = _drawing(model)
+    if key.startswith("place:") and key[6:] in d.groups:
+        if sval not in ("0", "90", "180", "270", "reset"):
+            raise SceneApiError("Góc xoay phải là 0, 90, 180 hoặc 270.")
+    elif key in ("space:ceiling", "space:door_h"):
+        if sval != "reset":
+            try:
+                num = float(sval.replace(",", "."))
+            except ValueError:
+                raise SceneApiError("Giá trị phải là số (mm).") from None
+            if not 1500 <= num <= 6000:
+                raise SceneApiError("Giá trị ngoài khoảng hợp lệ (1500–6000 mm).")
+            sval = f"{num:g}"
+    else:
+        raise SceneApiError("Khoá không thuộc cảnh cả tầng.")
+    raw.pop(key, None)
+    if sval != "reset":
+        raw[key] = sval
+    sp, _ = _paths(root, model.file_hash)
+    _write(sp, {"schema": SUPPLEMENT_SCHEMA, "source_hash": model.file_hash, "origin": "user", "values": raw})
+    return space_view(model, root)
+
+
+def space_glb(model, root: Path) -> dict:
+    from ..scene.space import render_space_glb
+
+    sp, _d = _space(model, root)
+    return {"name": f"ca-tang-{sp.get('space_hash', '')}.glb", "space_hash": sp.get("space_hash"),
+            "b64": base64.b64encode(render_space_glb(sp)).decode("ascii")}
+
+
+__all__ = ["SceneApiError", "add_proposals", "glb", "has_items", "item_supp", "prompt", "read_supplement", "scoped_key",
+           "set_value", "space_glb", "space_set", "space_view", "view"]

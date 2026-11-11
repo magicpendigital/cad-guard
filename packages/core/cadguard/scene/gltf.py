@@ -23,7 +23,8 @@ PALETTE = [
 ]
 FIXED = {"wall": (0.93, 0.93, 0.91), "floor": (0.60, 0.58, 0.55), "default": (0.80, 0.80, 0.80), "ceiling": (0.97, 0.97, 0.97),
          "module-base": (0.86, 0.72, 0.52), "module-wall": (0.78, 0.66, 0.50), "module-tall": (0.74, 0.62, 0.48),
-         "front-door": (0.95, 0.90, 0.80), "front-drawer": (0.90, 0.85, 0.74)}
+         "front-door": (0.95, 0.90, 0.80), "front-drawer": (0.90, 0.85, 0.74), "loose": (0.62, 0.70, 0.80),
+         "panel": (0.88, 0.82, 0.70)}
 
 
 def color_for(material: str) -> tuple[float, float, float]:
@@ -48,6 +49,45 @@ def box_faces(b: Box) -> list[tuple[list[tuple[float, float, float]], tuple[floa
         ln = (ex * ex + ey * ey) ** 0.5 or 1.0
         faces.append(([(px, py, b.z0), (qx, qy, b.z0), (qx, qy, b.z1), (px, py, b.z1)], (ey / ln, -ex / ln, 0.0)))
     return faces
+
+
+def _triangulate(verts, nrm) -> list[int]:
+    """Chia mặt phẳng n đỉnh (lồi hoặc lõm, ngược chiều kim đồng hồ nhìn theo pháp tuyến) thành tam giác (cắt tai)."""
+    n = len(verts)
+    if n == 3:
+        return [0, 1, 2]
+    if n == 4:
+        return [0, 1, 2, 0, 2, 3]
+    ax = max(range(3), key=lambda i: abs(nrm[i]))  # chiếu lên mặt phẳng bỏ trục pháp tuyến lớn nhất
+    u, v = [i for i in range(3) if i != ax]
+    pts = [(p[u], p[v]) for p in verts]
+    area = sum(pts[i][0] * pts[(i + 1) % n][1] - pts[(i + 1) % n][0] * pts[i][1] for i in range(n))
+    sign = 1.0 if area > 0 else -1.0
+
+    def cross(a, b, c):
+        return ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) * sign
+
+    def inside(p, a, b, c):
+        return cross(a, b, p) > 1e-9 and cross(b, c, p) > 1e-9 and cross(c, a, p) > 1e-9
+
+    idx, out, guard = list(range(n)), [], 0
+    while len(idx) > 3 and guard < 4 * n * n:
+        guard += 1
+        for k in range(len(idx)):
+            i0, i1, i2 = idx[k - 1], idx[k], idx[(k + 1) % len(idx)]
+            a, b, c = pts[i0], pts[i1], pts[i2]
+            if cross(a, b, c) <= 1e-9:
+                continue
+            if any(inside(pts[j], a, b, c) for j in idx if j not in (i0, i1, i2)):
+                continue
+            out += [i0, i1, i2]
+            idx.pop(k)
+            break
+        else:
+            break
+    if len(idx) >= 3:  # đa giác hỏng (tự cắt): quạt phần còn lại để không mất mặt
+        out += [x for k in range(1, len(idx) - 1) for x in (idx[0], idx[k], idx[k + 1])]
+    return out
 
 
 def build_glb(scene: Scene) -> bytes:
@@ -82,7 +122,7 @@ def glb_from_boxes(box_list: list[Box], generator: str, extras: dict | None = No
                 for v in verts:
                     pos.extend(_to_gl(*v))
                     nor.extend((gn[0] / 1000, gn[1] / 1000, gn[2] / 1000))
-                idx.extend((start, start + 1, start + 2, start, start + 2, start + 3))
+                idx.extend(start + i for i in _triangulate(verts, nrm))
         count = len(pos) // 3
         mins = [min(pos[i::3]) for i in range(3)]
         maxs = [max(pos[i::3]) for i in range(3)]

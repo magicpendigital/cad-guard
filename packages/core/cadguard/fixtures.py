@@ -320,7 +320,7 @@ def _kt_title(msp, text, at, k):
 
 
 def make_company_kitchen(path: Path, lower_h: float = 850.0, upper_z0: float = 1500.0, aisle: float | None = None,
-                         room_h: float = 2700.0) -> None:
+                         room_h: float = 2700.0, extra=None) -> None:
     """Ba tờ: (1) SYN.01. 01 mặt bằng bố trí 1:50: phòng 4000×3000 tường đôi dày 200, dải tủ bếp 2400×600 sát tường
     trên; (2) SYN.10. 01 tủ bếp 1:20: mặt đứng (tủ dưới 2400×`lower_h`, tủ trên 2400×700 từ cao `upper_z0`, mỗi tủ 4
     cánh 600; tường, sàn, trần cao `room_h`) và mặt bằng (tủ dưới nét liền sâu 600, tủ trên nét khuất sâu 350); ký hiệu
@@ -396,6 +396,8 @@ def make_company_kitchen(path: Path, lower_h: float = 850.0, upper_z0: float = 1
     _kt_dim(msp, (sx, sz + lower_h), (sx + 600, sz + lower_h), (sx + 300, sz + lower_h + 150))
     _kt_dim(msp, (sx + 600, sz), (sx + 600, sz + lower_h), (sx + 800, sz + 400), angle=90)
     _kt_title(msp, "MẶT CẮT Y1 TỦ BẾP SYN", (sx, 600), k)
+    if extra is not None:
+        extra(doc, msp)
     _finish(doc, path)
 
 
@@ -407,7 +409,27 @@ def make_company_kitchen_aisle(path: Path) -> None:
     make_company_kitchen(path, aisle=450.0)
 
 
+def _floor_extra(doc, msp) -> None:
+    """Mặt bằng bố trí (tờ 1) thành mặt bằng tổng: ký hiệu số hạng mục "10" cạnh dải tủ, một cửa (block layer cửa) ở
+    tường trái, một sofa (block layer nội thất)."""
+    doc.layers.add("SYN-Cua")
+    cua = doc.blocks.new("SYN-CUA-DI")
+    cua.add_line((0, 0), (900, 0))
+    cua.add_line((0, 0), (0, 200))
+    cua.add_line((900, 0), (900, 200))
+    sofa = doc.blocks.new("SYN-SOFA-3")
+    sofa.add_lwpolyline([(0, 0), (2000, 0), (2000, 900), (0, 900)], close=True)
+    msp.add_text("10", height=150, dxfattribs={"layer": "SYN_Text", "style": "STD", "insert": (4700, 5000)})
+    msp.add_blockref("SYN-CUA-DI", (3000, 3600), dxfattribs={"layer": "SYN-Cua", "rotation": 90})
+    msp.add_blockref("SYN-SOFA-3", (3800, 3300), dxfattribs={"layer": "SYN_Noithat"})
+
+
+def make_company_floor(path: Path) -> None:
+    make_company_kitchen(path, extra=_floor_extra)
+
+
 SCENE_FIXTURES = {
+    "company_floor.dxf": make_company_floor,
     "company_kitchen.dxf": make_company_kitchen,
     "company_kitchen_low.dxf": make_company_kitchen_low,
     "company_kitchen_aisle.dxf": make_company_kitchen_aisle,

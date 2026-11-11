@@ -720,3 +720,5 @@ body.acad-panel .tabs{overflow-x:auto}
 .tbl3d td.ed{cursor:pointer}
 .tbl3d td.ed:hover{outline:1px dashed var(--border-strong)}
 .tbl3d input{width:70px}
+.sp-edit input{width:80px}
+.sp-edit{display:inline-block;margin-right:12px}

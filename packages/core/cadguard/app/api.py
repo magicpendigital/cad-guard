@@ -948,6 +948,12 @@ def scene_action(app: AppData, rel: Any, action: str, body: dict) -> dict:
             return scene_api.cutlist_file(model, root, body.get("item"))
         if action == "source":
             return scene_api.source_geometry(model, root, body.get("item"), body.get("view"))
+        if action == "space":
+            return {"file": app.rel(path), **scene_api.space_view(model, root)}
+        if action == "space_set":
+            return {"file": app.rel(path), **scene_api.space_set(model, root, body.get("key"), body.get("value"))}
+        if action == "space_glb":
+            return scene_api.space_glb(model, root)
     except scene_api.SceneApiError as exc:
         raise ApiError(str(exc), 422) from None
     raise ApiError("Thao tác 3D không hợp lệ.")

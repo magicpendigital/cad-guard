@@ -1,5 +1,5 @@
 """Dòng lệnh: cadguard audit | stats | rules | profile | fixtures | mcp | propose | apply | undo | diff | validate
-| ask | chat | engines | keys | app | scene | scene-assess | studio | review | watch | doctor | mcp-config | autocad.
+| ask | chat | engines | keys | app | scene | scene-assess | space | studio | review | watch | doctor | mcp-config | autocad.
 
 Mã thoát của `audit`: 0 = không có lỗi mức E; 1 = có lỗi mức E; 2 = không đọc được đầu vào/chuẩn.
 `propose`/`validate`: 0 = đạt, 1 = kiểm không đạt, 2 = lỗi/từ chối. `apply`/`undo`: 0 = xong, 2 = từ chối/lỗi.
@@ -1059,6 +1059,34 @@ def cmd_scene_assess(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_space(args: argparse.Namespace) -> int:
+    """Dựng cả tầng `cg.space/1`: tường + hạng mục đặt theo ký hiệu số + đồ rời + cửa; xuất .glb hoặc .json."""
+    import json
+
+    from .reader_select import read_with
+    from .scene.space import build_space, render_space_glb
+    from .scene.views2d import read_drawing
+
+    model = read_with(args.path, "auto")
+    sp = build_space(model, read_drawing(model))
+    c = sp.get("counts") or {}
+    if args.out:
+        out = Path(args.out)
+        if out.suffix.lower() == ".glb":
+            out.write_bytes(render_space_glb(sp))
+        else:
+            out.write_text(json.dumps(sp, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(f"Đã ghi {out}")
+    if args.json and not args.out:
+        print(json.dumps(sp, ensure_ascii=False, indent=2))
+        return 0
+    print(f"Cả tầng: {c.get('walls', 0)} mảng tường, {c.get('placed', 0)}/{c.get('items', 0)} hạng mục đã đặt, "
+          f"{c.get('loose', 0)} đồ rời, {c.get('doors', 0)} cửa, {c.get('tasks', len(sp['tasks']))} việc cần làm")
+    for t in sp["tasks"][:20]:
+        print(f"  - {t['title']}: {t.get('why', '')}")
+    return 0
+
+
 def cmd_studio(args: argparse.Namespace) -> int:
     from .studio.llm import AnthropicBackend, ClaudeCliBackend, LlmError, auto_backend
     from .studio.server import serve
@@ -1303,6 +1331,11 @@ def main(argv: list[str] | None = None) -> int:
     sa.add_argument("path")
     sa.add_argument("--json", action="store_true")
     sa.set_defaults(fn=cmd_scene_assess)
+    spc = sub.add_parser("space", help="dựng 3D cả tầng từ mặt bằng tổng + các hạng mục (cg.space/1); --out x.glb|x.json")
+    spc.add_argument("path")
+    spc.add_argument("--out", help="tệp ra .glb (mở bằng phần mềm diễn họa) hoặc .json")
+    spc.add_argument("--json", action="store_true")
+    spc.set_defaults(fn=cmd_space)
 
     st = sub.add_parser("studio", help="ứng dụng web cục bộ: trao đổi với LLM, xem 3D, bổ sung dữ liệu thiếu")
     st.add_argument("--port", type=int, default=8770)

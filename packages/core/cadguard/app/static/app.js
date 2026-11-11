@@ -1246,6 +1246,70 @@
     renderFinds();
   }
 
+  // cg.space/1: cả tầng = tường từ mặt bằng tổng + hạng mục đặt theo ký hiệu số + đồ rời + cửa. Mọi số có nguồn;
+  // hạng mục chưa chắc vị trí thành việc cần làm (chọn góc xoay), không tự đoán.
+  async function loadSpace(path) {
+    const sheet = $("sheet");
+    fill(sheet, emptyBox("Đang dựng cả tầng…", "Đọc tường ở mặt bằng tổng, đặt từng hạng mục theo ký hiệu số, không dùng AI."));
+    try { renderSpace(path, await api("/api/space", {file: path})); } catch (e) { fill(sheet, emptyBox("Không dựng được cả tầng", e.message)); }
+  }
+  function renderSpace(path, r) {
+    if (S.file !== path) return;
+    S.r3d = null;
+    $("t3Item").value = "__space__";
+    const c = r.counts || {walls: 0, rooms: 0, items: 0, placed: 0, loose: 0, doors: 0, tasks: r.tasks.length};
+    $("cvInfo").textContent = `Cả tầng · ${c.walls} mảng tường · ${c.placed}/${c.items} hạng mục đã đặt · ${c.loose} đồ rời · ${c.doors} cửa · ${c.tasks} việc cần làm`;
+    const save = async (key, value) => {
+      try { renderSpace(path, await api("/api/space/set", {file: path, key, value})); } catch (e) { fail(e, "Lưu cả tầng"); }
+    };
+    const numEdit = (label, obj, key) => {
+      const inp = el("input", {type: "number", min: "1500", max: "6000", step: "10", value: obj ? String(Math.round(obj.value)) : "", "aria-label": label});
+      return el("span", {class: "sp-edit"}, b(label + ": "), inp, " mm ", badge(obj ? obj.src : "missing"), " ",
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: () => save(key, inp.value)}, "Lưu"),
+        obj && obj.src === "user" ? el("button", {class: "link sm", type: "button", onclick: () => save(key, "reset")}, "Bỏ sửa") : null);
+    };
+    const srcBar = el("div", {class: "v3d-src"},
+      el("div", {}, b("Đang xem: "), "Cả tầng", r.plan && r.plan.label ? [" · dựng từ ", r.plan.label] : null),
+      r.rooms.length ? el("div", {}, b("Phòng: "), r.rooms.map(x => `${x.name || "?"} (${x.area_m2} m²)`).join(" · ")) : null,
+      el("div", {}, numEdit("Cao sàn – trần", r.ceiling, "space:ceiling"), "  ", numEdit("Cao cửa", r.door_h, "space:door_h")),
+      el("div", {class: "f-d", text: "Tường lấy từ đa giác nét cắt của mặt bằng tổng; hạng mục đặt bằng cách khớp nét mặt bằng chi tiết với mặt bằng tổng quanh ký hiệu số; đồ rời và cửa là hộp theo khung block, cao mặc định. Ảnh để xem bố cục, không dùng để đo."}));
+    const cv = el("canvas", {"aria-label": "Mô hình 3D cả tầng, kéo để xoay, cuộn để phóng to", role: "img"});
+    const stage = el("div", {class: "v3d-stage"}, el("div", {}, cv, el("span", {class: "cap", text: "3D cả tầng · kéo để xoay, cuộn để phóng to"})));
+    const METHOD = {match: "Khớp nét", user: "Bạn chọn góc + khớp nét", user_tag: "Bạn chọn góc, đặt theo ký hiệu"};
+    const head = el("tr", {}, ["Hạng mục", "Tờ", "Đặt", "Góc xoay", "Độ khớp", ""].map(t => el("th", {text: t})));
+    const rows = r.items.map(it => {
+      const rot = el("select", {"aria-label": `Góc xoay ${it.name}`}, ["", "0", "90", "180", "270"].map(v => el("option", {value: v, text: v ? v + "°" : "tự động"})));
+      rot.value = it.method && it.method.startsWith("user") ? String(it.rot) : "";
+      return el("tr", {}, el("td", {}, b(it.name || it.item)), el("td", {text: it.sheet_names || ""}),
+        el("td", {text: it.placed ? (METHOD[it.method] || it.method) : "Chưa đặt"}),
+        el("td", {}, rot, " ", el("button", {class: "btn-s btn-sm", type: "button", onclick: () => save(`place:${it.item}`, rot.value || "reset")}, "Lưu")),
+        el("td", {text: it.score != null ? Math.round(it.score * 100) + "%" : "—"}),
+        el("td", {}, el("button", {class: "link sm", type: "button", onclick: () => load3d(path, it.item)}, "Xem hạng mục")));
+    });
+    const tasks = r.tasks.map(t => el("div", {class: "gap3d"}, el("div", {class: "g-title", text: t.title}),
+      t.why ? el("div", {class: "g-why", text: "Vì sao: " + t.why}) : null,
+      t.fix_here ? el("div", {class: "g-fix", text: "Sửa nhanh tại đây: " + t.fix_here}) : null,
+      t.fix_cad ? el("div", {class: "g-fix", text: "Sửa gốc trong AutoCAD: " + t.fix_cad}) : null));
+    const dl = el("button", {type: "button", class: "btn-s btn-sm", text: "Tải GLB cả tầng", title: "Mở bằng D5, Twinmotion, Blender… để diễn họa", onclick: async () => {
+      try {
+        const g = await api("/api/space/glb", {file: path});
+        const bin = Uint8Array.from(atob(g.b64), ch => ch.charCodeAt(0));
+        el("a", {href: URL.createObjectURL(new Blob([bin], {type: "model/gltf-binary"})), download: g.name}).click();
+      } catch (e) { fail(e, "Tải GLB cả tầng"); }
+    }});
+    const bottom = el("div", {class: "v3d-bottom"}, el("div", {class: "bar-act"}, dl, el("small", {text: ` mã cảnh ${r.space_hash || ""}`})),
+      el("table", {class: "tbl3d"}, head, rows),
+      tasks.length ? el("div", {class: "sub-h", text: "Việc cần làm để dựng đủ cả tầng"}) : null, tasks,
+      (r.notes || []).map(n => el("small", {text: n})));
+    fill($("sheet"), el("div", {class: "v3d"}, srcBar, stage, bottom));
+    if (S.v3d) { S.v3d.stop(); S.v3d = null; }
+    S.v3d = makeViewer(cv);
+    S.v3d.set(r.boxes);
+  }
+  function badge(kind) {
+    return el("span", {class: "src-b src-" + (kind || "missing"), title: SRC_TIP[kind] || "", text: SRC_BADGE[kind] || kind});
+  }
+
   // cg.scene/2: một hạng mục dựng từ mặt bằng + mặt đứng. Đối chiếu 2D ↔ 3D: dựng từ hình nào/tờ nào, mỗi số đo
   // lấy từ đâu (Ghi = kích thước trên bản vẽ, Đo = đo trên nét, Đã sửa = người dùng), xem song song hình 2D gốc,
   // bấm khối để tô sáng cả hai bên, sửa số đo (lưu vết, Bỏ sửa), hỏi trợ lý về một khối.
@@ -1319,11 +1383,11 @@
     $("cvInfo").textContent = `Hạng mục ${r.item} · ${r.counts.modules} khối · ${r.counts.fronts} cánh/ngăn kéo · ${r.counts.gaps} phần thiếu · mã cảnh ${r.scene_hash}`;
     // thanh công cụ: chọn hạng mục
     const isel = $("t3Item");
-    isel.replaceChildren(...r.items.map(it => el("option", {value: it.id,
+    isel.replaceChildren(el("option", {value: "__space__", text: "★ Cả tầng (mặt bằng tổng + các hạng mục)"}), ...r.items.map(it => el("option", {value: it.id,
       text: `${it.name || it.id}${it.sheet_names ? " · " + it.sheet_names : ""}${it.plans && it.elevations ? "" : " (chưa dựng được)"}`})));
     isel.title = "Hạng mục (tên lấy từ khung tên) và các tờ chứa hạng mục đó";
     isel.value = r.item;
-    if (!isel.dataset.bound) { isel.dataset.bound = "1"; isel.addEventListener("change", () => { S.sel3d = null; load3d(S.file, isel.value); }); }
+    if (!isel.dataset.bound) { isel.dataset.bound = "1"; isel.addEventListener("change", () => { S.sel3d = null; isel.value === "__space__" ? loadSpace(S.file) : load3d(S.file, isel.value); }); }
     const mode = S.mode3d || "3d";
     seg("t3Mode", mode);
     seg("t3Body", S.body3d || "block");

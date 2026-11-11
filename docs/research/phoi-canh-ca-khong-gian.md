@@ -57,3 +57,20 @@ khớp ảnh minh hoạ không". Số đo và vị trí vẫn do code tính, ng�
 | 3 Đồ rời | nhỏ | bố cục đầy đủ để xem lối đi |
 | 4 Cửa | nhỏ | lỗ cửa trên tường |
 | 5 Xuất diễn họa | nhỏ | tệp glTF cả tầng mở trong phần mềm diễn họa |
+
+## 5. Đã triển khai (11/11/2026)
+
+`scene/space.py` (`cg.space/1`), lệnh `cadguard space <dxf> --out x.glb|x.json`, màn 3D → ô Hạng mục → "★ Cả tầng"
+(`/api/space`, `/api/space/set`, `/api/space/glb`).
+
+| Bậc | Cách làm | Đo trên phiên 01 |
+|---|---|---|
+| 1 Khung phòng | mặt bằng tổng = hình mặt bằng có nhiều ký hiệu số nhất; tường = đa giác kín nét cắt/tường mảnh (bề dày quy đổi ≤ 600 mm, hai đường bao lồng nhau = vành tường) + cặp nét song song hở cách 60–450 mm; cao = trung vị sàn–trần của các mặt đứng hạng mục | 44 mảng tường, 4 phòng, cao 2685 (7 mặt đứng ghi sàn–trần) |
+| 2 Đặt hạng mục | ký hiệu số (bỏ cột chú thích); xoay 0/90/180/270 + dời: ứng viên từ bỏ phiếu đầu mút, chấm bằng tỷ lệ nét chi tiết nằm trên nét mặt bằng tổng (≥ 45 %), tâm hình phải gần ký hiệu; khớp yếu → việc cần làm, người chọn góc xoay | 4/10 đặt chắc (khớp 61–88 %); bếp ướt và bàn đảo 39–40 % chờ chọn góc; 4 hạng mục chưa dựng được khối |
+| 3 Đồ rời | block layer nội thất ngoài hạng mục đã đặt; cao theo tên block, nhãn Mặc định | 6 |
+| 4 Cửa | block layer cửa ≤ 2400 mm: cánh + lanh tô; cao cửa mặc định 2200, sửa được | 7 (1 block vách kính lớn bỏ qua, có ghi chú) |
+| 5 Xuất | GLB cả tầng (mặt lõm chia tam giác cắt tai), trình xem trong app | 0,4 s dựng |
+
+Chưa làm: khoét lỗ cửa trong tường (cửa đứng chồng lên tường nếu mặt bằng không chừa khe), cửa sổ, trần, vật liệu bề mặt
+theo phòng, ghép nhiều mặt đứng của bếp chữ L. Số khối người dùng sửa giờ lưu kèm mã hạng mục (`<mã>|module:M1:w`) để
+M1 của hạng mục này không đè lên M1 của hạng mục khác.
