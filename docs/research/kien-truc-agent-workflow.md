@@ -94,7 +94,7 @@ Chưa có người kỹ thuật ghi đáp án nên dùng **agent thiết kế + 
 
 - Agent thiết kế tạo THÔNG SỐ đồ (`cg.furniture-spec/1`: tủ áo, tủ bếp hai hàng, kệ TV) theo luật kết cấu (cánh ≤ 600, cặp
   cánh, cột ngăn kéo, tấm bù); tuỳ chọn AI thiết kế theo yêu cầu bằng lời, qua `validate_spec` (sai luật thì loại).
-- Bộ vẽ dựng DXF từ thông số theo 9 kiểu trình bày (chuẩn; layer THAY; khung không số; ngăn kéo vẽ LINE; liền thân; hình bỏ
+- Bộ vẽ dựng DXF từ thông số theo 9 kiểu trình bày (nay 12, xem mục 9) (chuẩn; layer THAY; khung không số; ngăn kéo vẽ LINE; liền thân; hình bỏ
   cánh riêng; một tiêu đề chung cho hai hình; mặt bằng không đường bao; chiều sâu chỉ ở mặt cắt) và ghi đáp án đúng 100 %
   (máy vẽ ra), không phụ thuộc kết quả đọc của CAD Guard.
 - Chấm: `cadguard bench3d --workspace <thư mục>`. Lần đầu bộ dữ liệu tìm ra 3 lỗi thật của CAD Guard, đã sửa: (1) cánh/ngăn
@@ -105,3 +105,35 @@ Chưa có người kỹ thuật ghi đáp án nên dùng **agent thiết kế + 
 
 Giới hạn: dữ liệu tổng hợp đều đặn hơn bản vẽ thật; dùng để kiểm hồi quy và đo từng kiểu trình bày. Thêm kiểu mới mỗi khi
 gặp một cách vẽ lạ ở bản vẽ thật; vẫn nên có vài đáp án thật để kiểm chéo.
+
+## 9. Ca thật: hình bỏ cánh bị bỏ qua, vùng bo cong bị đọc nhầm (11/11/2026)
+
+Người dùng thử `TESt 2 (1).dxf` (phiên Demo, ngoài repo): tủ áo 3 khối (tấm fix 830, tủ áo 1200, tủ minibar 600). Đo bằng
+code, chỉ ghi số cấu trúc:
+
+- **Tiêu đề chép trùng.** Hai mặt đứng đặt cạnh nhau đều tên "MẶT ĐỨNG BỎ CÁNH TỦ ÁO"; hình trái thật ra có cánh (ký hiệu mở
+  cánh), hình phải mới bỏ cánh. CAD Guard coi cả hai là "bỏ cánh", dựng khối từ hình trái và đọc đợt cũng từ hình trái;
+  hình phải (thanh treo, 2 hộc, ô tủ lạnh) chỉ dùng gợi ý chia khối. Sửa: tiêu đề trùng thì phân biệt theo diện tích ký
+  hiệu mở cánh (không có ký hiệu thì theo số khung cánh/ngăn kéo); có ghi chú giải thích; người dùng chọn tay được
+  ("Dùng làm hình bỏ cánh", khoá `interior:<hạng mục>`).
+- **Đếm nét thành đợt.** Mỗi tấm vẽ hai nét (ván 25, đá 20, kính 10) nên tủ minibar ra "6 đợt". Sửa: tầng ngang = chồng nét
+  ngang cách nhau ≤ 62 mm, dài gần bằng nhau, phải tựa hông/vách (đáy lòng ngăn kéo, đáy máy hút mùi không tính), bỏ tầng
+  sát chân/nóc; loại theo ghi chú gần nhất (kính → đợt kính, đá → ván đỡ + mặt đá).
+- **Ký hiệu trên layer khuất.** Hai polyline 3 điểm ở cạnh phải tủ minibar là đường khấu (hai đầu trên hai cạnh vuông góc,
+  điểm giữa lồi về góc — khác ký hiệu mở cánh có hai đầu cùng cạnh); vòng tròn r ≈ 113 ở góc trên là vòng chú thích mối
+  ghép. Hình chi tiết khấu cạnh bên (không tiêu đề hình, chỉ có dòng ghi chú) có cung R200. Sửa: hai loại
+  này không còn vào bước tách khối/ký hiệu cánh; ghi thành `features` của khối (kèm chi tiết và bán kính), tấm hông trong
+  danh sách cắt ghi "có khấu bo cong R200, xem chi tiết". 3D chỉ đánh dấu, không vẽ đúng đường cong.
+
+Kết quả trên tệp này: tủ áo = 4 cánh, 2 tấm ngang (nóc hộc, đợt trên), 2 hộc trong + vách giữa hộc, 1 thanh treo, 1 đèn
+LED; tủ minibar = 1 cánh soi, ván đỡ + mặt đá, 1 đợt kính, ô tủ lạnh (thiết bị, không sản xuất), 2 đường khấu, 1 vòng chú
+thích. Vách ngăn suốt chiều cao do luật nhịp đợt tự thêm trước đây không còn khi có hình bỏ cánh (vách theo bản vẽ; kiểm
+kết cấu vẫn cảnh báo đợt 1164 mm > nhịp 700).
+
+Bộ 40 tờ thật: kích thước, số khối, số cánh không đổi; số đợt đổi ở 6 hạng mục theo hướng đúng hơn (đã soát bằng ảnh: hai
+nét một tấm không còn đếm đôi, đợt từng khoang được nhận, đợt kính sau cánh kính vẽ nét khuất vẫn được tính). Bộ mô phỏng
+thêm 3 kiểu (`trungtieude`, `noithat`, `khuat_chuthich`), đáp án có số nội thất; 36 hạng mục × 4 tổ hợp kiểu mới: 100 %
+(lần đầu kiểu `trungtieude` tìm ra lỗi kệ TV chỉ có ngăn kéo khung kín, đã sửa bằng dấu hiệu thứ hai).
+
+Giới hạn: khấu/bo cong chỉ là ký hiệu + ghi chú (chưa dựng hình cong); hộc trong lấy theo ô chứa chữ "HỘC"; thanh treo
+nhận theo hình chữ nhật mảnh nét khuất trên khoang cao ≥ 800 hoặc có chữ "thanh treo".

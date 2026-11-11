@@ -40,7 +40,11 @@ def plan_module(m, hinges: dict[str, str], c: dict) -> list[dict]:
     x0, x1 = m.x, m.x + m.w
     out: list[dict] = []
 
+    drawn = [q for q in (getattr(m, "inner", None) or []) if q.get("kind") == "partition"]
+
     def add(x: float, reason: str, code: str):
+        if any(q["x0"] - 30 <= x <= q["x1"] + 30 for q in drawn):  # bản vẽ đã có vách ở đây (hình bỏ cánh)
+            return
         if x0 + t + 50 < x < x1 - t - 50 and not any(abs(x - o["x"]) <= 30 for o in out):
             out.append({"x": round(x, 1), "reason": reason, "code": code})
 
@@ -62,7 +66,9 @@ def plan_module(m, hinges: dict[str, str], c: dict) -> list[dict]:
                 add(xe, "Ray ngăn kéo bắt vào tấm đứng: cột ngăn kéo cần vách ở cạnh này.", "drawer")
     # nhịp đợt: khoang có đợt rộng hơn nhịp cho phép -> vách tại đường ráp cánh gần giữa khoang
     span = float(c.get("shelf_max_span", 700))
-    if getattr(m, "shelves", 0):
+    # có hình bỏ cánh: vách theo bản vẽ, không tự đặt vách vì nhịp đợt (kiểm kết cấu vẫn cảnh báo S06)
+    from_drawing = bool(getattr(m, "interior", "")) and getattr(m, "interior", "") != getattr(m, "elevation", "")
+    if getattr(m, "shelves", 0) and not from_drawing:
         bounds = sorted({round((a.x1 + b.x0) / 2, 1) for row in _rows(m.fronts) for a, b in zip(row, row[1:])})
         for _ in range(8):
             edges = [x0] + sorted(o["x"] for o in out) + [x1]

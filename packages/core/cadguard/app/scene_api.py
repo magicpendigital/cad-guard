@@ -107,7 +107,7 @@ def view(model, root: Path, item: Any = None) -> dict:
         "boxes": _block_boxes(bx, sc, root),
         "truncated": len(bx) > MAX_BOXES,
         "modules": [{"id": m.id, "kind": m.kind, "form": m.form, "type_vi": _type_vi(m), "label": m.label, "fronts": len(m.fronts),
-                     "shelves": m.shelves,
+                     "shelves": m.shelves, "inner_vi": _inner_vi(m), "features_vi": _features_vi(m),
                      "x": m.x, "y": m.y,
                      **{k: {"value": getattr(m, k), "src": SRC_LABEL.get(m.src[k].kind, m.src[k].kind) if k in m.src else "?",
                             "kind": m.src[k].kind if k in m.src else "missing"}
@@ -122,10 +122,32 @@ def view(model, root: Path, item: Any = None) -> dict:
         "splits": __import__("cadguard.scene.annotate", fromlist=["accepted"]).accepted(supp, sc.item),
         "counts": {"modules": len(sc.modules), "fronts": sum(len(m.fronts) for m in sc.modules), "walls": len(sc.walls),
                    "gaps": len(sc.gaps)},
-        "notes": sc.notes[:10],
+        "notes": sc.notes[:24],
         "provenance": provenance(sc, d, supp),
         **production(sc, root, model.file_hash),
     }
+
+
+def _inner_vi(m) -> str:
+    """Nội thất của khối bằng lời, vd. "2 tấm ngang · 2 hộc trong · 1 thanh treo" (đọc từ hình bỏ cánh)."""
+    from ..scene.assemble import INNER_VI
+
+    cnt: dict[str, int] = {}
+    for q in getattr(m, "inner", None) or []:
+        cnt[q.get("kind", "")] = cnt.get(q.get("kind", ""), 0) + 1
+    return " · ".join(f"{n} {INNER_VI.get(k, k)}" for k, n in cnt.items())
+
+
+def _features_vi(m) -> list[str]:
+    out = []
+    for f in getattr(m, "features", None) or []:
+        if f.get("kind") == "curve":
+            where = "mặt hộc (khấu tay nắm)" if f.get("on") == "drawer" else {"r": "cạnh phải", "l": "cạnh trái"}.get(f.get("side"), "trong khối")
+            r = f" R{f['radius']:.0f}" if f.get("radius") else ""
+            out.append(f"Khấu/bo cong ở {where}{r}" + (f" — {f['detail'][:80]}" if f.get("detail") else ""))
+        elif f.get("kind") == "callout":
+            out.append(f"Vòng chú thích: {f.get('text') or '(không có chữ)'}"[:120])
+    return out
 
 
 def _block_boxes(bx, sc, root: Path) -> list[dict]:
@@ -187,11 +209,12 @@ def cutlist_file(model, root: Path, item: Any) -> dict:
 def provenance(sc, d, supp: dict) -> dict:
     """Đối chiếu 2D ↔ 3D: dựng từ hình nào, tờ nào; mặt đứng nào chưa dùng; từng số đo của khối lấy từ đâu."""
     used_e = sorted({m.elevation for m in sc.modules if m.elevation})
+    used_i = sorted({m.interior for m in sc.modules if getattr(m, "interior", "") and m.interior not in used_e})
     used_p = sorted({m.plan for m in sc.modules if m.plan})
     all_e = [v.id for v in d.views_of(sc.item, "elevation") if v.box]
     linked = {lk.elevation for lk in sc.links}
     views = {}
-    for vid in set(used_e) | set(used_p) | set(all_e):
+    for vid in set(used_e) | set(used_p) | set(all_e) | set(used_i):
         v = d.view(vid)
         if v is not None:
             views[vid] = {"id": vid, "label": _view_vi(d, vid), "kind": v.kind, "sheet": v.sheet_id,
@@ -200,8 +223,10 @@ def provenance(sc, d, supp: dict) -> dict:
     return {
         "item_name": _vi(str((d.groups.get(sc.item) or {}).get("name") or sc.item)),
         "sheets": [{"id": s, "label": _sheet_label(d, s)} for s in (d.groups.get(sc.item) or {}).get("sheets") or []],
-        "used": {"elevations": used_e, "plans": used_p},
-        "elevations": [{"id": e, "label": views[e]["label"], "linked": e in linked, "used": e in used_e} for e in all_e if e in views],
+        "used": {"elevations": used_e, "plans": used_p, "interior": used_i},
+        "elevations": [{"id": e, "label": views[e]["label"], "linked": e in linked, "used": e in used_e, "interior": e in used_i}
+                       for e in all_e if e in views],
+        "interior_pick": supp.get(f"interior:{sc.item}"),
         "views": views,
         "main_pick": supp.get(f"main:{sc.item}"),
         "modules": {m.id: {"elevation": m.elevation, "plan": m.plan, "ebox": m.ebox,
@@ -293,6 +318,8 @@ def _allowed(sc: Scene2, d, key: str):
         return "label"
     if key == f"main:{sc.item}":
         return "main"
+    if key == f"interior:{sc.item}":  # hình bỏ cánh dùng để đọc nội thất (người dùng chọn khi máy nhận sai)
+        return "interior"
     if key == f"split:{sc.item}":
         return "split"
     parts = key.split(":")
@@ -330,12 +357,12 @@ def set_value(model, root: Path, item: Any, key: Any, value: Any) -> dict:
         sp, _ = _paths(root, model.file_hash)
         _write(sp, {"schema": SUPPLEMENT_SCHEMA, "source_hash": model.file_hash, "origin": "user", "values": vals})
         return view(model, root, sc.item)
-    if sval == "reset" and f in ("dim", "main"):  # bỏ giá trị người dùng đã sửa: quay về số đo từ bản vẽ
+    if sval == "reset" and f in ("dim", "main", "interior"):  # bỏ giá trị người dùng đã sửa: quay về số đo từ bản vẽ
         sp, _ = _paths(root, model.file_hash)
         vals = {k: v for k, v in read_supplement(root, model.file_hash).items() if k not in (key, scoped_key(key, sc.item))}
         _write(sp, {"schema": SUPPLEMENT_SCHEMA, "source_hash": model.file_hash, "origin": "user", "values": vals})
         return view(model, root, sc.item)
-    if f == "main":
+    if f in ("main", "interior"):
         if sval not in {lk.elevation for lk in sc.links}:
             raise SceneApiError("Mặt đứng chưa ghép với mặt bằng nên chưa dựng được từ nó.")
     elif f == "dim":

@@ -15,12 +15,20 @@ from dataclasses import dataclass, field
 
 PART_VI = {"side_l": "Hông trái", "side_r": "Hông phải", "top": "Nóc", "bottom": "Đáy", "back": "Hậu", "shelf": "Đợt",
            "door": "Cánh", "drawer": "Mặt ngăn kéo", "panel": "Tấm ốp", "filler": "Tấm bù (đo thực tế)",
-           "partition": "Vách ngăn", "rail": "Thanh giằng"}
+           "partition": "Vách ngăn", "rail": "Thanh giằng", "glass": "Đợt kính", "stone": "Mặt đá", "counter": "Tấm đỡ mặt đá",
+           "drawer_in": "Mặt hộc trong", "rod": "Thanh treo", "appliance": "Thiết bị (không sản xuất)", "light": "Đèn",
+           "drawer_box": "Lòng hộc"}
 GROUP_OF = {"side_l": "thùng", "side_r": "thùng", "top": "thùng", "bottom": "thùng", "shelf": "đợt", "back": "hậu",
-            "door": "cánh", "drawer": "cánh", "panel": "ốp", "filler": "ốp", "partition": "thùng", "rail": "thùng"}
+            "door": "cánh", "drawer": "cánh", "panel": "ốp", "filler": "ốp", "partition": "thùng", "rail": "thùng",
+            "counter": "thùng", "drawer_in": "cánh"}
+# vật liệu cố định (không phải ván), không tính vào diện tích ván/dán cạnh
+FIXED_MAT = {"glass": "Kính", "stone": "Đá", "rod": "Phụ kiện (thanh treo)"}
+VISUAL_ONLY = {"appliance", "light", "drawer_box"}  # chỉ để hình dung, không vào danh sách cắt
 COLORS = {"side_l": (0.80, 0.70, 0.55), "side_r": (0.80, 0.70, 0.55), "top": (0.74, 0.64, 0.50), "bottom": (0.74, 0.64, 0.50),
           "back": (0.62, 0.60, 0.58), "shelf": (0.86, 0.78, 0.62), "door": (0.93, 0.89, 0.80), "drawer": (0.90, 0.84, 0.72),
-          "panel": (0.88, 0.82, 0.70), "filler": (0.80, 0.80, 0.78), "partition": (0.70, 0.60, 0.46), "rail": (0.74, 0.64, 0.50)}
+          "panel": (0.88, 0.82, 0.70), "filler": (0.80, 0.80, 0.78), "partition": (0.70, 0.60, 0.46), "rail": (0.74, 0.64, 0.50),
+          "glass": (0.70, 0.86, 0.92), "stone": (0.52, 0.52, 0.55), "counter": (0.74, 0.64, 0.50), "drawer_in": (0.90, 0.84, 0.72),
+          "rod": (0.62, 0.62, 0.66), "appliance": (0.86, 0.87, 0.90), "light": (1.0, 0.93, 0.55), "drawer_box": (0.84, 0.76, 0.60)}
 
 
 @dataclass
@@ -99,7 +107,12 @@ def panels_for(scene, c: dict) -> list[Panel]:
         parts = plan_module(m, hinges, c)  # vách ngăn bắt buộc theo kết cấu (bản lề, ray, nhịp đợt)
         for i, pt in enumerate(parts, 1):
             P("partition", pt["x"] - t / 2, yf, z0 + t, pt["x"] + t / 2, yc, z1 - t, 1, n=i, auto=True, reason=pt["reason"])
-        n = int(m.shelves or 0)
+        inner = list(getattr(m, "inner", None) or [])
+        lvls = [q for q in inner if q.get("kind") in ("shelf", "glass", "stone")]
+        n = 0 if lvls else int(m.shelves or 0)  # có tầng đọc từ hình bỏ cánh: đặt đúng cao độ, không chia đều
+        if lvls or inner:
+            _inner_panels(P, m, c, inner, parts, yf, yb, yc, t, bt)
+        _mark_curves(out, m)
         if n > 0:
             inner0, inner1 = z0 + t, z1 - t
             step = (inner1 - inner0) / (n + 1)
@@ -121,6 +134,74 @@ def panels_for(scene, c: dict) -> list[Panel]:
                 P(f.kind if f.kind in ("door", "drawer") else "door", fx0, fy0, fz0, fx1, fy1, fz1, 4, n=j, front=f.id,
                   md=m.d, mkind=m.kind, t=t, hinge=hinges.get(f.id, "l"))
     return out
+
+
+def _inner_panels(P, m, c, inner, parts, yf, yb, yc, t, bt) -> None:
+    """Nội thất đọc từ hình bỏ cánh: tầng ngang đúng cao độ (ván, kính, ván đỡ + mặt đá) theo từng khoang giữa các vách,
+    hộc trong (mặt hộc + lòng hộc), thanh treo, đèn, thiết bị (chỉ để hình dung)."""
+    x0, x1 = m.x, m.x + m.w
+    ys = yf + float(c["shelf_setback"])
+    yback = (yb - bt) if c["back_type"] == "screw" else (yb - float(c["back_inset"]) - bt)
+    drawn = [q for q in inner if q.get("kind") == "partition"]
+
+    def bays_at(z: float) -> list[tuple[float, float]]:  # khoang tại cao độ z: vách tự thêm (suốt) + vách vẽ có mặt ở z
+        xs = [(pt["x"] - t / 2, pt["x"] + t / 2) for pt in parts] + [(q["x0"], q["x1"]) for q in drawn if q["z0"] + 1 < z < q["z1"] - 1]
+        walls = [x0 + t] + [v for a, b in sorted(xs) for v in (a, b)] + [x1 - t]
+        return list(zip(walls[::2], walls[1::2]))
+
+    k = 0
+    for q in sorted(inner, key=lambda q: (q["z0"], q["x0"])):
+        kind = q.get("kind")
+        k += 1
+        if kind == "partition":
+            P("partition", q["x0"], yf, q["z0"], q["x1"], yc, q["z1"], 1, n=f"v{k}", drawn=True)
+        if kind in ("shelf", "glass", "stone"):
+            lines = q.get("lines") or [q["z0"], q["z1"]]
+            bays = bays_at((q["z0"] + q["z1"]) / 2)  # tấm đặt TRÊN vách thấp thì chạy suốt
+            for j, (a, b) in enumerate(bays, 1):
+                if min(b, q["x1"]) - max(a, q["x0"]) < 0.5 * (b - a):
+                    continue
+                n = f"{k}.{j}" if len(bays) > 1 else k
+                if kind == "glass":
+                    th = max(q["z1"] - q["z0"], 5.0)
+                    P("glass", a, ys, q["z0"], b, yback, q["z0"] + th, 0, n=n)
+                elif kind == "stone":
+                    zs = lines[-2] if len(lines) >= 2 else q["z1"] - 20.0
+                    if zs - lines[0] >= 10:
+                        P("counter", a, yf, lines[0], b, yc, zs, 1, n=n)
+                else:
+                    th = q["z1"] - q["z0"]
+                    th = th if 10 <= th <= 60 else t
+                    P("shelf", a, ys, q["z0"], b, yback, q["z0"] + th, 1, n=n)
+            if kind == "stone":  # mặt đá phủ cả bề ngang khối, từ mặt trước thùng tới mặt sau
+                zs = lines[-2] if len(lines) >= 2 else q["z1"] - 20.0
+                P("stone", x0, m.y, zs, x1, yb, max(q["z1"], zs + 10), 0, n=k)
+        elif kind == "drawer":
+            a, b = max(q["x0"], x0 + t) + 2, min(q["x1"], x1 - t) - 2
+            if b - a > 50 and q["z1"] - q["z0"] > 50:
+                yd = yf + 20.0  # mặt hộc lùi sau cánh
+                P("drawer_in", a, yd, q["z0"] + 2, b, yd + t, q["z1"] - 2, 4, n=k)
+                P("drawer_box", a + t, yd + t, q["z0"] + 12, b - t, yback - 10, q["z0"] + max(0.6 * (q["z1"] - q["z0"]), 60), 0, n=k)
+        elif kind == "rod":
+            zc = (q["z0"] + q["z1"]) / 2
+            yc2 = (yf + yb) / 2
+            P("rod", max(q["x0"], x0 + t), yc2 - 12, zc - 12, min(q["x1"], x1 - t), yc2 + 12, zc + 12, 0, n=k)
+        elif kind == "light":
+            P("light", max(q["x0"], x0 + t), yf + 30, q["z0"], min(q["x1"], x1 - t), yf + 60, q["z1"], 0, n=k)
+        elif kind == "appliance":
+            P("appliance", q["x0"], yf + 30, q["z0"], q["x1"], yb - 40, q["z1"], 0, n=k)
+
+
+def _mark_curves(out: list, m) -> None:
+    """Đường khấu/bo cong (ký hiệu trên mặt đứng): ghi vào tấm hông tương ứng để danh sách cắt nhắc xem chi tiết."""
+    for f in getattr(m, "features", None) or []:
+        if f.get("kind") != "curve" or f.get("on") == "drawer" or f.get("side") not in ("l", "r"):
+            continue
+        part = "side_r" if f["side"] == "r" else "side_l"
+        for pn in out:
+            if pn.module == m.id and pn.part == part:
+                r = f" R{f['radius']:.0f}" if f.get("radius") else ""
+                pn.meta["note"] = f"có khấu bo cong{r}, xem chi tiết"
 
 
 def hinge_sides(fronts, mx0: float, mx1: float) -> dict[str, str]:
@@ -287,6 +368,8 @@ def boxes(panels: list[Panel], mode: str = "panel") -> list[dict]:
 
 def _material(part: str, materials: list[dict]) -> str:
     """Vật liệu của bộ phận theo vật liệu người dùng đã xác nhận cho hạng mục (P2): khớp tên bộ phận."""
+    if part in FIXED_MAT:
+        return FIXED_MAT[part]
     want = GROUP_OF.get(part, "")
     alias = {"thùng": ("thùng", "hông", "nóc", "đáy"), "đợt": ("đợt", "thùng"), "hậu": ("hậu",), "cánh": ("cánh", "ngăn kéo")}
     for m in materials:
@@ -300,18 +383,22 @@ def cutlist(panels: list[Panel], c: dict, materials: list[dict] | None = None) -
     rows: dict[tuple, dict] = {}
     hinges = 0
     for p in panels:
+        if p.part in VISUAL_ONLY:
+            continue
         L, W, T = p.dims
         mat = _material(p.part, materials or [])
-        key = (PART_VI.get(p.part, p.part), L, W, T, mat, p.edges)
+        label = PART_VI.get(p.part, p.part) + (f" ({p.meta['note']})" if p.meta.get("note") else "")
+        key = (label, L, W, T, mat, p.edges)
         r = rows.setdefault(key, {"part": key[0], "length": L, "width": W, "thickness": T, "material": mat,
-                                  "edges": p.edges, "qty": 0, "modules": []})
+                                  "edges": p.edges, "qty": 0, "modules": [], "board": p.part not in FIXED_MAT})
         r["qty"] += 1
         if p.module not in r["modules"]:
             r["modules"].append(p.module)
         hinges += hinges_for(p, c)
     items = sorted(rows.values(), key=lambda r: (r["material"], r["part"], -r["length"]))
-    area = sum(r["length"] * r["width"] * r["qty"] for r in items) / 1e6
-    edge_m = sum((2 * (r["length"] + r["width"]) if r["edges"] == 4 else r["length"] * r["edges"]) * r["qty"] for r in items) / 1000
+    boards = [r for r in items if r["board"]]  # diện tích ván, dán cạnh: không tính kính, đá, phụ kiện
+    area = sum(r["length"] * r["width"] * r["qty"] for r in boards) / 1e6
+    edge_m = sum((2 * (r["length"] + r["width"]) if r["edges"] == 4 else r["length"] * r["edges"]) * r["qty"] for r in boards) / 1000
     return {"rows": items, "panels": len(panels), "area_m2": round(area, 2), "edge_band_m": round(edge_m, 1),
             "hinges": hinges, "hinge_brand": c.get("hinge_brand"), "note": "Mô hình tham khảo, không phải dữ liệu chạy máy."}
 

@@ -75,6 +75,12 @@ class Module2(BaseModel):
     elevation: str = ""
     plan: str = ""
     ebox: list[float] = Field(default_factory=list)
+    # nội thất đọc từ hình bỏ cánh (`interior.py`): tầng ngang (shelf | glass | stone), hộc trong (drawer), thiết bị
+    # (appliance), thanh treo (rod), đèn (light); toạ độ hạng mục; `refs` dẫn nét/chữ gốc
+    inner: list[dict] = Field(default_factory=list)
+    # ký hiệu đặc biệt: đường khấu/bo cong (curve), vòng chú thích (callout) — không dựng thành tấm, kèm chữ/chi tiết
+    features: list[dict] = Field(default_factory=list)
+    interior: str = ""  # hình dùng để đọc nội thất
 
 
 class Wall2(BaseModel):
@@ -230,6 +236,104 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
     sc.modules.append(m)
 
 
+def _body_roles(d: Drawing2D, v: View) -> frozenset[str]:
+    n_furn = sum(1 for h in v.handles if d.roles.get(d.entities[h].layer) in FURN)
+    n_vis = sum(1 for h in v.handles if d.roles.get(d.entities[h].layer) == "visible")
+    return FURN | {"visible"} if (n_furn < 10 or n_vis > 2 * n_furn) else FURN
+
+
+INNER_VI = {"partition": "vách đứng", "shelf": "tấm ngang", "glass": "đợt kính", "stone": "mặt đá", "drawer": "hộc trong", "appliance": "thiết bị",
+            "rod": "thanh treo", "light": "đèn"}
+
+
+def _read_interiors(d: Drawing2D, sc, group: str, e: View, oxe: float, floor: float, furn, shelf_src, origin,
+                    e_no_doors: bool = False) -> None:
+    """Nội thất từng khối: đọc ở hình bỏ cánh (nếu có, cùng mặt bằng) hoặc chính hình có cánh; đường khấu, vòng chú thích."""
+    from . import interior as itr
+
+    if shelf_src is not None:
+        se = shelf_src[0]
+        rh2 = room_height_dim(d, se)
+        v, oxv, fl, body = se, shelf_src[2] - origin[0], (rh2.lo if rh2 else se.box[1]), _body_roles(d, se)
+    else:
+        v, oxv, fl, body = e, oxe, floor, furn
+    # đọc đủ nội thất (vách, thanh treo, hộc trong, đèn) chỉ ở hình bỏ cánh THẬT: hình riêng, hoặc hình chính có tiêu đề
+    # "bỏ cánh" mà gần như không có ký hiệu mở cánh (< 10 % diện tích hình)
+    eb = e.box or (0, 0, 0, 0)
+    interior_mode = (v is not e) or (e_no_doors and itr.door_symbol_area(d, e) < 0.1 * max((eb[2] - eb[0]) * (eb[3] - eb[1]), 1.0))
+    details = None
+    sheet_hs = [h for s in d.structure.sheets if s.id == e.sheet_id for h in s.handles if h in d.entities]
+    for m in sc.modules:
+        if m.form in ("filler", "panel"):
+            continue
+        mod = {"x0": m.x, "x1": m.x + m.w, "z0": m.z0, "z1": m.z0 + m.h}
+        notes = []  # chữ trong khung hình (phân vùng có thể không gán chữ vào hình)
+        for vv, oo, ff, src in ((v, oxv, fl, "v"),) + (((e, oxe, floor, "e"),) if v is not e else ()):
+            b = vv.box
+            notes += [(x + oo, z - ff, t, h, src) for x, z, t, h in itr._text_items(d, sheet_hs)
+                      if b and b[0] - 5 <= x <= b[2] + 5 and b[1] - 5 <= z <= b[3] + 5]
+        res = itr.read_interior(d, v, oxv, fl, body, mod, m.fronts, notes, interior=interior_mode)
+        inner = []
+        for L in res["levels"]:
+            inner.append({"kind": L["kind"], "x0": _r1(L["x0"]), "x1": _r1(L["x1"]), "z0": _r1(L["z0"]), "z1": _r1(L["z1"]),
+                          "lines": [_r1(z) for z in L["lines"]], "refs": L["refs"][:10]})
+        for k, kind in (("drawers", "drawer"), ("appliances", "appliance")):
+            for c in res[k]:
+                inner.append({"kind": kind, "x0": _r1(c["x0"]), "x1": _r1(c["x1"]), "z0": _r1(c["z0"]), "z1": _r1(c["z1"]),
+                              "text": c.get("text", "")[:60], "refs": c["refs"]})
+        for c in res["partitions"]:
+            inner.append({"kind": "partition", "x0": _r1(c["x0"]), "x1": _r1(c["x1"]), "z0": _r1(c["z0"]), "z1": _r1(c["z1"]),
+                          "refs": c["refs"]})
+        for c in res["rods"]:
+            inner.append({"kind": "rod", "x0": _r1(c["x0"]), "x1": _r1(c["x1"]), "z0": _r1(c["z"] - 15), "z1": _r1(c["z"] + 15),
+                          "refs": c["refs"]})
+        for c in res["lights"]:
+            inner.append({"kind": "light", "x0": _r1(c["x0"]), "x1": _r1(c["x1"]), "z0": _r1(c["z"] - 6), "z1": _r1(c["z"]),
+                          "text": c["text"][:60], "refs": c["refs"]})
+        m.inner = inner
+        m.interior = v.id
+        if res["levels"] or interior_mode:  # hình bỏ cánh thật không vẽ đợt = không có đợt (không chia đều đoán)
+            m.shelves = len([q for q in res["levels"] if q["kind"] in ("shelf", "glass")])
+        feats = itr.curve_marks(d, e, oxe, floor, mod) + itr.callouts(d, e, oxe, floor, mod, sheet_hs)
+        if v is not e:
+            for f in itr.curve_marks(d, v, oxv, fl, mod) + itr.callouts(d, v, oxv, fl, mod, sheet_hs):
+                if not any(o["kind"] == f["kind"] and abs(o.get("x0", o.get("x", 0)) - f.get("x0", f.get("x", 0))) < 30
+                           and abs(o.get("z0", o.get("z", 0)) - f.get("z0", f.get("z", 0))) < 30 for o in feats):
+                    feats.append(f)
+        if any(f["kind"] == "curve" for f in feats):
+            if details is None:
+                details = itr.curve_details(d, group)
+            det = max(details, key=lambda x: (bool(x.get("radius")), len(x["text"]))) if details else None
+            for f in feats:
+                cell = next((x for x in inner if x["kind"] == "drawer" and x["x0"] - 5 <= f.get("x0", -1e9) and f.get("x1", 1e9) <= x["x1"] + 5
+                             and x["z0"] - 15 <= f.get("z0", -1e9) and f.get("z1", 1e9) <= x["z1"] + 15), None)
+                if f["kind"] == "curve" and cell is not None:
+                    f["on"] = "drawer"  # khấu tay nắm ở mặt hộc
+                elif f["kind"] == "curve" and det:
+                    f["detail"], f["radius"] = det["text"][:120], det.get("radius")
+                    f["refs"] = f["refs"] + det["refs"]
+        m.features = feats
+        if inner:
+            cnt: dict[str, int] = {}
+            for x in inner:
+                cnt[x["kind"]] = cnt.get(x["kind"], 0) + 1
+            where = f"hình bỏ cánh {v.id}" if v is not e else "hình chính"
+            sc.notes.append(f"Khối {m.id}: nội thất đọc ở {where}: " + ", ".join(f"{n} {INNER_VI.get(k, k)}" for k, n in cnt.items()) + ".")
+        for f in feats:
+            if f["kind"] == "curve":
+                side = " ở mặt hộc (khấu tay nắm)" if f.get("on") == "drawer" else {"r": " cạnh phải", "l": " cạnh trái"}.get(f["side"], "")
+                det = f' — chi tiết "{f["detail"]}"' if f.get("detail") else ""
+                rad = f" R{f['radius']:.0f}" if f.get("radius") else ""
+                sc.notes.append(f"Khối {m.id}: đường khấu/bo cong{side} (cao độ {f['z0']:.0f}–{f['z1']:.0f}){det}{rad}; "
+                                "là ký hiệu, không dựng thành cánh/đợt.")
+            elif f["kind"] == "callout" and f.get("text"):
+                sc.notes.append(f'Khối {m.id}: vòng chú thích "{f["text"][:60]}" là ghi chú, không dựng hình.')
+
+
+def _r1(x) -> float:
+    return round(float(x), 1)
+
+
 CLUSTER_GAP = 150.0  # khe giữa hai bản vẽ đặt cạnh nhau trong cùng một khung tiêu đề
 
 
@@ -335,15 +439,29 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
     links = _links(d, plans, elevs, supp, sc)
     for e, p, ox, refs, method in links.values():
         sc.links.append(Link(elevation=e.id, plan=p.id, method=method, offset_x=round(ox, 3), refs=refs))
+    from . import interior as itr
+
     main = [lk for lk in links.values() if "no_doors" not in lk[0].flags] or list(links.values())
+    doors_view: str | None = None  # hình có cánh nhận theo nội dung (tiêu đề chép trùng "bỏ cánh")
+    inner_view: str | None = None
+    cls = itr.classify(d, [lk[0] for lk in links.values()])
+    if cls is not None:
+        doors_view, inner_view = cls[0].id, cls[1].id
+        main = [links[doors_view]] + [lk for lk in main if lk is not links[doors_view]]
+        sc.notes.append(cls[2])
     pick = supp.get(f"main:{group}")  # người dùng chọn mặt đứng dùng để dựng khối
     if pick in links:
         main = [links[pick]] + [lk for lk in main if lk is not links[pick]]
     if not main:
         return _finish(sc, d)
     e, p, ox, _refs, _m = main[0]
+    e_flags = set(e.flags) - ({"no_doors"} if e.id == doors_view else set())
     e = _crop_to_dim(d, e, _refs, sc)
-    shelf_src = next((lk for lk in links.values() if "no_doors" in lk[0].flags and lk[1].id == p.id), None)
+    want = supp.get(f"interior:{group}") or inner_view  # người dùng chọn hình bỏ cánh
+    shelf_src = links.get(want) if want in links and want != e.id and links[want][1].id == p.id else None
+    if shelf_src is None:
+        shelf_src = next((lk for lk in links.values() if "no_doors" in lk[0].flags and lk[1].id == p.id and lk[0].id != e.id
+                          and lk[0].id != doors_view), None)
     origin = (p.box[0], p.box[1])
 
     # sàn / trần
@@ -388,7 +506,9 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
                 shelf_rects.append((r[0] + sox, r[2] + sox, r[1] - f2))
 
     comps: list[Component] = components(d, e, furn, min_size=200.0)
-    hidden = seg.items_in(d, e.handles, HIDDEN)
+    # nét khuất trừ đường khấu/bo cong và vòng chú thích (ký hiệu đặc biệt, không phải nét tủ hay ký hiệu cánh)
+    hidden = [it for it in seg.items_in(d, e.handles, HIDDEN)
+              if not itr.is_curve_mark(list(d.entities[it[1]].pts or [])) and not itr.is_callout(d.entities[it[1]], it[2])]
     fill_x = tuple(_filler_notes(d, e))  # vị trí ghi chú "tấm fix" (hồ sơ trình bày): giữ tấm bù hẹp thành khối riêng
     blocks: list[tuple] = []  # (khung khối trên mặt đứng, handles, mặt trước [(box, handle)], dạng)
     for c in comps:
@@ -402,7 +522,7 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
             if ((box[2] - box[0]) < 100.0 and not any(box[0] - 1 <= x <= box[2] + 1 for x in fill_x)) or (box[3] - box[1]) < 100.0:
                 continue
             # hình "bỏ cánh": tiêu đề có thể đặt nhầm (người vẽ chép tiêu đề) -> vẫn nhận ô có ký hiệu mở cánh
-            fr = seg.fronts(d, body, [it for it in leaf if it[2] in HIDDEN], box, symbols_only="no_doors" in e.flags)
+            fr = seg.fronts(d, body, [it for it in leaf if it[2] in HIDDEN], box, symbols_only="no_doors" in e_flags)
             form = seg.form_of(d, body, box, fr)
             if not fr and _note_meaning(d, e, box) == "filler":  # hồ sơ trình bày: "TẤM FIX…" = tấm bù, không phải tủ
                 form = "filler"
@@ -416,6 +536,7 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
         sc.notes.append(f"Đã chia khối theo {len(cuts)} vách bạn đã Đồng ý (chú giải hạng mục).")
     for i, (box, hs, fr, form, levels) in enumerate(blocks, 1):
         _add_module(sc, f"M{i}", box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form, pt, levels, d)
+    _read_interiors(d, sc, group, e, ox - origin[0], floor, furn, shelf_src, origin, "no_doors" in e_flags)
 
     # tường: nét tường của mặt bằng hạng mục
     walls, _rooms = read_walls(d, p)

@@ -32,6 +32,10 @@ MEANINGS = {
     "drawer": "Ngăn kéo / hộc kéo",
     "glass": "Kính / gương",
     "light": "Đèn",
+    "stone": "Đá (mặt đá, đá ốp)",
+    "rod": "Thanh treo quần áo",
+    "curve": "Khấu / bo cong (cạnh tấm cắt cong, xem chi tiết)",
+    "joint": "Mối ghép (ghép mòi 45°…), chỉ là ghi chú",
 }
 DEFAULT_KEYWORDS = [
     {"text": "TẤM FIX", "meaning": "filler"}, {"text": "TẤM BÙ", "meaning": "filler"},
@@ -39,6 +43,11 @@ DEFAULT_KEYWORDS = [
     {"text": "LÒ NƯỚNG", "meaning": "appliance"}, {"text": "MÁY RỬA BÁT", "meaning": "appliance"},
     {"text": "KHOANG HỞ", "meaning": "open"}, {"text": "NGĂN KÉO", "meaning": "drawer"}, {"text": "HỘC", "meaning": "drawer"},
     {"text": "KÍNH", "meaning": "glass"}, {"text": "GƯƠNG", "meaning": "glass"}, {"text": "ĐÈN", "meaning": "light"},
+    {"text": "MẶT ĐÁ", "meaning": "stone"}, {"text": "ĐÁ CĐT", "meaning": "stone"}, {"text": "ĐÁ NHÂN TẠO", "meaning": "stone"},
+    {"text": "ĐÁ MARBLE", "meaning": "stone"}, {"text": "ĐÁ GRANITE", "meaning": "stone"}, {"text": "ĐÁ THẠCH ANH", "meaning": "stone"},
+    {"text": "THANH TREO", "meaning": "rod"}, {"text": "TREO ĐỒ", "meaning": "rod"}, {"text": "ỐNG TREO", "meaning": "rod"},
+    {"text": "KHẤU", "meaning": "curve"}, {"text": "BO CONG", "meaning": "curve"}, {"text": "BO TRÒN", "meaning": "curve"},
+    {"text": "GHÉP MÒI", "meaning": "joint"}, {"text": "GHÉP 45", "meaning": "joint"}, {"text": "MÒI 45", "meaning": "joint"},
 ]
 ROLE_VI = {"wall": "tường", "furniture": "thân đồ nội thất", "cut": "nét cắt", "hidden": "nét khuất", "thin": "nét mảnh",
            "visible": "nét thấy", "door": "cửa", "dim": "kích thước", "text": "chữ", "symbol": "ký hiệu", "hatch": "hatch",

@@ -7,7 +7,9 @@ KIỂU TRÌNH BÀY (mỗi người kỹ thuật một kiểu), và ghi đáp án
 - Agent thiết kế: `design_specs(n, seed)` bằng code (ngẫu nhiên có hạt giống, lặp lại được); tuỳ chọn `design_specs_ai`
   (AI đề xuất thông số theo yêu cầu bằng lời, qua `validate_spec`; sai luật thì loại).
 - Kiểu trình bày (`STYLES`): chuẩn công ty; thân tủ trên layer "THAY"; khung tên không số; ngăn kéo vẽ bằng LINE + nét
-  khuất chéo; tủ liền thân (vách đôi); có hình bỏ cánh đi kèm; mặt bằng không vẽ đường bao (chỉ ghi kích thước sâu); tấm fix.
+  khuất chéo; tủ liền thân (vách đôi); có hình bỏ cánh đi kèm; mặt bằng không vẽ đường bao (chỉ ghi kích thước sâu); một
+  tiêu đề chung; sâu chỉ ở mặt cắt; hai mặt đứng chép trùng tiêu đề "BỎ CÁNH"; nội thất chỉ ở hình bỏ cánh (tấm hai nét,
+  đợt kính, thanh treo, hộc trong + vách; đáp án có số nội thất); đường khấu + vòng chú thích trên layer nét khuất.
 - `generate(out_dir, n, seed)`: mỗi hạng mục một tệp DXF + đáp án trong `<out_dir>/.cadguard/answers/`; chấm bằng
   `cadguard bench3d --workspace <out_dir>`.
 
@@ -37,7 +39,14 @@ STYLES: dict[str, dict[str, Any]] = {
     "motieude": {"label": "Một tiêu đề chung cho hình có cánh và hình bỏ cánh đặt cạnh", "companion": True, "companion_title": False},
     "sauomatcat": {"label": "Chiều sâu chỉ ghi ở mặt cắt (mặt bằng không có số sâu, không đường bao)", "plan_outline": False,
                    "plan_depth_dim": False, "section": True},
+    # ca thật 11/11/2026 (tủ áo + minibar): người vẽ chép tiêu đề, nội thất chỉ có ở hình bỏ cánh, ký hiệu trên layer khuất
+    "trungtieude": {"label": "Hai mặt đứng cùng tiêu đề \"BỎ CÁNH\" (hình có cánh bị chép nhầm tiêu đề)", "companion": True,
+                    "dup_title": True},
+    "noithat": {"label": "Nội thất chỉ vẽ ở hình bỏ cánh: tấm hai nét, đợt kính, thanh treo, hộc trong + vách", "companion": True,
+                "interior": True},
+    "khuat_chuthich": {"label": "Đường khấu bo cong + vòng chú thích \"ghép mòi 45°\" vẽ trên layer nét khuất", "marks": True},
 }
+INNER_KINDS = ("shelf", "glass", "rod", "drawer", "partition")
 
 
 # ---------------- agent thiết kế (code) ----------------
@@ -73,10 +82,12 @@ def _wardrobe(rng: random.Random, idx: int) -> dict:
         fw = rng.choice([50, 80, 100, 150])
         mods.append({"w": fw, "d": d, "h": h, "z0": 0, "form": "filler", "fronts": [], "shelves": 0, "note": "TẤM FIX ĐO THỰC TẾ"})
         x += fw
+    r2 = random.Random(1000 + idx)  # nội thất (hình bỏ cánh) theo hạt giống riêng: thông số cũ giữ nguyên
     for kind in rng.sample(["hang", "drawer", "shelf"], k=rng.choice([2, 3])):
         w = rng.choice([900, 1000, 1200]) if kind == "hang" else rng.choice([450, 500, 600])
         fr = _doors(0, w, T, h - T) if kind != "drawer" else (_doors(0, w, 900, h - T) + _drawers(0, w, T, 900, 3))
-        mods.append({"w": w, "d": d, "h": h, "z0": 0, "form": "cabinet", "fronts": fr, "shelves": 1 if kind == "hang" else 3})
+        mods.append({"w": w, "d": d, "h": h, "z0": 0, "form": "cabinet", "fronts": fr, "shelves": 1 if kind == "hang" else 3,
+                     "use": kind, "inner_drawers": r2.choice([0, 2]) if kind == "hang" else 0, "glass": kind == "shelf"})
     return {"schema": SPEC, "id": f"SYN.{20 + idx:02d}", "name": f"TỦ ÁO MẪU {idx + 1}", "kind": "wardrobe", "room_h": 2700, "modules": mods}
 
 
@@ -188,6 +199,65 @@ def _layout(spec: dict) -> list[dict]:
     return out
 
 
+def _lines2(msp, x0, x1, z, th, layer):
+    """Tấm ngang vẽ hai nét (cách vẽ hay gặp: ván, kính)."""
+    for zz in (z, z + th):
+        msp.add_line((x0, zz), (x1, zz), dxfattribs={"layer": layer})
+
+
+def interior_plan(m: dict) -> dict:
+    """Nội thất khối tủ áo ở hình bỏ cánh (kiểu "noithat"): cao độ tầng (từ chân khối), thanh treo, hộc trong. Trả cả số
+    đếm đáp án theo loại."""
+    h, use = m["h"], m.get("use")
+    out = {"levels": [], "rod": None, "drawers": 0}
+    if use == "hang":
+        out["levels"].append(("shelf", h - 400.0))
+        out["rod"] = h - 520.0
+        if m.get("inner_drawers"):
+            out["drawers"] = 2
+            out["levels"].append(("shelf", 380.0))
+    elif use == "shelf":
+        n = int(m.get("shelves") or 0)
+        for i in range(1, n + 1):
+            z = T + i * (h - 2 * T) / (n + 1)
+            out["levels"].append(("glass" if (m.get("glass") and i == (n + 1) // 2) else "shelf", z))
+    else:
+        n = int(m.get("shelves") or 0)
+        for i in range(1, n + 1):
+            out["levels"].append(("shelf", T + i * (h - 2 * T) / (n + 1)))
+    out["count"] = {"shelf": sum(1 for k, _z in out["levels"] if k == "shelf"), "glass": sum(1 for k, _z in out["levels"] if k == "glass"),
+                    "rod": 1 if out["rod"] else 0, "drawer": out["drawers"], "partition": 1 if out["drawers"] else 0}
+    return out
+
+
+def _interior(msp, m, x0, z0, x1, body):
+    """Vẽ nội thất một khối ở hình bỏ cánh (kiểu "noithat")."""
+    ip = interior_plan(m)
+    a, b = x0 + T, x1 - T
+    for kind, z in ip["levels"]:
+        th = 10.0 if kind == "glass" else T
+        _lines2(msp, a, b, z0 + z, th, body)
+        if kind == "glass":
+            msp.add_text("KÍNH CƯỜNG LỰC 10MM", height=30, dxfattribs={"layer": "SYN_Text", "insert": (a + 20, z0 + z - 80)})
+    if ip["rod"]:
+        _rect(msp, a, z0 + ip["rod"] - 15, b, z0 + ip["rod"] + 15, "SYN_Khuat")
+    if ip["drawers"]:
+        xm = (a + b) / 2
+        msp.add_line((xm - T / 2, z0 + T), (xm - T / 2, z0 + 380), dxfattribs={"layer": body})
+        msp.add_line((xm + T / 2, z0 + T), (xm + T / 2, z0 + 380), dxfattribs={"layer": body})
+        for cx in ((a + xm) / 2, (xm + b) / 2):
+            msp.add_text("HỘC TỦ", height=30, dxfattribs={"layer": "SYN_Text", "insert": (cx - 60, z0 + 180)})
+
+
+def _marks(msp, m, x0, z0, x1, z1):
+    """Ký hiệu đặc biệt trên layer nét khuất (kiểu "khuat_chuthich"): đường khấu gãy khúc ở cạnh phải khoang trên cùng và
+    vòng chú thích ở góc trên phải, chữ đặt ngoài hình."""
+    ztop = z1 - T
+    msp.add_lwpolyline([(x1 - T, ztop - 500), (x1 - T - 60, ztop - 60), (x1 - T - 250, ztop)], dxfattribs={"layer": "SYN_Khuat"})
+    msp.add_circle((x1, z1), 110, dxfattribs={"layer": "SYN_Khuat"})
+    msp.add_text("VỊ TRÍ GHÉP MÒI 45 ĐỘ", height=40, dxfattribs={"layer": "SYN_Text", "insert": (x1 + 150, z1 + 350)})
+
+
 def _elevation(msp, mods, ex, fz, body, style, fronts=True):
     for m in mods:
         x0, z0, x1, z1 = ex + m["x"], fz + m["z0"], ex + m["x"] + m["w"], fz + m["z0"] + m["h"]
@@ -202,6 +272,9 @@ def _elevation(msp, mods, ex, fz, body, style, fronts=True):
         _rect(msp, x0 + T, z0, x1 - T, z0 + T, body)
         if not style.get("shared"):
             _rect(msp, x0, z0, x1, z1, body)  # đường bao khối
+        if not fronts and style.get("interior") and m.get("use"):
+            _interior(msp, m, x0, z0, x1, body)
+            continue
         if not fronts:
             n = int(m.get("shelves") or 0)
             for i in range(1, n + 1):
@@ -263,7 +336,12 @@ def draw(spec: dict, style_keys: list[str], path: Path) -> dict:
             seen_h.add(key)
             _dim(msp, (ex + total + 100, fz + m["z0"]), (ex + total + 100, fz + m["z0"] + m["h"]),
                  (ex + total + 300 + 150 * len(seen_h), fz + m["z0"] + m["h"] / 2), angle=90)
-    _title(msp, f"MẶT ĐỨNG {spec['name']}", (ex, fz - 450))
+    if style.get("marks"):
+        cab = [m for m in mods if m["form"] == "cabinet" and m["z0"] == 0]
+        if cab:
+            m = cab[-1]
+            _marks(msp, m, ex + m["x"], fz + m["z0"], ex + m["x"] + m["w"], fz + m["z0"] + m["h"])
+    _title(msp, f"MẶT ĐỨNG BỎ CÁNH {spec['name']}" if style.get("dup_title") else f"MẶT ĐỨNG {spec['name']}", (ex, fz - 450))
     if style.get("companion"):  # hình bỏ cánh đặt cạnh, tiêu đề riêng
         cx = ex + total + 900
         _elevation(msp, mods, cx, fz, body, style, fronts=False)
@@ -296,8 +374,16 @@ def draw(spec: dict, style_keys: list[str], path: Path) -> dict:
         _dim(msp, (sx, sz + mm["h"]), (sx + mm["d"], sz + mm["h"]), (sx + mm["d"] / 2, sz + mm["h"] + 150))
         _title(msp, f"MẶT CẮT 1-1 {spec['name']}", (sx, sz - 450))
     doc.saveas(path)
-    return {"modules": [{"x": float(m["x"]), "w": float(m["w"]), "d": float(m["d"]), "h": float(m["h"]), "z0": float(m["z0"]),
-                         "form": m["form"], "fronts": len(m["fronts"])} for m in sorted(mods, key=lambda q: (q["x"], q["z0"]))]}
+    inner = bool(style.get("interior") and style.get("companion"))
+
+    def row(m):
+        r = {"x": float(m["x"]), "w": float(m["w"]), "d": float(m["d"]), "h": float(m["h"]), "z0": float(m["z0"]),
+             "form": m["form"], "fronts": len(m["fronts"])}
+        if inner and m.get("use"):  # đáp án nội thất: số tầng/đợt kính/thanh treo/hộc trong/vách đọc từ hình bỏ cánh
+            r["inner"] = interior_plan(m)["count"]
+        return r
+
+    return {"modules": [row(m) for m in sorted(mods, key=lambda q: (q["x"], q["z0"]))]}
 
 
 def generate(out_dir: Path, n: int = 12, seed: int = 1, specs: list[dict] | None = None) -> dict:

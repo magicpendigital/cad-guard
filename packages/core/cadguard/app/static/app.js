@@ -1571,9 +1571,11 @@
     };
     // nguồn: dựng từ hình nào, tờ nào; mặt đứng nào chưa dùng
     const vlabel = (id) => (pv.views[id] ? pv.views[id].label : id);
-    const elevChips = pv.elevations.map(e => el("span", {class: "chip" + (e.used ? " used" : " off"), title: e.used ? "Đang dùng để dựng khối" : (e.linked ? "Đã ghép với mặt bằng, chưa dùng để dựng" : "Chưa ghép với mặt bằng (xem Phần thiếu)")},
-      (e.used ? "✓ " : "") + e.label,
-      !e.used && e.linked ? [" ", el("button", {class: "link sm", type: "button", onclick: () => save(`main:${r.item}`, e.id)}, "Dựng từ hình này")] : null));
+    const elevChips = pv.elevations.map(e => el("span", {class: "chip" + (e.used || e.interior ? " used" : " off"),
+      title: e.used ? "Hình có cánh: dựng khối, cánh/ngăn kéo" : (e.interior ? "Hình bỏ cánh: đọc đợt, hộc trong, thanh treo, thiết bị" : (e.linked ? "Đã ghép với mặt bằng, chưa dùng để dựng" : "Chưa ghép với mặt bằng (xem Phần thiếu)"))},
+      (e.used ? "✓ " : (e.interior ? "◐ " : "")) + e.label + (e.used ? " (hình có cánh)" : (e.interior ? " (hình bỏ cánh)" : "")),
+      !e.used && e.linked ? [" ", el("button", {class: "link sm", type: "button", onclick: () => save(`main:${r.item}`, e.id)}, "Dựng từ hình này")] : null,
+      !e.used && !e.interior && e.linked ? [" ", el("button", {class: "link sm", type: "button", title: "Đọc nội thất (đợt, hộc, thanh treo) từ hình này", onclick: () => save(`interior:${r.item}`, e.id)}, "Dùng làm hình bỏ cánh")] : null));
     const srcBar = el("div", {class: "v3d-src"},
       el("div", {}, b("Đang xem: "), pv.item_name || r.item, ` · ${pv.sheets.length} tờ của hạng mục`),
       el("div", {}, b("Dựng từ: "), pv.used.elevations.map(vlabel).join("; ") || "—", " + ", pv.used.plans.map(vlabel).join("; ") || "—",
@@ -1581,7 +1583,8 @@
           [" ", el("button", {class: "link sm", type: "button", title: "Mở AutoCAD và phóng tới " + vlabel(id),
             onclick: () => showInAutocad({handles: pv.views[id].handles, items: []})}, (pv.views[id].kind === "plan" ? "Mặt bằng" : "Mặt đứng") + " trong AutoCAD")])),
       pv.elevations.length > 1 || pv.main_pick ? el("div", {}, b("Các mặt đứng của hạng mục: "), elevChips,
-        pv.main_pick ? el("button", {class: "link sm", type: "button", onclick: () => save(`main:${r.item}`, "reset")}, "Về mặc định") : null) : null,
+        pv.main_pick ? el("button", {class: "link sm", type: "button", onclick: () => save(`main:${r.item}`, "reset")}, "Về mặc định") : null,
+        pv.interior_pick ? el("button", {class: "link sm", type: "button", onclick: () => save(`interior:${r.item}`, "reset")}, "Bỏ chọn hình bỏ cánh") : null) : null,
       el("div", {class: "f-d", text: "Bấm một hàng trong bảng hoặc một khung khối trên hình 2D để tô sáng cả hai bên. Bấm vào số đo để sửa nếu dựng sai; nhãn cho biết số lấy từ đâu."}));
     // sân khấu: 3D | song song | 2D
     const stage = el("div", {class: "v3d-stage"});
@@ -1592,11 +1595,11 @@
     if (mode !== "2d") stage.append(host3);
     if (mode !== "3d") stage.append(host2);
     const viewSel = el("select", {"aria-label": "Hình 2D để đối chiếu"},
-      [...pv.used.elevations, ...pv.used.plans].map(v => el("option", {value: v, text: vlabel(v)})));
-    if (S.view2d && [...pv.used.elevations, ...pv.used.plans].includes(S.view2d)) viewSel.value = S.view2d;
+      [...pv.used.elevations, ...(pv.used.interior || []), ...pv.used.plans].map(v => el("option", {value: v, text: vlabel(v)})));
+    if (S.view2d && [...pv.used.elevations, ...(pv.used.interior || []), ...pv.used.plans].includes(S.view2d)) viewSel.value = S.view2d;
     viewSel.addEventListener("change", () => { S.view2d = viewSel.value; draw2d(host2, path, r, viewSel.value); });
     // bảng khối: số đo + nhãn nguồn, bấm để sửa
-    const head = el("tr", {}, ["Khối", "Loại", "Rộng", "Sâu", "Cao", "Cao độ chân", "Cánh/ngăn kéo", "Đợt", ""].map(t => el("th", {text: t})));
+    const head = el("tr", {}, ["Khối", "Loại", "Rộng", "Sâu", "Cao", "Cao độ chân", "Cánh/ngăn kéo", "Đợt · nội thất", ""].map(t => el("th", {text: t})));
     const rows = r.modules.map(m => {
       const src = pv.modules[m.id] || {user: []};
       const cell = (k) => {
@@ -1611,7 +1614,8 @@
         return td;
       };
       const tr = el("tr", {class: S.sel3d === m.id ? "on" : ""}, el("td", {}, b(m.id)), el("td", {text: m.label || m.type_vi || m.kind}),
-        cell("w"), cell("d"), cell("h"), cell("z0"), el("td", {text: String(m.fronts)}), el("td", {text: String(m.shelves)}),
+        cell("w"), cell("d"), cell("h"), cell("z0"), el("td", {text: String(m.fronts)}), el("td", {title: (m.features_vi || []).join("\n"),
+          text: String(m.shelves) + (m.inner_vi ? " · " + m.inner_vi : "") + ((m.features_vi || []).length ? " · ⚑ " + m.features_vi.length + " ký hiệu" : "")}),
         el("td", {}, el("button", {class: "link sm", type: "button", title: "Nhờ trợ lý AI kiểm khối này và đề xuất sửa (bạn vẫn là người lưu)",
           onclick: (ev) => { ev.stopPropagation(); askAI(feedbackPrompt(r, m, pv)); }}, "Hỏi trợ lý"),
           (pv.modules[m.id] || {}).handles && pv.modules[m.id].handles.length ? el("button", {class: "link sm", type: "button",
@@ -1936,7 +1940,7 @@
       };
       for (const o of BOXES) {
         const v0 = P.length / 3;
-        const n = o.b.length, alpha = (o.k === "wall" || o.k === "ceiling") ? 0.35 : 1;
+        const n = o.b.length, alpha = (o.k === "wall" || o.k === "ceiling") ? 0.35 : (o.k === "panel-glass" ? 0.45 : 1);
         const col = [o.c[0], o.c[1], o.c[2], alpha], E = alpha < 1 ? Et : Eo;
         const tri = earcut2(o.b);
         face(o.b.map(p => [p[0], p[1], o.z1]), [0, 0, 1], col, tri, E);
@@ -2072,7 +2076,7 @@
         cx.beginPath();
         f.p.forEach((p, i) => (i ? cx.lineTo(p[0], p[1]) : cx.moveTo(p[0], p[1])));
         cx.closePath();
-        cx.globalAlpha = ((f.k === "wall" && f.n[2] === 0) || f.k === "ceiling") ? 0.22 : 1;
+        cx.globalAlpha = ((f.k === "wall" && f.n[2] === 0) || f.k === "ceiling") ? 0.22 : (f.k === "panel-glass" ? 0.4 : 1);
         cx.fillStyle = "rgb(" + f.c.map((v) => Math.round(v * 255 * Math.min(1, f.l))).join(",") + ")";
         cx.fill();
         cx.strokeStyle = f.k === "wall" || f.k === "ceiling" ? cx.fillStyle : "rgba(40,36,30,0.85)"; cx.lineWidth = 0.9; cx.stroke();
