@@ -381,6 +381,8 @@ class CadGuardApp:
             ("POST", "/api/scene/source"): lambda q, b: api.scene_action(d(), b.get("file"), "source", b),
             ("POST", "/api/scene/cutlist"): lambda q, b: api.scene_action(d(), b.get("file"), "cutlist", b),
             ("POST", "/api/space"): lambda q, b: api.scene_action(d(), b.get("file"), "space", b),
+            ("POST", "/api/scene/answer"): lambda q, b: api.scene_action(d(), b.get("file"), "answer", b),
+            ("POST", "/api/bench3d"): lambda q, b: api.bench3d(d()),
             ("POST", "/api/space/set"): lambda q, b: api.scene_action(d(), b.get("file"), "space_set", b),
             ("POST", "/api/space/glb"): lambda q, b: api.scene_action(d(), b.get("file"), "space_glb", b),
             ("GET", "/api/construction"): lambda q, b: api.construction_get(d()),

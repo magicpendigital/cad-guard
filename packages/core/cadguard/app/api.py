@@ -958,6 +958,8 @@ def scene_action(app: AppData, rel: Any, action: str, body: dict) -> dict:
             return scene_api.cutlist_file(model, root, body.get("item"))
         if action == "source":
             return scene_api.source_geometry(model, root, body.get("item"), body.get("view"))
+        if action == "answer":
+            return scene_api.save_answer(model, root, body.get("item"), body.get("note"), app.rel(path))
         if action == "space":
             return {"file": app.rel(path), **scene_api.space_view(model, root)}
         if action == "space_set":
@@ -1026,3 +1028,22 @@ def version_action(app: AppData, rel: Any, action: str, target: Any = None) -> d
     except ValueError as exc:
         raise ApiError(str(exc), 422) from None
     raise ApiError("Thao tác phiên bản không hợp lệ.")
+
+
+def bench3d(app: AppData) -> dict:
+    """Chấm các đáp án 3D của dự án (chỉ code + code tự áp gợi ý). Đáp án và bản vẽ nằm trong dự án; không gửi đi đâu."""
+    from ..bench3d import find_model
+
+    def read_model(ans):
+        try:
+            p = app.resolve(ans.get("file") or "")
+            m = app.model(p)
+            if m.file_hash == ans["source_hash"]:
+                return m
+        except Exception:  # noqa: BLE001
+            pass
+        return find_model(app.ws.root, ans, app.model)
+
+    from . import scene_api
+
+    return scene_api.bench(app.ws.root, read_model)

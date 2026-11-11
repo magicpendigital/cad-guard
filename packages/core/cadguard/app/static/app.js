@@ -1377,6 +1377,24 @@
         else if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
       }));
   }
+  async function showBench() {
+    const bz = busy("Đang chấm điểm dựng 3D…", "Dựng lại từng hạng mục có đáp án theo từng cách đọc.");
+    let r;
+    try { r = await api("/api/bench3d", {}); } catch (e) { bz.done(); fail(e, "Chấm điểm 3D"); return; }
+    bz.done();
+    const PL = {code: "Chỉ code", "code+suggest": "Code + gợi ý tự áp", "code+ai": "Code + AI"};
+    const n = notice({kind: "info", title: `Chấm điểm dựng 3D · ${r.answers} hạng mục có đáp án`,
+      msg: r.answers ? "Điểm = số khối đúng hoàn toàn (4 số đo lệch ≤ 2 mm, đúng dạng, đúng số cánh) / số khối." :
+        "Chưa có đáp án. Ở màn 3D, khi một hạng mục đã đúng hết, bấm “Lưu làm đáp án”."});
+    if (r.answers) {
+      n.append(el("table", {class: "tbl3d"}, el("tr", {}, ["Cách đọc", "Điểm", "Đúng số khối", "Rộng", "Sâu", "Cao", "Cao độ"].map(t => el("th", {text: t}))),
+        Object.entries(r.summary).map(([k, s]) => el("tr", {}, el("td", {text: PL[k] || k}), el("td", {}, b(s.score_pct + "%")), el("td", {text: s.count_ok_pct + "%"}),
+          ["w", "d", "h", "z0"].map(x => el("td", {text: s.dims_pct[x] + "%"}))))));
+      n.append(el("table", {class: "tbl3d"}, el("tr", {}, ["Hạng mục", ...Object.keys(r.summary).map(k => PL[k] || k)].map(t => el("th", {text: t}))),
+        r.rows.map(row => el("tr", {}, el("td", {text: row.item_name || row.item}),
+          row.skipped ? el("td", {text: row.skipped}) : Object.keys(r.summary).map(k => el("td", {text: row.scores[k] ? `${row.scores[k].correct}/${row.scores[k].modules_answer}` : "—"}))))));
+    }
+  }
   function badge(kind) {
     return el("span", {class: "src-b src-" + (kind || "missing"), title: SRC_TIP[kind] || "", text: SRC_BADGE[kind] || kind});
   }
@@ -1577,10 +1595,19 @@
         el("a", {href: URL.createObjectURL(new Blob([bin], {type: "model/gltf-binary"})), download: g.name}).click();
       } catch (e) { fail(e, "Tải GLB"); }
     }});
+    const ansBtn = el("button", {type: "button", class: "btn-s btn-sm", text: "Lưu làm đáp án",
+      title: "Người kỹ thuật: khi mọi khối và số đo đã đúng như bản vẽ, lưu làm đáp án để đo độ chính xác của CAD Guard", onclick: async () => {
+        const ok = await confirmDialog({title: "Lưu làm đáp án", body: ["Chỉ lưu khi bạn đã kiểm MỌI khối và số đo (rộng, sâu, cao, cao độ chân, số cánh) đúng như bản vẽ.",
+          "Đáp án dùng để chấm điểm các cách đọc của CAD Guard (chỉ code, code + gợi ý, code + AI). Lưu trong dự án, không gửi đi đâu."], yes: "Lưu đáp án", no: "Huỷ"});
+        if (!ok) return;
+        try { const a = await api("/api/scene/answer", {file: path, item: r.item}); toast(`Đã lưu đáp án ${a.modules} khối.`); } catch (e) { fail(e, "Lưu đáp án"); }
+      }});
+    const benchBtn = el("button", {type: "button", class: "btn-s btn-sm", text: "Chấm điểm 3D",
+      title: "Chấm các cách đọc của CAD Guard trên mọi đáp án đã lưu trong dự án", onclick: () => showBench()});
     const bottom = el("div", {class: "v3d-bottom"},
       r.readiness ? el("div", {class: "ready3d"}, b(`Sẵn sàng: ${r.readiness.level}`),
         ` · ${r.readiness.modules} khối, ${r.readiness.complete} đủ 4 số đo · ${r.readiness.from_dimension_pct}% số đo lấy từ kích thước ghi trên bản vẽ, ${r.readiness.from_user_pct}% bạn đã sửa · ${r.readiness.gaps} phần thiếu`) : null,
-      el("div", {class: "bar-act"}, mode !== "3d" ? [el("span", {text: "Hình 2D: "}), viewSel] : null, el("label", {}, ceil, " hiện trần"), dl, el("small", {text: ` mã cảnh ${r.scene_hash}`})),
+      el("div", {class: "bar-act"}, mode !== "3d" ? [el("span", {text: "Hình 2D: "}), viewSel] : null, el("label", {}, ceil, " hiện trần"), dl, ansBtn, benchBtn, el("small", {text: ` mã cảnh ${r.scene_hash}`})),
       el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), cutlistBox(r),
       r.notes.map(n => el("small", {text: n})));
     S.warn3d = new Set(warnMods.map(m => m.id));

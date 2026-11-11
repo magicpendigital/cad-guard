@@ -392,6 +392,26 @@ def glb(model, root: Path, item: Any) -> dict:
             "b64": base64.b64encode(build_glb2(sc)).decode("ascii")}
 
 
+# ---------------- bộ đáp án đo độ chính xác (bước 3) ----------------
+
+def save_answer(model, root: Path, item: Any, note: Any = "", file_rel: str = "") -> dict:
+    """Lưu cảnh hiện tại (đã gồm số người kỹ thuật sửa) làm ĐÁP ÁN của hạng mục."""
+    from ..bench3d import answer_path, save_answer as _save
+
+    sc, d, _supp = build(model, root, item if isinstance(item, str) else None)
+    if sc is None or not sc.modules:
+        raise SceneApiError("Hạng mục chưa có khối nào để lưu làm đáp án.")
+    name = _vi(str((d.groups.get(sc.item) or {}).get("name") or sc.item))
+    data = _save(root, model, sc, name, str(note or ""), file_rel)
+    return {"saved": True, "item": sc.item, "modules": len(data["modules"]), "path": answer_path(root, model.file_hash, sc.item).name}
+
+
+def bench(root: Path, read_model) -> dict:
+    from ..bench3d import run
+
+    return run(root, read_model)
+
+
 # ---------------- cả tầng (cg.space/1) ----------------
 
 def _space(model, root: Path) -> dict:

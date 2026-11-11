@@ -163,7 +163,7 @@ def _links(d: Drawing2D, plans: list[View], elevs: list[View], supp: dict, sc: S
     return out
 
 
-def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form="cabinet", pt=(), levels=0) -> None:
+def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form="cabinet", pt=(), levels=0, drawing=None) -> None:
     x0p, x1p = box[0] + ox, box[2] + ox  # toạ độ X của mặt bằng
     z0, z1 = box[1] - floor, box[3] - floor
     kind = "wall" if z0 >= UPPER_MIN_Z else ("tall" if z1 >= 1800 else "base")
@@ -206,6 +206,10 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
         y1 = max(b[3] for b in over)
         dm = measure_span(pdims, "v", y0, y1)
         m.y, m.d, m.src["d"] = round(y0 - origin[1], 3), dm.value, _src(dm)
+    elif drawing is not None and (dd := _plan_depth_dim(drawing, pdims, x0p, x1p, kind)) is not None:
+        # đường bao trên mặt bằng không khớp khối nhưng mặt bằng GHI kích thước sâu nằm ngang qua khối: dùng số ghi
+        back = max((q.box[3] for q in pf), default=p.box[3])
+        m.y, m.d, m.src["d"] = round(back - dd.value - origin[1], 3), dd.value, Src(kind="dimension", refs=[dd.handle])
     else:
         sc.gaps.append(Gap(id=f"module:{mid}", kind="missing_value", target=mid,
                            message=(f"Khối {mid} ({'tủ treo' if kind == 'wall' else 'tủ'} rộng {w.value:.0f}, cao {h.value:.0f}): "
@@ -227,6 +231,27 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
 
 
 CLUSTER_GAP = 150.0  # khe giữa hai bản vẽ đặt cạnh nhau trong cùng một khung tiêu đề
+
+
+def _plan_depth_dim(d: Drawing2D, pdims, x0p: float, x1p: float, kind: str):
+    """Kích thước SÂU ghi trên mặt bằng (đo theo trục Y, 200–1200 mm; tủ treo ≤ 700) cho khối [x0p, x1p]: ưu tiên kích
+    thước đặt trong khoảng X của khối (±300 mm); không có thì dùng khi cả mặt bằng chỉ có một số sâu. Không dùng cho tủ treo."""
+    from .views2d import entity_box
+
+    if kind == "wall":  # mặt bằng thể hiện tủ dưới: kích thước sâu trên mặt bằng không phải của tủ treo
+        return None
+    cands = [x for x in pdims if x.axis == "v" and 200.0 <= x.value <= 1200.0]
+    if not cands:
+        return None
+    near = []
+    for x in cands:
+        b = entity_box(d.entities[x.handle], {})
+        if b is not None and x0p - 300 <= (b[0] + b[2]) / 2 <= x1p + 300:
+            near.append(x)
+    if near:
+        return max(near, key=lambda x: x.value)
+    vals = {round(x.value) for x in cands}
+    return cands[0] if len(vals) == 1 else None
 
 
 def _note_meaning(d: Drawing2D, e: View, box) -> str | None:
@@ -374,7 +399,7 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
         blocks = sorted(apply_splits(d, blocks, cuts), key=lambda t: (t[0][0], t[0][1]))
         sc.notes.append(f"Đã chia khối theo {len(cuts)} vách bạn đã Đồng ý (chú giải hạng mục).")
     for i, (box, hs, fr, form, levels) in enumerate(blocks, 1):
-        _add_module(sc, f"M{i}", box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form, pt, levels)
+        _add_module(sc, f"M{i}", box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form, pt, levels, d)
 
     # tường: nét tường của mặt bằng hạng mục
     walls, _rooms = read_walls(d, p)

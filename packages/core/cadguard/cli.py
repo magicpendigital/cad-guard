@@ -1,5 +1,5 @@
 """Dòng lệnh: cadguard audit | stats | rules | profile | fixtures | mcp | propose | apply | undo | diff | validate
-| ask | chat | engines | keys | app | scene | scene-assess | space | studio | review | watch | doctor | mcp-config | autocad.
+| ask | chat | engines | keys | app | scene | scene-assess | space | bench3d | studio | review | watch | doctor | mcp-config | autocad.
 
 Mã thoát của `audit`: 0 = không có lỗi mức E; 1 = có lỗi mức E; 2 = không đọc được đầu vào/chuẩn.
 `propose`/`validate`: 0 = đạt, 1 = kiểm không đạt, 2 = lỗi/từ chối. `apply`/`undo`: 0 = xong, 2 = từ chối/lỗi.
@@ -1087,6 +1087,38 @@ def cmd_space(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_bench3d(args: argparse.Namespace) -> int:
+    """Chấm bộ đáp án 3D của một dự án: chỉ code / code + gợi ý tự áp / code + AI (--ai)."""
+    import json
+
+    from .bench3d import find_model, run
+    from .reader_select import read_with
+
+    root = Path(args.workspace)
+    backend = None
+    if args.ai:
+        from .studio.llm import all_backends
+
+        backend = all_backends(allow_codex=True)
+        if backend is None:
+            print("Không có AI dùng được: chỉ chấm code.")
+    pls = ("code", "code+suggest") + (("code+ai",) if backend is not None else ())
+    r = run(root, lambda ans: find_model(root, ans, lambda p: read_with(p, "auto")), backend=backend, pipelines=pls)
+    if args.json:
+        print(json.dumps(r, ensure_ascii=False, indent=2))
+        return 0
+    print(f"Đáp án: {r['answers']} hạng mục")
+    for pl, s in r["summary"].items():
+        print(f"  {pl:13s} điểm {s['score_pct']:3d}% · đúng số khối {s['count_ok_pct']:3d}% · rộng {s['dims_pct']['w']}% sâu {s['dims_pct']['d']}% "
+              f"cao {s['dims_pct']['h']}% cao độ {s['dims_pct']['z0']}%")
+    for row in r["rows"]:
+        if "skipped" in row:
+            print(f"  - {row['item_name'] or row['item']}: bỏ qua ({row['skipped']})")
+        else:
+            print(f"  - {row['item_name'] or row['item']}: " + ", ".join(f"{pl} {s['correct']}/{s['modules_answer']}" for pl, s in row["scores"].items()))
+    return 0
+
+
 def cmd_studio(args: argparse.Namespace) -> int:
     from .studio.llm import AnthropicBackend, ClaudeCliBackend, LlmError, auto_backend
     from .studio.server import serve
@@ -1336,6 +1368,11 @@ def main(argv: list[str] | None = None) -> int:
     spc.add_argument("--out", help="tệp ra .glb (mở bằng phần mềm diễn họa) hoặc .json")
     spc.add_argument("--json", action="store_true")
     spc.set_defaults(fn=cmd_space)
+    bn = sub.add_parser("bench3d", help="chấm độ chính xác dựng 3D theo bộ đáp án của dự án (.cadguard/answers)")
+    bn.add_argument("--workspace", default=".", help="thư mục dự án (chứa bản vẽ và .cadguard/answers)")
+    bn.add_argument("--ai", action="store_true", help="chấm thêm cách đọc code + AI (gửi nội dung bản vẽ cho AI)")
+    bn.add_argument("--json", action="store_true")
+    bn.set_defaults(fn=cmd_bench3d)
 
     st = sub.add_parser("studio", help="ứng dụng web cục bộ: trao đổi với LLM, xem 3D, bổ sung dữ liệu thiếu")
     st.add_argument("--port", type=int, default=8770)
