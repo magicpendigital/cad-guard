@@ -94,6 +94,10 @@ def test_scene_view_has_provenance_production_and_editable_dims(cfg, kitchen):
     assert src["elevation"] in pv["views"] and src["plan"] in pv["views"] and len(src["ebox"]) == 4
     assert "Tờ" in pv["views"][src["elevation"]]["label"] or "tờ" in pv["views"][src["elevation"]]["label"]
     assert mod["w"]["kind"] in ("dimension", "geometry")
+    assert src["handles"] and pv["views"][src["elevation"]]["handles"]  # "Tới trong AutoCAD" cho khối và cho hình
+    assert mod["type_vi"] in ("Tủ dưới", "Tủ treo", "Tủ cao", "Kệ mở", "Tấm ốp", "Kệ mở treo", "Tấm ốp treo")
+    it = next(x for x in r["items"] if x["id"] == "SYN.10")
+    assert it["sheet_names"]  # danh sách hạng mục ghi tờ
     assert r["panels"]["panel"] and r["cutlist"]["panels"] > 0 and r["construction"]["confirmed"] is False
     g = scene_api.source_geometry(m, root, "SYN.10", src["elevation"])
     assert g["items"] and len(g["box"]) == 4

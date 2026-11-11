@@ -27,6 +27,7 @@ from pydantic import BaseModel, Field
 from .build import Field_, Gap
 from .feasibility import common_width_dim, room_height_dim
 from .plan import Component, components, measure_span, read_walls, tol_for
+from . import segment as seg
 from .views2d import Drawing2D, View, rect_of, view_dims
 
 SCHEMA = "cg.scene/2"
@@ -37,6 +38,7 @@ FRONT_MIN = 150.0
 SHELF_MAX = 40.0
 SLAB_MM = 20.0
 DEFAULT_WALL_H = 2700.0
+DEFAULT_DEPTH = {"wall": 350.0, "base": 560.0}  # chỉ để hiện khối thiếu chiều sâu; luôn kèm gap
 
 
 class Src(BaseModel):
@@ -57,6 +59,7 @@ class Front(BaseModel):
 class Module2(BaseModel):
     id: str
     kind: str  # base | wall | tall
+    form: str = "cabinet"  # cabinet (có cánh/ngăn kéo) | open (kệ mở) | panel (tấm ốp, vd. vách TV)
     x: float
     y: float
     z0: float
@@ -160,86 +163,28 @@ def _links(d: Drawing2D, plans: list[View], elevs: list[View], supp: dict, sc: S
     return out
 
 
-def _fronts(rects: list[tuple], comp_box) -> list[tuple]:
-    area = (comp_box[2] - comp_box[0]) * (comp_box[3] - comp_box[1])
-    cands = [r for r in rects if (r[0][2] - r[0][0]) >= FRONT_MIN and (r[0][3] - r[0][1]) >= FRONT_MIN
-             and (r[0][2] - r[0][0]) * (r[0][3] - r[0][1]) < 0.9 * area]
-    out = []
-    for r in cands:
-        b = r[0]
-        if any(o is not r and o[0][0] <= b[0] + 0.5 and o[0][1] <= b[1] + 0.5 and o[0][2] >= b[2] - 0.5 and o[0][3] >= b[3] - 0.5
-               and o[0] != b for o in cands):
-            continue
-        out.append(r)
-    return out
-
-
-def _edges(d: Drawing2D, c: Component) -> tuple[list[float], list[float]]:
-    xs: set[float] = set()
-    zs: set[float] = set()
-    for h in c.handles:
-        e = d.entities[h]
-        for x, y in e.pts or []:
-            xs.add(x)
-            zs.add(y)
-    return sorted(xs), sorted(zs)
-
-
-def _snap(v: float, edges: list[float], direction: int, reach: float) -> float:
-    """Bám mép thân tủ gần nhất ra phía ngoài (direction -1: nhỏ hơn, +1: lớn hơn) trong khoảng `reach`."""
-    cands = [x for x in edges if 0 <= (x - v) * direction <= reach]
-    return max(cands, key=lambda x: (x - v) * direction) if cands else v
-
-
-def _front_groups(fr: list[tuple]) -> list[list[tuple]]:
-    """Nhóm mặt trước thành khối: cánh cao (≥ 1500) là một khối; các mặt còn lại sát nhau (≤ 40 mm) cùng khối."""
-    tall = [f for f in fr if (f[0][3] - f[0][1]) >= 1500.0]
-    rest = [f for f in fr if f not in tall]
-    parent = list(range(len(rest)))
-
-    def find(i):
-        while parent[i] != i:
-            i = parent[i]
-        return i
-
-    for i, (a, _) in enumerate(rest):
-        for j in range(i):
-            b = rest[j][0]
-            near = a[0] - 40 <= b[2] and b[0] - 40 <= a[2] and a[1] - 40 <= b[3] and b[1] - 40 <= a[3]
-            side = _overlap(a[1], a[3], b[1], b[3]) >= 0.5 * min(a[3] - a[1], b[3] - b[1])  # cạnh nhau cùng dải cao
-            stack = _overlap(a[0], a[2], b[0], b[2]) >= 0.5 * min(a[2] - a[0], b[2] - b[0])  # chồng nhau cùng cột
-            if near and (side or stack):
-                parent[find(i)] = find(j)
-    groups: dict[int, list] = {}
-    for i, f in enumerate(rest):
-        groups.setdefault(find(i), []).append(f)
-    out = list(groups.values())
-    # nhóm vắt qua tủ cao (khung bao hình chữ L) -> tách trái / phải / phía trên tủ cao
-    for t in tall:
-        tb = t[0]
-        nxt = []
-        for g in out:
-            gx0, gx1 = min(b[0] for b, _ in g), max(b[2] for b, _ in g)
-            gz0 = min(b[1] for b, _ in g)
-            if gx0 < tb[0] and gx1 > tb[2] and gz0 < tb[3]:
-                cx = lambda f: (f[0][0] + f[0][2]) / 2  # noqa: E731
-                parts = [[f for f in g if cx(f) < tb[0]], [f for f in g if cx(f) > tb[2]], [f for f in g if tb[0] <= cx(f) <= tb[2]]]
-                nxt += [x for x in parts if x]
-            else:
-                nxt.append(g)
-        out = nxt
-    return [[t] for t in tall] + out
-
-
-def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp) -> None:
+def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form="cabinet", pt=(), levels=0) -> None:
     x0p, x1p = box[0] + ox, box[2] + ox  # toạ độ X của mặt bằng
     z0, z1 = box[1] - floor, box[3] - floor
     kind = "wall" if z0 >= UPPER_MIN_Z else ("tall" if z1 >= 1800 else "base")
     pool = ph if kind == "wall" else pf
     # sâu: các nét (của cụm mặt bằng cùng loại) có ≥ 50 % bề ngang nằm trong khoảng X của khối
-    over = [b for q in pool for b in q.parts if _overlap(b[0], b[2], x0p, x1p) >= 0.5 * max(b[2] - b[0], 1.0) and (b[3] - b[1]) > 1.0]
+    # sâu: ưu tiên nét mặt bằng có hai đầu trùng hai mép khối (đúng khối đó); không có thì lấy các nét nằm phần lớn trong
+    # khoảng X của khối. Tủ dưới bị kệ/tấm phía trên che thường vẽ nét mảnh: xét cả nét mảnh.
+    tolx = max(30.0, 0.02 * (x1p - x0p))
+    over = []
+    for q_pool in ((ph,) if kind == "wall" else (pf, pt)):  # tủ treo chỉ lấy nét khuất: nét liền ở dưới là tủ dưới
+        over = [b for q in q_pool for b in q.parts if abs(b[0] - x0p) <= tolx and abs(b[2] - x1p) <= tolx and (b[3] - b[1]) >= 100.0]
+        if over:  # mặt trước ở nét khớp; mặt sau: xa nhất trong các nét nằm trong khoảng X của khối (tủ sát tường)
+            inside = [b for q in (ph if kind == "wall" else pf) for b in q.parts
+                      if b[0] >= x0p - tolx and b[2] <= x1p + tolx and (b[2] - b[0]) >= 100.0 and (b[3] - b[1]) > 1.0]
+            back = max([b[3] for b in over + inside])
+            over = over + [(x0p, back - 1.0, x1p, back)]
+            break
+    if not over:
+        over = [b for q in pool for b in q.parts if _overlap(b[0], b[2], x0p, x1p) >= 0.5 * max(b[2] - b[0], 1.0) and (b[3] - b[1]) > 1.0]
     w, h = measure_span(edims, "h", box[0], box[2]), measure_span(edims, "v", box[1], box[3])
-    m = Module2(id=mid, kind=kind, x=round(x0p - origin[0], 3), y=0.0, z0=round(z0, 3), w=w.value, d=0.0, h=h.value, refs=list(hs)[:50])
+    m = Module2(id=mid, kind=kind, form=form, x=round(x0p - origin[0], 3), y=0.0, z0=round(z0, 3), w=w.value, d=0.0, h=h.value, refs=list(hs)[:50])
     m.src["w"], m.src["h"] = _src(w), _src(h)
     zd = next((x for x in edims if x.axis == "v" and abs(x.lo - floor) <= 1.0 and abs(x.hi - box[1]) <= tol_for(max(z0, 1.0))), None)
     m.src["z0"] = Src(kind="dimension", refs=[zd.handle]) if zd else Src(kind="geometry")
@@ -264,12 +209,17 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
                            message=(f"Khối {mid} ({'tủ treo' if kind == 'wall' else 'tủ'} rộng {w.value:.0f}, cao {h.value:.0f}): "
                                     f"mặt bằng không có nét {'khuất' if kind == 'wall' else 'liền'} tương ứng để lấy chiều sâu."),
                            fields=[Field_(key=f"module:{mid}:d", label="Chiều sâu")]))
-        return
+        # vẫn hiện khối (không để mất khỏi cảnh) với chiều sâu mặc định, nhãn "Mặc định" cho tới khi người dùng nhập
+        dd = DEFAULT_DEPTH["wall" if kind == "wall" else "base"]
+        back = max((q.box[3] for q in pf), default=p.box[3])
+        m.y, m.d, m.src["d"] = round(back - dd - origin[1], 3), dd, Src(kind="default")
     for j, (b, hf) in enumerate(sorted(fr, key=lambda t: (t[0][0], t[0][1])), 1):
         kindf = "drawer" if (b[3] - b[1]) < 0.6 * (b[2] - b[0]) else "door"
         m.fronts.append(Front(id=f"{mid}.F{j}", kind=kindf, x0=round(b[0] + ox - origin[0], 3), x1=round(b[2] + ox - origin[0], 3),
                               z0=round(b[1] - floor, 3), z1=round(b[3] - floor, 3), refs=[hf]))
     m.shelves = sum(1 for sx0, sx1, sz in shelf_rects if sx0 >= x0p - 1 and sx1 <= x1p + 1 and z0 < sz < z1)
+    if not m.shelves:  # không có mặt đứng bỏ cánh: đếm tấm ngang thấy trên mặt đứng (kệ mở, đợt kính vẽ nét khuất)
+        m.shelves = levels
     m.label = str(supp.get(f"label:{mid}", ""))[:60]
     sc.modules.append(m)
 
@@ -318,6 +268,7 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
     edims = view_dims(d, e)
     pf = components(d, p, FURN, min_size=100.0)
     ph = components(d, p, HIDDEN, min_size=100.0)
+    pt = components(d, p, frozenset({"thin"}), min_size=100.0)
     shelf_rects: list[tuple] = []
     if shelf_src is not None:
         se, _sp, sox = shelf_src[0], shelf_src[1], shelf_src[2]
@@ -329,21 +280,23 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
                 shelf_rects.append((r[0] + sox, r[2] + sox, r[1] - f2))
 
     comps: list[Component] = components(d, e, FURN, min_size=200.0)
-    blocks: list[tuple] = []  # (khung khối trên mặt đứng, handles, mặt trước [(box, handle)], cụm gốc)
+    hidden = seg.items_in(d, e.handles, HIDDEN)
+    blocks: list[tuple] = []  # (khung khối trên mặt đứng, handles, mặt trước [(box, handle)], dạng)
     for c in comps:
-        fr = _fronts([(r, h) for h in c.handles if (r := rect_of(d.entities[h]))], c.box) if "no_doors" not in e.flags else []
-        if len(fr) < 2:
-            blocks.append((c.box, c.handles, fr, c))
-            continue
-        edges_x, edges_z = _edges(d, c)
-        for grp in _front_groups(fr):
-            gb = (min(b[0] for b, _ in grp), min(b[1] for b, _ in grp), max(b[2] for b, _ in grp), max(b[3] for b, _ in grp))
-            box = (_snap(gb[0], edges_x, -1, 40.0), c.box[1] if gb[1] - c.box[1] <= 200.0 else _snap(gb[1], edges_z, -1, 60.0),
-                   _snap(gb[2], edges_x, 1, 40.0), _snap(gb[3], edges_z, 1, 80.0))
-            blocks.append((box, [h for _, h in grp], grp, c))
+        cb = c.box
+        inside = [it for it in hidden if it[0][0] >= cb[0] - 1 and it[0][2] <= cb[2] + 1 and it[0][1] >= cb[1] - 1 and it[0][3] <= cb[3] + 1]
+        for leaf in seg.split_blocks(seg.items_in(d, c.handles, FURN) + inside):
+            body = [it for it in leaf if it[2] in FURN]
+            if not body:
+                continue
+            box = seg.box_of(body)
+            if (box[2] - box[0]) < 100.0 or (box[3] - box[1]) < 100.0:
+                continue
+            fr = [] if "no_doors" in e.flags else seg.fronts(d, body, [it for it in leaf if it[2] in HIDDEN], box)
+            blocks.append((box, [h for _b, h, _r in body if h], fr, seg.form_of(d, body, box, fr), len(seg.board_levels(leaf))))
     blocks.sort(key=lambda t: (t[0][0], t[0][1]))
-    for i, (box, hs, fr, c) in enumerate(blocks, 1):
-        _add_module(sc, f"M{i}", box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp)
+    for i, (box, hs, fr, form, levels) in enumerate(blocks, 1):
+        _add_module(sc, f"M{i}", box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form, pt, levels)
 
     # tường: nét tường của mặt bằng hạng mục
     walls, _rooms = read_walls(d, p)

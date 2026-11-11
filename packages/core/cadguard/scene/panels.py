@@ -14,11 +14,12 @@ import io
 from dataclasses import dataclass, field
 
 PART_VI = {"side_l": "Hông trái", "side_r": "Hông phải", "top": "Nóc", "bottom": "Đáy", "back": "Hậu", "shelf": "Đợt",
-           "door": "Cánh", "drawer": "Mặt ngăn kéo"}
+           "door": "Cánh", "drawer": "Mặt ngăn kéo", "panel": "Tấm ốp"}
 GROUP_OF = {"side_l": "thùng", "side_r": "thùng", "top": "thùng", "bottom": "thùng", "shelf": "đợt", "back": "hậu",
-            "door": "cánh", "drawer": "cánh"}
+            "door": "cánh", "drawer": "cánh", "panel": "ốp"}
 COLORS = {"side_l": (0.80, 0.70, 0.55), "side_r": (0.80, 0.70, 0.55), "top": (0.74, 0.64, 0.50), "bottom": (0.74, 0.64, 0.50),
-          "back": (0.62, 0.60, 0.58), "shelf": (0.86, 0.78, 0.62), "door": (0.93, 0.89, 0.80), "drawer": (0.90, 0.84, 0.72)}
+          "back": (0.62, 0.60, 0.58), "shelf": (0.86, 0.78, 0.62), "door": (0.93, 0.89, 0.80), "drawer": (0.90, 0.84, 0.72),
+          "panel": (0.88, 0.82, 0.70)}
 
 
 @dataclass
@@ -52,6 +53,9 @@ def panels_for(scene, c: dict) -> list[Panel]:
         if m.w <= 2 * t or m.h <= 2 * t or m.d <= td + bt:
             continue
         x0, x1, z0, z1 = m.x, m.x + m.w, m.z0, m.z0 + m.h
+        if getattr(m, "form", "cabinet") == "panel":  # tấm ốp (vách TV…): một tấm mặt trước, không thùng
+            out.append(Panel(f"{m.id}:panel", m.id, "panel", x0, m.y, z0, x1, m.y + t, z1, 4, {}))
+            continue
         has_front = bool(m.fronts)
         yf = m.y + (td if has_front else 0.0)  # mặt trước thùng (cánh đặt trước thùng)
         yb = m.y + m.d  # mặt sau thùng

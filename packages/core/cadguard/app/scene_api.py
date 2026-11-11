@@ -83,12 +83,14 @@ def view(model, root: Path, item: Any = None) -> dict:
     bx = boxes2(sc)
     return {
         "schema": "cg.scene/2", "item": sc.item, "scene_hash": sc.scene_hash,
-        "items": [{**x, "name": _vi(str((d.groups.get(x["id"]) or {}).get("name") or ""))} for x in item_summary(d)],
+        "items": [{**x, "name": _vi(str((d.groups.get(x["id"]) or {}).get("name") or "")), "sheet_names": _sheet_names(d, x["id"])}
+                  for x in item_summary(d)],
         "readiness": readiness(sc),
         "boxes": [{"b": [list(p) for p in b.base], "z0": b.z0, "z1": b.z1, "c": list(color_for(b.material)), "k": b.kind, "n": b.name}
                   for b in bx[:MAX_BOXES]],
         "truncated": len(bx) > MAX_BOXES,
-        "modules": [{"id": m.id, "kind": m.kind, "label": m.label, "fronts": len(m.fronts), "shelves": m.shelves,
+        "modules": [{"id": m.id, "kind": m.kind, "form": m.form, "type_vi": _type_vi(m), "label": m.label, "fronts": len(m.fronts),
+                     "shelves": m.shelves,
                      "x": m.x, "y": m.y,
                      **{k: {"value": getattr(m, k), "src": SRC_LABEL.get(m.src[k].kind, m.src[k].kind) if k in m.src else "?",
                             "kind": m.src[k].kind if k in m.src else "missing"}
@@ -149,7 +151,8 @@ def provenance(sc, d, supp: dict) -> dict:
         v = d.view(vid)
         if v is not None:
             views[vid] = {"id": vid, "label": _view_vi(d, vid), "kind": v.kind, "sheet": v.sheet_id,
-                          "box": [round(x, 1) for x in v.box] if v.box else None}
+                          "box": [round(x, 1) for x in v.box] if v.box else None,
+                          "handles": _body_handles(d, v)}  # "Tới trong AutoCAD": chọn nét của hình để phóng tới
     return {
         "item_name": _vi(str((d.groups.get(sc.item) or {}).get("name") or sc.item)),
         "sheets": [{"id": s, "label": _sheet_label(d, s)} for s in (d.groups.get(sc.item) or {}).get("sheets") or []],
@@ -159,8 +162,37 @@ def provenance(sc, d, supp: dict) -> dict:
         "main_pick": supp.get(f"main:{sc.item}"),
         "modules": {m.id: {"elevation": m.elevation, "plan": m.plan, "ebox": m.ebox,
                            "refs": {k: (m.src[k].refs if k in m.src else []) for k in ("w", "d", "h", "z0")},
+                           "handles": [h for h in m.refs if h][:200],
                            "user": [k for k in ("w", "d", "h", "z0") if f"module:{m.id}:{k}" in supp]} for m in sc.modules},
     }
+
+
+TYPE_VI = {"base": "Tủ dưới", "wall": "Tủ treo", "tall": "Tủ cao"}
+FORM_VI = {"open": "Kệ mở", "panel": "Tấm ốp"}
+
+
+def _type_vi(m) -> str:
+    """Loại khối bằng lời: tủ dưới/treo/cao (theo cao độ) hoặc kệ mở/tấm ốp (theo nét trên mặt đứng)."""
+    if m.form in FORM_VI:
+        return FORM_VI[m.form] + (" treo" if m.kind == "wall" else "")
+    return TYPE_VI.get(m.kind, m.kind)
+
+
+def _sheet_names(d, item: str) -> str:
+    """Tên ngắn các tờ của hạng mục, vd. "Tờ 3, 4, 5" (để biết tìm ở đâu trong tệp)."""
+    names = []
+    for sid in (d.groups.get(item) or {}).get("sheets") or []:
+        s = next((x for x in d.structure.sheets if x.id == sid), None)
+        names.append((s.name if s and s.name else sid).strip())
+    nums = [n[3:].strip() for n in names if n.lower().startswith("tờ ")]
+    if names and len(nums) == len(names):
+        return "Tờ " + ", ".join(nums)
+    return ", ".join(names)
+
+
+def _body_handles(d, v) -> list[str]:
+    roles = {"furniture", "cut", "wall", "hidden", "thin", "visible"}
+    return [h for h in v.handles if d.roles.get(d.entities[h].layer) in roles][:400]
 
 
 def _sheet_label(d, sid: str) -> str:

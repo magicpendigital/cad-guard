@@ -187,6 +187,23 @@ P3 (số mặc định, người dùng chỉnh được):
 Còn mở: phủ chiếu ngược khối 3D lên hình 2D để tự khoanh chỗ lệch; dựng nhiều mặt đứng cùng lúc (tường B/C xoay góc); báo "3D đã cũ"
 khi DXF đổi; bản lề/ray theo mã hãng cụ thể; mặt bên theo chiều sâu.
 
+## 5e. Nhận diện khối trên mặt đứng + tới AutoCAD (11/11/2026)
+
+Kệ TV phòng khách (tờ 3) dựng sai: bộ tách khối cũ dựa vào "cánh là hình chữ nhật kín" nên bỏ mất ngăn kéo vẽ bằng LINE,
+kệ mở, tấm ốp; tách tủ cao làm ba (tủ treo + tủ dưới + tủ cao); sâu tủ dưới lấy nhầm của kệ phía trên.
+
+- `scene/segment.py`: cắt XY đệ quy theo ranh giới thân tủ (khe hở hoặc tấm hông/nóc), không cắt ở đường ráp hai cánh;
+  bỏ nóc chung để tách tủ sát nhau khi đợt hai bên khác cao độ. Mặt trước = hình kín sát mép, hoặc ô có ký hiệu mở
+  (nét khuất chéo) bốn cạnh có nét; dấu X = khoang hở. Dạng khối `cabinet | open | panel`.
+- Sâu: ưu tiên nét mặt bằng có hai đầu trùng mép khối (xét cả nét mảnh), mặt sau = nét xa nhất trong khoảng X; tủ treo chỉ
+  lấy nét khuất. Khối thiếu sâu vẫn hiện với sâu mặc định có nhãn + phần thiếu.
+- Đo trên phiên 01, kệ TV: 4 khối sai → 5 khối đúng (tủ cao 1110, tủ cao 780, tủ ngăn kéo 3690×435×420 có 4 ngăn,
+  tấm ốp 2700×150, kệ mở 1480×300 có 3 đợt). Bếp khô: tủ treo tách đúng, sâu chưa có trên mặt bằng → hỏi người dùng.
+- Màn 3D: hạng mục ghi tờ ("… · Tờ 2, 3, 4, 5"), loại khối bằng lời, nút "Tới trong AutoCAD" cho từng khối và cho mặt
+  đứng/mặt bằng đang dùng.
+- Dựng cả không gian: đánh giá ở `docs/research/phoi-canh-ca-khong-gian.md` (dựng được khung phòng + đặt hạng mục theo ký
+  hiệu số trên mặt bằng tổng; ảnh diễn họa đẹp giao phần mềm diễn họa qua glTF).
+
 ## 6. Cần khách trả lời trước P3
 
 1. Kiểu kết cấu chuẩn của xưởng: hông trùm hay nóc trùm; hậu rãnh (lùi, dày, sâu rãnh) hay bắt vít; chân tủ/len chân.

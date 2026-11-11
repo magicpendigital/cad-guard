@@ -1319,7 +1319,9 @@
     $("cvInfo").textContent = `Hạng mục ${r.item} · ${r.counts.modules} khối · ${r.counts.fronts} cánh/ngăn kéo · ${r.counts.gaps} phần thiếu · mã cảnh ${r.scene_hash}`;
     // thanh công cụ: chọn hạng mục
     const isel = $("t3Item");
-    isel.replaceChildren(...r.items.map(it => el("option", {value: it.id, text: `${it.name || it.id}${it.plans && it.elevations ? "" : " (chưa dựng được)"}`})));
+    isel.replaceChildren(...r.items.map(it => el("option", {value: it.id,
+      text: `${it.name || it.id}${it.sheet_names ? " · " + it.sheet_names : ""}${it.plans && it.elevations ? "" : " (chưa dựng được)"}`})));
+    isel.title = "Hạng mục (tên lấy từ khung tên) và các tờ chứa hạng mục đó";
     isel.value = r.item;
     if (!isel.dataset.bound) { isel.dataset.bound = "1"; isel.addEventListener("change", () => { S.sel3d = null; load3d(S.file, isel.value); }); }
     const mode = S.mode3d || "3d";
@@ -1335,7 +1337,10 @@
       !e.used && e.linked ? [" ", el("button", {class: "link sm", type: "button", onclick: () => save(`main:${r.item}`, e.id)}, "Dựng từ hình này")] : null));
     const srcBar = el("div", {class: "v3d-src"},
       el("div", {}, b("Đang xem: "), pv.item_name || r.item, ` · ${pv.sheets.length} tờ của hạng mục`),
-      el("div", {}, b("Dựng từ: "), pv.used.elevations.map(vlabel).join("; ") || "—", " + ", pv.used.plans.map(vlabel).join("; ") || "—"),
+      el("div", {}, b("Dựng từ: "), pv.used.elevations.map(vlabel).join("; ") || "—", " + ", pv.used.plans.map(vlabel).join("; ") || "—",
+        ...[...pv.used.elevations, ...pv.used.plans].filter(id => pv.views[id] && (pv.views[id].handles || []).length).map(id =>
+          [" ", el("button", {class: "link sm", type: "button", title: "Mở AutoCAD và phóng tới " + vlabel(id),
+            onclick: () => showInAutocad({handles: pv.views[id].handles, items: []})}, (pv.views[id].kind === "plan" ? "Mặt bằng" : "Mặt đứng") + " trong AutoCAD")])),
       pv.elevations.length > 1 || pv.main_pick ? el("div", {}, b("Các mặt đứng của hạng mục: "), elevChips,
         pv.main_pick ? el("button", {class: "link sm", type: "button", onclick: () => save(`main:${r.item}`, "reset")}, "Về mặc định") : null) : null,
       el("div", {class: "f-d", text: "Bấm một hàng trong bảng hoặc một khung khối trên hình 2D để tô sáng cả hai bên. Bấm vào số đo để sửa nếu dựng sai; nhãn cho biết số lấy từ đâu."}));
@@ -1366,10 +1371,13 @@
         });
         return td;
       };
-      const tr = el("tr", {class: S.sel3d === m.id ? "on" : ""}, el("td", {}, b(m.id)), el("td", {text: m.label || m.kind}),
+      const tr = el("tr", {class: S.sel3d === m.id ? "on" : ""}, el("td", {}, b(m.id)), el("td", {text: m.label || m.type_vi || m.kind}),
         cell("w"), cell("d"), cell("h"), cell("z0"), el("td", {text: String(m.fronts)}), el("td", {text: String(m.shelves)}),
         el("td", {}, el("button", {class: "link sm", type: "button", title: "Nhờ trợ lý AI kiểm khối này và đề xuất sửa (bạn vẫn là người lưu)",
-          onclick: (ev) => { ev.stopPropagation(); askAI(feedbackPrompt(r, m, pv)); }}, "Hỏi trợ lý")));
+          onclick: (ev) => { ev.stopPropagation(); askAI(feedbackPrompt(r, m, pv)); }}, "Hỏi trợ lý"),
+          (pv.modules[m.id] || {}).handles && pv.modules[m.id].handles.length ? el("button", {class: "link sm", type: "button",
+            title: "Mở AutoCAD và chọn các nét của khối này trên mặt đứng để chỉnh thiết kế",
+            onclick: (ev) => { ev.stopPropagation(); showInAutocad({handles: pv.modules[m.id].handles, items: []}); }}, "Tới trong AutoCAD") : null));
       tr.addEventListener("click", () => select3d(m.id));
       return tr;
     });
@@ -1490,7 +1498,7 @@
   function feedbackPrompt(r, m, pv) {
     const src = pv.modules[m.id] || {};
     const vals = ["w", "d", "h", "z0"].map(k => `${{w: "rộng", d: "sâu", h: "cao", z0: "cao độ chân"}[k]} ${Math.round(m[k].value)} mm (${SRC_TIP[m[k].kind]})`).join("; ");
-    return `Kiểm giúp khối ${m.id} (${m.label || m.kind}) của hạng mục “${pv.item_name || r.item}” trong bản vẽ ${S.file}. ` +
+    return `Kiểm giúp khối ${m.id} (${m.label || m.type_vi || m.kind}) của hạng mục “${pv.item_name || r.item}” trong bản vẽ ${S.file}. ` +
       `CAD Guard dựng nó từ ${(pv.views[src.elevation] || {}).label || "?"} và ${(pv.views[src.plan] || {}).label || "?"}. Số đo hiện tại: ${vals}. ` +
       `Dùng công cụ get_scene/get_drawing_graph/query_model để đối chiếu với kích thước ghi trên bản vẽ. Nếu thấy sai, chỉ ra số đúng và lấy từ kích thước/hình nào; ` +
       `tôi sẽ tự sửa trong bảng 3D. Ghi rõ đâu là nhận xét của AI.`;
