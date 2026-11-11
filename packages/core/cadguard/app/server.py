@@ -26,7 +26,7 @@ from ..privacy import effective as privacy_effective, label as privacy_label, se
 from .. import __version__
 from ..review.types import ReviewError, LOCAL
 from ..standard import ProfileError, find_standards_dir, load_profile
-from . import api, bulkfix, connect, graph_api, history
+from . import api, bulkfix, connect, graph_api, history, scene_ai
 from .api import DEPARTMENTS_FILE, NAME_RE, ApiError, AppConfig, AppData, load_departments
 from .chat import Assistant
 from .project import DialogBusy, check_profile_file, check_project_dir, dialog_available, run_dialog
@@ -213,7 +213,10 @@ class CadGuardApp:
         files = out.pop("files")
         rows = []
         for x in drawings:
-            if x["is_output"]:
+            # một bản vẽ có nhiều phiên bản (bản gốc + tệp mới của từng lệnh): chỉ hiện BẢN ĐANG DÙNG để phòng sau
+            # không làm nhầm trên bản gốc chưa chuẩn hoá
+            v = x.get("version")
+            if (v and v["state"] != "current") or (not v and x["is_output"]):
                 continue
             st = files.get(x["path"])
             rows.append({"path": x["path"], "name": x["name"], **(st or {"scanned": False})})
@@ -351,6 +354,10 @@ class CadGuardApp:
             ("POST", "/api/project/profile"): lambda q, b: self.set_profile(b.get("path")),
             ("POST", "/api/project/privacy"): lambda q, b: self.set_privacy(b.get("anonymize")),
             ("GET", "/api/drawings"): lambda q, b: api.list_drawings(d()),
+            ("POST", "/api/versions"): lambda q, b: api.version_action(d(), b.get("file"), "info"),
+            ("POST", "/api/versions/set"): lambda q, b: api.version_action(d(), b.get("file"), "set", b.get("target")),
+            ("POST", "/api/versions/undo"): lambda q, b: api.version_action(d(), b.get("file"), "undo"),
+            ("POST", "/api/versions/redo"): lambda q, b: api.version_action(d(), b.get("file"), "redo"),
             ("POST", "/api/audit"): lambda q, b: api.audit_file(d(), b.get("file"), b.get("standard"), b.get("dept")),
             ("POST", "/api/autocad/show"): lambda q, b: api.show_in_autocad(d(), b.get("file"), b.get("handles"),
                                                                             b.get("layers")),
@@ -408,6 +415,9 @@ class CadGuardApp:
                                                                            self.assistant.effective()["experimental"],
                                                                            self.preferred_engine(b)),
             ("POST", "/api/graph/suggest/status"): lambda q, b: graph_api.status(b.get("job")),
+            ("POST", "/api/scene/ai"): lambda q, b: scene_ai.start(d(), b.get("file"), b.get("item"), b.get("ai"), self.translate_backend,
+                                                                   self.assistant.effective()["experimental"], self.preferred_engine(b)),
+            ("POST", "/api/scene/ai/status"): lambda q, b: scene_ai.status(b.get("job")),
             ("POST", "/api/graph/proposals"): lambda q, b: graph_api.proposals(d(), b.get("file")),
             ("POST", "/api/graph/decide"): lambda q, b: graph_api.decide(d(), b.get("file"), b.get("id"), b.get("accept")),
             ("POST", "/api/fix/bulk/plan"): lambda q, b: bulkfix.plan(d(), b.get("file"), self.dept_standards(b.get("dept")),

@@ -640,7 +640,8 @@
       "aria-current": f.path === S.file || (S.applied && S.applied.output === f.path && S.cmp === "after") ? "true" : "false",
       onclick: () => openFile(f.path, {scan: false})},
     el("span", {class: "n"}, icon("file"), f.path),
-    el("span", {class: "m"}, child ? pill("info", "Bản mới") : null, statPills(S.stat[f.path]),
+    el("span", {class: "m"}, f.version ? (f.version.state === "current" ? pill("ok", "Đang dùng") : pill("warn", "Bản cũ"))
+      : (child ? pill("info", "Bản mới") : null), statPills(S.stat[f.path]),
       el("span", {class: "muted small", text: `${fmt(Math.max(1, Math.round(f.size_bytes / 1024)))} KB`})));
     const nodes = [];
     for (const f of src) {
@@ -717,11 +718,59 @@
     renderWorkSide();
     if (!$("log").childElementCount || o.intro !== false) introChat();
     renderSuggestions();
+    checkVersion(path);
     if (S.dept.view === "scene") { load3d(path); return; }
     loadGeometry(path);
     loadSheets(path);
     if (o.scan && deptStd().length) await doScan(true);
     if (isOut) toast("Đây là tệp mới do cad-guard tạo; tệp gốc giữ nguyên.");
+  }
+
+  // Dòng phiên bản: một bản vẽ = bản gốc + các tệp mới do lệnh sửa tạo ra. Mở nhầm bản cũ thì cảnh báo ngay;
+  // Hoàn tác/Làm lại đổi "bản đang dùng" (không xoá tệp nào); Lịch sử cho xem và chọn lại bản bất kỳ.
+  async function checkVersion(path) {
+    const bar = $("verBar");
+    bar.hidden = true;
+    if (S.verNote) { S.verNote.remove(); S.verNote = null; }
+    let v;
+    try { v = await api("/api/versions", {file: path}); } catch (e) { return; }
+    if (S.file !== path || v.state === "single") return;
+    const alive = v.versions.filter(x => x.exists);
+    const idx = alive.findIndex(x => x.path === path) + 1;
+    const cur = alive.find(x => x.path === v.current) || {};
+    const act = async (url, body, msg) => {
+      try {
+        const r = await api(url, {file: path, ...(body || {})});
+        toast(msg(r));
+        await loadFiles();
+        if (r.current !== S.file) openFile(r.current, {scan: false, intro: false}); else checkVersion(path);
+      } catch (e) { fail(e, "Phiên bản"); }
+    };
+    const vbtn = (t, title, fn, dis) => el("button", {class: "btn-s btn-sm", type: "button", title, disabled: dis ? "disabled" : null, onclick: fn}, t);
+    fill(bar, el("span", {class: "muted small", text: `Phiên bản ${idx}/${alive.length}${v.state === "current" ? " · đang dùng" : " · BẢN CŨ"}`}),
+      vbtn("↶ Hoàn tác", "Về bản trước (tệp vẫn giữ, chỉ đổi bản đang dùng)", () => act("/api/versions/undo", null, r => `Bản đang dùng: ${r.current}`), !cur.parent),
+      vbtn("↷ Làm lại", "Dùng lại bản vừa hoàn tác", () => act("/api/versions/redo", null, r => `Bản đang dùng: ${r.current}`), !(v.redo || []).length),
+      vbtn("Lịch sử", "Xem các bản và chọn bản đang dùng", () => showVersions(path, v, act)));
+    bar.hidden = false;
+    if (v.state === "old") {
+      const n = notice({kind: "warn", title: "Bạn đang mở một bản CŨ của bản vẽ này",
+        msg: `Bản đang dùng là “${v.current}” (${cur.summary || "mới nhất"}${cur.at ? ", " + cur.at.slice(0, 16).replace("T", " ") : ""}). ` +
+          "Các phòng sau (Thiết kế 3D, Lập trình sản xuất) nên làm trên bản đang dùng để không mất phần đã chuẩn hoá."});
+      n.append(el("div", {class: "n-act"},
+        el("button", {class: "btn-p btn-sm", type: "button", onclick: () => { n.remove(); openFile(v.current, {scan: false, intro: false}); }}, "Mở bản đang dùng"),
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: () => { n.remove(); act("/api/versions/set", {target: path}, () => "Đã chọn bản này làm bản đang dùng."); }}, "Dùng bản này")));
+      S.verNote = n;
+    }
+  }
+  function showVersions(path, v, act) {
+    const rows = v.versions.slice().reverse().map(x => el("tr", {class: x.path === v.current ? "on" : ""},
+      el("td", {}, b(x.path === v.current ? "● " : ""), x.path), el("td", {text: x.summary}),
+      el("td", {text: x.at ? x.at.slice(0, 16).replace("T", " ") : "—"}),
+      el("td", {}, !x.exists ? el("span", {class: "muted small", text: "đã xoá"}) : x.path === v.current ? el("span", {class: "muted small", text: "đang dùng"}) :
+        el("button", {class: "btn-s btn-sm", type: "button", onclick: () => { d.remove(); act("/api/versions/set", {target: x.path}, () => "Đã đổi bản đang dùng."); }}, "Dùng bản này"))));
+    const d = notice({kind: "info", title: "Lịch sử phiên bản",
+      msg: "Bản gốc luôn giữ nguyên; mỗi lệnh sửa tạo một bản mới. Chọn bản đang dùng để các phòng sau làm trên đúng bản."});
+    d.append(el("table", {class: "tbl3d"}, el("tr", {}, ["Tệp", "Thay đổi", "Lúc", ""].map(t => el("th", {text: t}))), rows));
   }
 
   async function loadGeometry(path) {
@@ -1234,7 +1283,8 @@
     const c = r.counts;
     $("cvInfo").textContent = `${c.walls} đoạn tường · ${c.modules} mô-đun · ${c.panels} tấm · ${c.gaps} phần thiếu`;
     if (!r.boxes.length) {
-      fill(sheet, emptyBox("Bản vẽ này chưa dựng được 3D", "Cần khối tủ có thuộc tính kích thước hoặc tường trên layer tường (xem docs/scene). ",
+      $("t3Item").replaceChildren();
+      fill(sheet, emptyBox("Bản vẽ này chưa dựng được 3D", "CAD Guard không tìm thấy hạng mục nào có cả mặt bằng và mặt đứng: khung tên không ghi số bản vẽ, và tiêu đề hình không theo mẫu “MẶT ĐỨNG …” / “MẶT BẰNG …” cùng tên đồ. Sửa tiêu đề hình trong AutoCAD, hoặc mở Bản đồ để AI đề xuất loại hình. ",
         r.gaps.length ? el("br") : null, r.gaps.slice(0, 3).join(" · ")));
       return;
     }
@@ -1274,7 +1324,8 @@
       el("div", {}, numEdit("Cao sàn – trần", r.ceiling, "space:ceiling"), "  ", numEdit("Cao cửa", r.door_h, "space:door_h")),
       el("div", {class: "f-d", text: "Tường lấy từ đa giác nét cắt của mặt bằng tổng; hạng mục đặt bằng cách khớp nét mặt bằng chi tiết với mặt bằng tổng quanh ký hiệu số; đồ rời và cửa là hộp theo khung block, cao mặc định. Ảnh để xem bố cục, không dùng để đo."}));
     const cv = el("canvas", {"aria-label": "Mô hình 3D cả tầng, kéo để xoay, cuộn để phóng to", role: "img"});
-    const stage = el("div", {class: "v3d-stage"}, el("div", {}, cv, el("span", {class: "cap", text: "3D cả tầng · kéo để xoay, cuộn để phóng to"})));
+    const stage = el("div", {class: "v3d-stage"});
+    stage.append(el("div", {}, cv, el("span", {class: "cap", text: "3D cả tầng · kéo trái: xoay · kéo phải: dời · cuộn: phóng"}), stageTools(stage)));
     const METHOD = {match: "Khớp nét", user: "Bạn chọn góc + khớp nét", user_tag: "Bạn chọn góc, đặt theo ký hiệu"};
     const head = el("tr", {}, ["Hạng mục", "Tờ", "Đặt", "Góc xoay", "Độ khớp", ""].map(t => el("th", {text: t})));
     const rows = r.items.map(it => {
@@ -1305,6 +1356,26 @@
     if (S.v3d) { S.v3d.stop(); S.v3d = null; }
     S.v3d = makeViewer(cv);
     S.v3d.set(r.boxes);
+  }
+  // Khung xem: kéo mép dưới để đổi chiều cao (nhớ theo máy), góc nhìn nhanh, toàn màn hình.
+  function stageTools(stage) {
+    let h = null;
+    try { h = localStorage.getItem("cg.stageH"); } catch (e) { h = null; }
+    if (h && +h >= 260) stage.style.setProperty("--stage-h", h + "px");
+    new ResizeObserver(() => {
+      if (document.fullscreenElement === stage || !stage.isConnected) return;
+      try { localStorage.setItem("cg.stageH", String(Math.round(stage.getBoundingClientRect().height))); } catch (e) { /* bỏ qua */ }
+    }).observe(stage);
+    const v = (y, p) => () => { if (S.v3d && S.v3d.view) S.v3d.view(y, p); };
+    const btn = (t, title, fn) => el("button", {class: "btn-s btn-sm", type: "button", title, onclick: (e) => { e.stopPropagation(); fn(); }}, t);
+    return el("div", {class: "v3d-tools"},
+      btn("Trước", "Nhìn thẳng mặt trước (như mặt đứng)", v(0, 0)),
+      btn("Trên", "Nhìn từ trên xuống (như mặt bằng)", v(0, 1.5)),
+      btn("3/4", "Góc nhìn phối cảnh", v(0.8, 0.6)),
+      btn("⛶", "Toàn màn hình (Esc để thoát)", () => {
+        if (document.fullscreenElement) document.exitFullscreen();
+        else if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
+      }));
   }
   function badge(kind) {
     return el("span", {class: "src-b src-" + (kind || "missing"), title: SRC_TIP[kind] || "", text: SRC_BADGE[kind] || kind});
@@ -1380,7 +1451,7 @@
     const sheet = $("sheet");
     const pv = r.provenance || {views: {}, modules: {}, elevations: [], used: {elevations: [], plans: []}, sheets: []};
     const fmt = v => (Math.round(v * 10) / 10).toString();
-    $("cvInfo").textContent = `Hạng mục ${r.item} · ${r.counts.modules} khối · ${r.counts.fronts} cánh/ngăn kéo · ${r.counts.gaps} phần thiếu · mã cảnh ${r.scene_hash}`;
+    $("cvInfo").textContent = `Hạng mục ${pv.item_name || r.item} · ${r.counts.modules} khối · ${r.counts.fronts} cánh/ngăn kéo · ${r.counts.gaps} phần thiếu · mã cảnh ${r.scene_hash}`;
     // thanh công cụ: chọn hạng mục
     const isel = $("t3Item");
     isel.replaceChildren(el("option", {value: "__space__", text: "★ Cả tầng (mặt bằng tổng + các hạng mục)"}), ...r.items.map(it => el("option", {value: it.id,
@@ -1413,7 +1484,7 @@
     const host3 = el("div", {});
     const host2 = el("div", {});
     const cv = el("canvas", {"aria-label": "Mô hình 3D dựng từ bản vẽ, kéo chuột để xoay, cuộn để phóng to", role: "img"});
-    host3.append(cv, el("span", {class: "cap", text: "3D · kéo để xoay, cuộn để phóng to"}));
+    host3.append(cv, el("span", {class: "cap", text: "3D · kéo trái: xoay · kéo phải: dời · cuộn: phóng"}), stageTools(stage));
     if (mode !== "2d") stage.append(host3);
     if (mode !== "3d") stage.append(host2);
     const viewSel = el("select", {"aria-label": "Hình 2D để đối chiếu"},
@@ -1456,9 +1527,30 @@
       return el("label", {}, `${f.label}${f.kind === "choice" ? "" : " (mm)"} `, inp,
         el("button", {type: "button", class: "btn", text: "Lưu", onclick: () => inp.value && save(f.key, inp.value)}));
     })));
-    const props = r.proposals.map(p => el("div", {class: "gap3d"}, el("small", {text: "AI đề xuất · chưa xác nhận"}), " ",
-      el("span", {text: `${p.key} = ${p.value}${p.reason ? " — " + p.reason : ""}`}), " ",
+    const keyVi = (k) => {
+      const m = /^module:([^:]+):(w|d|h|z0)$/.exec(k);
+      if (m) return `${{w: "Rộng", d: "Chiều sâu", h: "Cao", z0: "Cao độ chân"}[m[2]]} khối ${m[1]}`;
+      if (k === "room:ceiling") return "Cao sàn – trần";
+      if (k.startsWith("link:")) return "Ghép mặt đứng với mặt bằng";
+      if (k.startsWith("label:")) return `Nhãn khối ${k.slice(6)}`;
+      return k;
+    };
+    const props = r.proposals.map(p => el("div", {class: "gap3d prop3d"},
+      el("span", {class: "src-b " + (p.origin === "code" ? "src-geometry" : "src-user"), text: p.origin === "code" ? "Code đọc" : "AI đọc"}), " ",
+      b(keyVi(p.key)), ` = ${p.value}${/^module:|^room:/.test(p.key) ? " mm" : ""}`,
+      p.reason ? el("div", {class: "g-why", text: p.reason}) : null,
+      p.evidence && p.evidence.length ? el("small", {text: `Bằng chứng trên bản vẽ: ${p.evidence.length} kích thước/chữ (đã kiểm có đúng số này)`}) : null, " ",
       el("button", {type: "button", class: "btn", text: "Xác nhận", onclick: () => save(p.key, p.value)})));
+    const warnMods = r.modules.filter(m => ["w", "d", "h", "z0"].some(k => m[k].kind === "default" || m[k].kind === "missing"));
+    const banner = (r.gaps.length || r.proposals.length) ? el("div", {class: "warn3d", role: "alert"},
+      el("div", {class: "w-head"}, b(`⚠ ${r.gaps.length} chỗ CAD Guard chưa đọc được từ bản vẽ`),
+        warnMods.length ? ` · ${warnMods.length} khối đang dùng số tạm (tô màu cam trên 3D)` : "",
+        el("div", {class: "f-d", text: "3D sai ở đây là do bản vẽ thiếu số hoặc trình bày khác mẫu CAD Guard đọc được. Nhập số đúng, hoặc nhờ code/AI đọc lại bản vẽ (mặt cắt, ghi chú) rồi xác nhận."})),
+      el("div", {class: "w-act"},
+        el("button", {class: "btn-s btn-sm", type: "button", title: "Tìm chiều sâu ở kích thước ngang của các mặt cắt cùng hạng mục", onclick: () => runSceneAI(path, r.item, false)}, "Gợi ý bằng code"),
+        el("button", {class: "btn-p btn-sm", type: "button", title: "AI đọc tiêu đề, kích thước, ghi chú của hạng mục; mỗi số phải dẫn đúng kích thước/chữ trên bản vẽ", onclick: () => runSceneAI(path, r.item, true)}, "Nhờ AI đọc bản vẽ")),
+      props.length ? [el("div", {class: "sub-h", text: "Đề xuất chờ bạn xác nhận"}), props] : null,
+      gaps.length ? el("details", {class: "w-gaps", open: gaps.length <= 3}, el("summary", {text: `Từng chỗ thiếu, vì sao và ô nhập (${gaps.length})`}), gaps) : null) : null;
     const room = r.room.ceiling ? `Cao sàn–trần ${fmt(r.room.ceiling)} · ${r.room.src}` : "Chưa có cao sàn–trần";
     const ceil = el("input", {type: "checkbox", "aria-label": "Hiện trần"});
     const dl = el("button", {type: "button", class: "btn-s btn-sm", text: "Tải GLB", onclick: async () => {
@@ -1473,9 +1565,9 @@
         ` · ${r.readiness.modules} khối, ${r.readiness.complete} đủ 4 số đo · ${r.readiness.from_dimension_pct}% số đo lấy từ kích thước ghi trên bản vẽ, ${r.readiness.from_user_pct}% bạn đã sửa · ${r.readiness.gaps} phần thiếu`) : null,
       el("div", {class: "bar-act"}, mode !== "3d" ? [el("span", {text: "Hình 2D: "}), viewSel] : null, el("label", {}, ceil, " hiện trần"), dl, el("small", {text: ` mã cảnh ${r.scene_hash}`})),
       el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), cutlistBox(r),
-      gaps.length ? el("div", {class: "sub-h", text: "Phần thiếu và cách bổ sung"}) : null, gaps, props,
       r.notes.map(n => el("small", {text: n})));
-    fill(sheet, el("div", {class: "v3d"}, srcBar, stage, bottom));
+    S.warn3d = new Set(warnMods.map(m => m.id));
+    fill(sheet, el("div", {class: "v3d"}, srcBar, banner, stage, bottom));
     if (S.v3d) { S.v3d.stop(); S.v3d = null; }
     if (mode !== "2d") {
       S.v3d = makeViewer(cv);
@@ -1557,7 +1649,13 @@
   function boxesFor(r) {
     const hl = S.sel3d;
     const src = (S.body3d && S.body3d !== "block" && r.panels) ? r.panels[S.body3d] || r.boxes : r.boxes;
-    return src.map(bx => (hl && bx.n && (bx.n === hl || bx.n.startsWith(hl + ".") || bx.n.startsWith(hl + ":"))) ? {...bx, c: [0.15, 0.39, 0.92]} : bx);
+    const own = (n, id) => n && (n === id || n.startsWith(id + ".") || n.startsWith(id + ":"));
+    const warn = S.warn3d || new Set();
+    return src.map(bx => {
+      if (hl && own(bx.n, hl)) return {...bx, c: [0.15, 0.39, 0.92]};
+      for (const id of warn) if (own(bx.n, id)) return {...bx, c: [0.96, 0.58, 0.2]};  // khối dùng số tạm
+      return bx;
+    });
   }
   function feedbackPrompt(r, m, pv) {
     const src = pv.modules[m.id] || {};
@@ -1569,7 +1667,131 @@
   }
 
   // Trình xem 3D canvas 2D (chuyển từ scene/viewer.py, gắn sự kiện bằng addEventListener).
+  // Trình xem 3D WebGL: bộ đệm độ sâu nên mặt sát nhau (cánh trước thùng, đợt sau cánh) không chồng sai khi xoay.
+  // Không có WebGL thì dùng bản canvas 2D (sắp mặt theo độ sâu). Kéo trái: xoay; kéo phải hoặc Shift+kéo: dời; cuộn: phóng.
   function makeViewer(cv) {
+    const gl = cv.getContext("webgl", {antialias: true}) || null;
+    return gl ? makeViewerGL(cv, gl) : makeViewer2d(cv);
+  }
+  function earcut2(pts) {  // cắt tai đa giác (lồi/lõm) -> chỉ số tam giác
+    const n = pts.length;
+    if (n < 3) return [];
+    if (n === 4) return [0, 1, 2, 0, 2, 3];
+    let area = 0;
+    for (let i = 0; i < n; i++) { const a = pts[i], b = pts[(i + 1) % n]; area += a[0] * b[1] - b[0] * a[1]; }
+    const sg = area > 0 ? 1 : -1, cr = (a, b, c) => ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) * sg;
+    const idx = [...Array(n).keys()], out = [];
+    let guard = 0;
+    while (idx.length > 3 && guard++ < 4 * n * n) {
+      let cut = false;
+      for (let k = 0; k < idx.length; k++) {
+        const i0 = idx[(k + idx.length - 1) % idx.length], i1 = idx[k], i2 = idx[(k + 1) % idx.length];
+        const a = pts[i0], b = pts[i1], c = pts[i2];
+        if (cr(a, b, c) <= 1e-9) continue;
+        if (idx.some(j => j !== i0 && j !== i1 && j !== i2 && cr(a, b, pts[j]) > 1e-9 && cr(b, c, pts[j]) > 1e-9 && cr(c, a, pts[j]) > 1e-9)) continue;
+        out.push(i0, i1, i2); idx.splice(k, 1); cut = true; break;
+      }
+      if (!cut) break;
+    }
+    for (let k = 1; k + 1 < idx.length; k++) out.push(idx[0], idx[k], idx[k + 1]);
+    return out;
+  }
+  function makeViewerGL(cv, gl) {
+    const VS = "attribute vec3 p;attribute vec4 c;uniform vec3 ctr;uniform vec4 rot;uniform vec3 sc;uniform vec2 pan;varying vec4 vc;" +
+      "void main(){vec3 q=p-ctr;float x1=q.x*rot.x-q.y*rot.y;float y1=q.x*rot.y+q.y*rot.x;" +
+      "gl_Position=vec4(x1*sc.x+pan.x,(q.z*rot.z+y1*rot.w)*sc.y+pan.y,(y1*rot.z-q.z*rot.w)*sc.z,1.0);vc=c;}";
+    const FS = "precision mediump float;varying vec4 vc;void main(){gl_FragColor=vc;}";
+    const sh = (t, src) => { const o = gl.createShader(t); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return makeViewer2d(cv);
+    gl.useProgram(prog);
+    const U = n => gl.getUniformLocation(prog, n), aP = gl.getAttribLocation(prog, "p"), aC = gl.getAttribLocation(prog, "c");
+    const bufP = gl.createBuffer(), bufC = gl.createBuffer(), bufE = gl.createBuffer();
+    const ext = gl.getExtension("OES_element_index_uint");
+    let BOXES = [], yaw = 0.8, pitch = 0.6, zoom = 1, pan = [0, 0], drag = null, alive = true, nOpaque = 0, nAll = 0, ctr = [0, 0, 0], rad = 1;
+    const light = (n, c, a) => {
+      const l = 0.5 + 0.5 * Math.max(0, n[0] * -0.35 + n[1] * -0.45 + n[2] * 0.82);
+      return [c[0] * l, c[1] * l, c[2] * l, a];
+    };
+    function build() {
+      const P = [], C = [], Eo = [], Et = [];
+      const a = [1e18, 1e18, 1e18], bb = [-1e18, -1e18, -1e18];
+      for (const o of BOXES) for (const p of o.b) for (const z of [o.z0, o.z1]) { const v = [p[0], p[1], z]; for (let i = 0; i < 3; i++) { a[i] = Math.min(a[i], v[i]); bb[i] = Math.max(bb[i], v[i]); } }
+      ctr = [(a[0] + bb[0]) / 2, (a[1] + bb[1]) / 2, (a[2] + bb[2]) / 2];
+      rad = Math.max(bb[0] - a[0], bb[1] - a[1], bb[2] - a[2]) || 1;
+      const face = (verts, n, col, tris, E) => {
+        const s0 = P.length / 3, cc = light(n, col, col[3]);
+        for (const v of verts) { P.push(v[0], v[1], v[2]); C.push(cc[0], cc[1], cc[2], cc[3]); }
+        for (const t of tris) E.push(s0 + t);
+      };
+      for (const o of BOXES) {
+        const n = o.b.length, alpha = (o.k === "wall" || o.k === "ceiling") ? 0.35 : 1;
+        const col = [o.c[0], o.c[1], o.c[2], alpha], E = alpha < 1 ? Et : Eo;
+        const tri = earcut2(o.b);
+        face(o.b.map(p => [p[0], p[1], o.z1]), [0, 0, 1], col, tri, E);
+        face(o.b.map(p => [p[0], p[1], o.z0]), [0, 0, -1], col, tri.slice().reverse(), E);
+        let ar = 0;
+        for (let i = 0; i < n; i++) { const p = o.b[i], q = o.b[(i + 1) % n]; ar += p[0] * q[1] - q[0] * p[1]; }
+        const sg = ar >= 0 ? 1 : -1;
+        for (let i = 0; i < n; i++) {
+          const p = o.b[i], q = o.b[(i + 1) % n], e = [q[0] - p[0], q[1] - p[1]], l = Math.hypot(e[0], e[1]) || 1;
+          face([[p[0], p[1], o.z0], [q[0], q[1], o.z0], [q[0], q[1], o.z1], [p[0], p[1], o.z1]], [sg * e[1] / l, -sg * e[0] / l, 0], col, [0, 1, 2, 0, 2, 3], E);
+        }
+      }
+      nOpaque = Eo.length; nAll = Eo.length + Et.length;
+      gl.bindBuffer(gl.ARRAY_BUFFER, bufP); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(P), gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, bufC); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(C), gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufE);
+      const all = Eo.concat(Et);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ext ? new Uint32Array(all) : new Uint16Array(all), gl.STATIC_DRAW);
+    }
+    const itype = ext ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, isize = ext ? 4 : 2;
+    function fit() {
+      const w = Math.max(1, Math.round(cv.clientWidth * devicePixelRatio)), h = Math.max(1, Math.round(cv.clientHeight * devicePixelRatio));
+      if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+      draw();
+    }
+    function draw() {
+      if (!alive) return;
+      gl.viewport(0, 0, cv.width, cv.height);
+      gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      if (!nAll) return;
+      const k = Math.min(cv.width, cv.height) / (rad * 1.6) * zoom;
+      gl.uniform3f(U("ctr"), ctr[0], ctr[1], ctr[2]);
+      gl.uniform4f(U("rot"), Math.cos(yaw), Math.sin(yaw), Math.cos(pitch), Math.sin(pitch));
+      gl.uniform3f(U("sc"), 2 * k / cv.width, 2 * k / cv.height, 1 / rad);
+      gl.uniform2f(U("pan"), pan[0], pan[1]);
+      gl.bindBuffer(gl.ARRAY_BUFFER, bufP); gl.enableVertexAttribArray(aP); gl.vertexAttribPointer(aP, 3, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ARRAY_BUFFER, bufC); gl.enableVertexAttribArray(aC); gl.vertexAttribPointer(aC, 4, gl.FLOAT, false, 0, 0);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufE);
+      gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
+      gl.disable(gl.BLEND); gl.depthMask(true);
+      gl.drawElements(gl.TRIANGLES, nOpaque, itype, 0);
+      if (nAll > nOpaque) {  // tường/trần trong suốt vẽ sau, không ghi độ sâu
+        gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
+        gl.drawElements(gl.TRIANGLES, nAll - nOpaque, itype, nOpaque * isize);
+        gl.depthMask(true);
+      }
+    }
+    cv.addEventListener("contextmenu", e => e.preventDefault());
+    cv.addEventListener("pointerdown", e => { drag = [e.clientX, e.clientY, e.button === 2 || e.shiftKey]; cv.setPointerCapture(e.pointerId); });
+    cv.addEventListener("pointermove", e => {
+      if (!drag) return;
+      const dx = e.clientX - drag[0], dy = e.clientY - drag[1];
+      if (drag[2]) { pan[0] += 2 * dx / cv.clientWidth; pan[1] -= 2 * dy / cv.clientHeight; }
+      else { yaw += dx * 0.01; pitch = Math.max(-0.2, Math.min(1.5, pitch + dy * 0.01)); }
+      drag = [e.clientX, e.clientY, drag[2]]; draw();
+    });
+    cv.addEventListener("pointerup", () => { drag = null; });
+    cv.addEventListener("wheel", e => { e.preventDefault(); zoom *= e.deltaY < 0 ? 1.1 : 0.9; draw(); }, {passive: false});
+    const ro = new ResizeObserver(fit); ro.observe(cv);
+    return {set(bx) { BOXES = bx; build(); fit(); }, redraw: draw, gl: true,
+      zoom(f) { if (f === 0) { zoom = 1; pan = [0, 0]; } else zoom *= f; draw(); },
+      view(y, p) { yaw = y; pitch = p; draw(); },
+      stop() { alive = false; ro.disconnect(); }};
+  }
+  function makeViewer2d(cv) {
     const cx = cv.getContext("2d");
     let BOXES = [], yaw = 0.8, pitch = 0.6, zoom = 1, drag = null, alive = true;
     function fit() { cv.width = Math.max(1, cv.clientWidth * devicePixelRatio); cv.height = Math.max(1, cv.clientHeight * devicePixelRatio); draw(); }
@@ -3241,6 +3463,23 @@
     bz.done();
     toast(`Đã đồng ý ${list.length} đề xuất.`);
     await loadMap(false);
+  }
+  // Chuẩn hoá trước khi dựng 3D: code đọc mặt cắt, AI đọc kích thước/ghi chú; đề xuất qua kiểm bằng chứng, người xác nhận.
+  async function runSceneAI(path, item, ai) {
+    const bz = busy(ai ? "AI đang đọc bản vẽ của hạng mục…" : "Đang tìm số thiếu bằng code…",
+      ai ? "Mỗi số AI đề xuất phải dẫn đúng kích thước/chữ trên bản vẽ; số không có bằng chứng bị loại." : "");
+    let job;
+    try { job = await api("/api/scene/ai", {file: path, item, ai, engine: S.engine ? S.engine.name : null}); } catch (e) { bz.done(); fail(e, "Chuẩn hoá dữ liệu 3D"); return; }
+    if (job.note) toast(job.note);
+    while (job.state === "running") {
+      await new Promise((res) => setTimeout(res, 2000));
+      try { job = await api("/api/scene/ai/status", {job: job.id}); } catch (e) { bz.done(); fail(e, "Chuẩn hoá dữ liệu 3D"); return; }
+    }
+    bz.done();
+    if (job.state === "error") { fail(new Error(job.error || "Lỗi khi chuẩn hoá."), "Chuẩn hoá dữ liệu 3D"); return; }
+    toast(job.accepted ? `Có ${job.accepted} đề xuất chờ bạn xác nhận ở đầu màn 3D.` :
+      `Không tìm được số nào có bằng chứng trên bản vẽ${job.rejected.length ? ` (${job.rejected.length} đề xuất bị loại vì không có bằng chứng)` : ""}. Hãy nhập tay.`);
+    if (S.file === path) load3d(path, item);
   }
   async function suggestGraph(ai) {
     if (!S.file) return;

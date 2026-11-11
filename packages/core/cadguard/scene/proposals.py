@@ -2,8 +2,11 @@
 
 - `prompt_for(d, group, scene)`: dữ liệu gửi LLM (sau khi người dùng đồng ý theo phiên, như Studio): mã hình chiếu, loại,
   tiêu đề, nhãn, số kích thước và vài số đo lớn nhất của từng hình, khối đã dựng, phần thiếu. Không đường dẫn/tên tệp.
-- `validate(raw, d, group, scene)`: mã kiểm từng đề xuất; chỉ nhận `link:<mặt đứng>` = `<mặt bằng>` cùng hạng mục và
-  `label:<khối>` = nhãn trong danh sách cho phép. Đề xuất số (sâu, cao, trần…) bị loại: số chỉ đến từ bản vẽ hoặc người nhập.
+- `validate(raw, d, group, scene)`: mã kiểm từng đề xuất; nhận `link:<mặt đứng>` = `<mặt bằng>` cùng hạng mục,
+  `label:<khối>` = nhãn trong danh sách cho phép, và SỐ cho ô phần thiếu (sâu khối, cao trần…) chỉ khi kèm bằng chứng:
+  handle một kích thước/chữ thuộc hình của hạng mục mà số đo đúng bằng giá trị đề xuất (AI đọc ra số đã có trên bản vẽ
+  nhưng vẽ theo kiểu code chưa hiểu; không bịa số).
+- `code_suggestions(d, group, scene)`: gợi ý bằng code cho chiều sâu thiếu từ kích thước ngang của mặt cắt cùng hạng mục.
 - Đề xuất hợp lệ được lưu "chờ xác nhận"; chỉ khi người dùng bấm xác nhận trên App mới ghi vào tệp bổ sung (`source: user`).
 """
 
@@ -20,10 +23,54 @@ LABELS = ("tủ bếp dưới", "tủ bếp trên", "tủ cao", "tủ áo", "k�
 MAX_PROPOSALS = 50
 
 SYSTEM = (
-    "Bạn hỗ trợ dựng 3D từ bản vẽ nội thất 2D. Chỉ được đề xuất hai loại: (1) ghép mặt đứng với mặt bằng cùng hạng mục: "
-    '{"key": "link:<mã mặt đứng>", "value": "<mã mặt bằng>"}; (2) gán nhãn khối: {"key": "label:<mã khối>", '
-    '"value": "<một nhãn trong danh sách>"}. KHÔNG đề xuất số đo (sâu, cao, rộng, cao trần): số đo chỉ lấy từ bản vẽ hoặc '
-    'người dùng nhập. Trả đúng JSON {"proposals": [{"key", "value", "reason"}]}, lý do ngắn bằng tiếng Việt.')
+    "Bạn hỗ trợ dựng 3D từ bản vẽ nội thất 2D (mỗi người kỹ thuật trình bày một kiểu). Được đề xuất ba loại: "
+    '(1) ghép mặt đứng với mặt bằng cùng hạng mục: {"key": "link:<mã mặt đứng>", "value": "<mã mặt bằng>"}; '
+    '(2) gán nhãn khối: {"key": "label:<mã khối>", "value": "<một nhãn trong danh sách>"}; '
+    '(3) điền số cho ô phần thiếu (khoá trong "gaps[].fields"): {"key": "<khoá ô>", "value": "<số mm>", "evidence": '
+    '["<handle kích thước hoặc chữ trên bản vẽ có đúng số này>"]}. Số PHẢI đọc từ kích thước/chữ có sẵn trong "evidence" '
+    "(vd. chiều sâu tủ ghi ở mặt cắt, ghi chú 'sâu 600'); không có bằng chứng thì không đề xuất. "
+    'Trả đúng JSON {"proposals": [{"key", "value", "evidence", "reason"}]}, lý do ngắn bằng tiếng Việt nói rõ số lấy ở hình nào.')
+NUM_RE = re.compile(r"(?<![\d.])(\d{2,5}(?:[.,]\d+)?)(?![\d])")
+
+
+def _evidence_pool(d: Drawing2D, group: str) -> dict[str, dict]:
+    """Kích thước + chữ có số trong các hình của hạng mục: {handle: {view, kind, values}} (để AI dẫn và code kiểm)."""
+    out: dict[str, dict] = {}
+    for v in d.views_of(group):
+        for h in v.handles:
+            e = d.entities[h]
+            vals = []
+            if e.type == "DIMENSION" and e.dim_value:
+                vals = [round(float(e.dim_value), 1)]
+            elif e.type in ("TEXT", "MTEXT") and e.text:
+                vals = [float(x.replace(",", ".")) for x in NUM_RE.findall(e.text)]
+            if vals:
+                out[h] = {"view": v.id, "kind": v.kind, "title": v.title, "values": vals,
+                          **({"text": e.text[:60]} if e.type in ("TEXT", "MTEXT") else {})}
+    return out
+
+
+def code_suggestions(d: Drawing2D, group: str, scene) -> list[dict]:
+    """Chiều sâu thiếu: kích thước ngang lớn nhất (250–1200 mm) của từng mặt cắt cùng hạng mục; khối treo ưu tiên số nhỏ.
+    Chỉ là gợi ý có bằng chứng, người dùng xác nhận."""
+    cands = []
+    for v in d.views_of(group, "section"):
+        hs = [x for x in view_dims(d, v) if x.axis == "h" and 250 <= x.value <= 1200]
+        if hs:
+            cands.append(max(hs, key=lambda x: x.value))
+    out = []
+    for g in scene.gaps:
+        for f in g.fields:
+            if not f.key.startswith("module:") or not f.key.endswith(":d") or not cands:
+                continue
+            wall = "tủ treo" in g.message
+            vals = sorted({round(x.value) for x in cands})
+            pick = vals[0] if wall else vals[-1]
+            ev = next(x for x in cands if round(x.value) == pick)
+            out.append({"key": f.key, "value": str(pick), "evidence": [ev.handle], "origin": "code",
+                        "reason": f"Kích thước ngang {pick} mm ở mặt cắt {d.view(next(v.id for v in d.views_of(group, 'section') if ev.handle in v.handles)).title or ''}"
+                                  f" ({'số nhỏ nhất: tủ treo' if wall else 'số lớn nhất'} trong {len(vals)} mặt cắt)."})
+    return out
 
 
 def prompt_for(d: Drawing2D, group: str, scene) -> dict:
@@ -37,10 +84,12 @@ def prompt_for(d: Drawing2D, group: str, scene) -> dict:
         views.append({"id": v.id, "kind": v.kind, "title": v.title, "label": v.label, "flags": v.flags,
                       "size": [round(v.box[2] - v.box[0]), round(v.box[3] - v.box[1])] if v.box else None,
                       "dims_h_top": hs, "dims_v_top": vs})
+    pool = _evidence_pool(d, group)
     return {"system": SYSTEM, "labels": list(LABELS), "item": group, "views": views,
-            "modules": [{"id": m.id, "kind": m.kind, "w": m.w, "d": m.d, "h": m.h, "z0": m.z0, "fronts": len(m.fronts)}
-                        for m in scene.modules],
-            "gaps": [{"id": g.id, "kind": g.kind, "message": g.message} for g in scene.gaps]}
+            "modules": [{"id": m.id, "kind": m.kind, "w": m.w, "d": m.d, "h": m.h, "z0": m.z0, "fronts": len(m.fronts),
+                         "src_d": m.src["d"].kind if "d" in m.src else "missing"} for m in scene.modules],
+            "gaps": [{"id": g.id, "kind": g.kind, "message": g.message, "fields": [f.key for f in g.fields]} for g in scene.gaps],
+            "evidence": [{"handle": h, **x} for h, x in list(pool.items())[:400]]}
 
 
 def _parse(raw) -> list:
@@ -62,6 +111,8 @@ def validate(raw, d: Drawing2D, group: str, scene) -> tuple[list[dict], list[dic
     plans = {v.id for v in d.views_of(group, "plan") if v.box}
     elevs = {v.id for v in d.views_of(group, "elevation") if v.box}
     mods = {m.id for m in scene.modules} | {g.target for g in scene.gaps if g.id.startswith("module:")}
+    fields = {f.key: f for g in scene.gaps for f in g.fields}
+    pool = None
     ok, bad = [], []
     for p in _parse(raw)[:MAX_PROPOSALS]:
         if not isinstance(p, dict):
@@ -79,10 +130,28 @@ def validate(raw, d: Drawing2D, group: str, scene) -> tuple[list[dict], list[dic
                 why = "không có khối này"
             elif value not in LABELS:
                 why = "nhãn ngoài danh sách"
+        elif key in fields and fields[key].kind != "choice":
+            pool = pool if pool is not None else _evidence_pool(d, group)
+            try:
+                num = float(str(value).replace(",", "."))
+            except ValueError:
+                num = None
+            ev = [str(h).upper() for h in (p.get("evidence") or []) if isinstance(h, (str, int))][:10]
+            if num is None or not 0 < num < 100000:
+                why = "giá trị không phải số mm hợp lệ"
+            elif not ev:
+                why = "thiếu bằng chứng (handle kích thước/chữ trên bản vẽ)"
+            elif not any(h in pool and any(abs(x - num) <= 1.0 for x in pool[h]["values"]) for h in ev):
+                why = "bằng chứng không thuộc hạng mục hoặc không có đúng số này"
+            else:
+                value = f"{num:g}"
+                p = {**p, "evidence": ev}
         else:
-            why = "chỉ nhận ghép hình chiếu hoặc gán nhãn; số đo phải lấy từ bản vẽ hoặc người nhập"
-        (bad if why else ok).append({"key": key, "value": value, "reason": reason, **({"rejected": why} if why else {"origin": "llm"})})
+            why = "chỉ nhận ghép hình chiếu, gán nhãn, hoặc số cho ô phần thiếu kèm bằng chứng"
+        extra = {"evidence": p["evidence"]} if p.get("evidence") and not why else {}
+        (bad if why else ok).append({"key": key, "value": value, "reason": reason, **extra,
+                                     **({"rejected": why} if why else {"origin": str(p.get("origin") or "llm")[:8]})})
     return ok, bad
 
 
-__all__ = ["LABELS", "SCHEMA", "SYSTEM", "prompt_for", "validate"]
+__all__ = ["LABELS", "SCHEMA", "SYSTEM", "code_suggestions", "prompt_for", "validate"]

@@ -435,6 +435,16 @@ def read_drawing(model: DrawingModel, structure: Structure | None = None, roles:
             sheet_group[s.id] = num[0]
     for v in views:
         v.group = sheet_group.get(v.sheet_id, "")
+    # Khung tên không có số bản vẽ (block khung không thuộc tính): nhóm theo tên đồ trong tiêu đề hình
+    # ("MẶT ĐỨNG BỎ CÁNH TỦ ÁO" + "MẶT BẰNG BỎ CÁNH TỦ ÁO" -> hạng mục "TỦ ÁO"). Mã nhóm bắt đầu "~" để phân biệt.
+    for v in views:
+        if v.group or not v.subject or v.kind not in ("plan", "elevation", "section", "detail"):
+            continue
+        g = "~" + v.subject[:40]
+        info = groups.setdefault(g, {"name": v.subject[:60], "sheets": [], "by_title": True})
+        if v.sheet_id not in info["sheets"]:
+            info["sheets"].append(v.sheet_id)
+        v.group = g
     view_of: dict[str, str] = {h: v.id for v in views for h in v.handles}
     marks: list[SectionMark] = []
     for e in model.entities:

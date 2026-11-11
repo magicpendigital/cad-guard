@@ -224,6 +224,45 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
     sc.modules.append(m)
 
 
+CLUSTER_GAP = 150.0  # khe giữa hai bản vẽ đặt cạnh nhau trong cùng một khung tiêu đề
+
+
+def _crop_to_dim(d: Drawing2D, e: View, refs: list[str], sc: Scene2) -> View:
+    """Một khung tiêu đề chứa nhiều bản vẽ cạnh nhau (mặt đứng có cánh + bỏ cánh + mặt bên), cách nhau bằng khe trống:
+    chỉ giữ cụm nét chứa kích thước dùng để ghép với mặt bằng."""
+    from dataclasses import replace
+
+    from .views2d import dim_of, entity_box
+
+    dims = [x for h in refs if h in d.entities and (x := dim_of(d.entities[h])) and x.axis == "h" and h in set(e.handles)]
+    if not dims or not e.box:
+        return e
+    mid = (min(x.lo for x in dims) + max(x.hi for x in dims)) / 2
+    body = FURN | {"visible", "hidden", "thin"}
+    iv = sorted((b[0], b[2]) for h in e.handles if d.roles.get(d.entities[h].layer) in body
+                and d.entities[h].type not in ("TEXT", "MTEXT", "DIMENSION") and (b := entity_box(d.entities[h], {})))
+    if not iv:
+        return e
+    clusters = [[iv[0][0], iv[0][1]]]
+    for a, b in iv[1:]:
+        if a > clusters[-1][1] + CLUSTER_GAP:
+            clusters.append([a, b])
+        else:
+            clusters[-1][1] = max(clusters[-1][1], b)
+    if len(clusters) < 2:
+        return e
+    lo, hi = next(((a, b) for a, b in clusters if a - 1 <= mid <= b + 1), (None, None))
+    if lo is None:
+        return e
+    keep = []
+    for h in e.handles:
+        b = entity_box(d.entities[h], {})
+        if b is None or (b[0] >= lo - CLUSTER_GAP / 2 and b[2] <= hi + CLUSTER_GAP / 2):
+            keep.append(h)
+    sc.notes.append(f"Khung mặt đứng chứa {len(clusters)} bản vẽ cạnh nhau: chỉ dùng bản vẽ rộng {hi - lo:.0f} mm có kích thước khớp mặt bằng.")
+    return replace(e, handles=keep, box=(lo, e.box[1], hi, e.box[3]))
+
+
 def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -> Scene2:
     supp = supplement or {}
     sc = Scene2(item=group)
@@ -244,6 +283,7 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
     if not main:
         return _finish(sc, d)
     e, p, ox, _refs, _m = main[0]
+    e = _crop_to_dim(d, e, _refs, sc)
     shelf_src = next((lk for lk in links.values() if "no_doors" in lk[0].flags and lk[1].id == p.id), None)
     origin = (p.box[0], p.box[1])
 
@@ -264,9 +304,18 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
                                fields=[Field_(key="room:ceiling", label="Cao sàn–trần")]))
         sc.room.src["floor"] = Src(kind="geometry")
 
+    furn = FURN
+    n_furn = sum(1 for h in e.handles if d.roles.get(d.entities[h].layer) in FURN)
+    n_vis = sum(1 for h in e.handles if d.roles.get(d.entities[h].layer) == "visible")
+    if n_furn < 10 or n_vis > 2 * n_furn:
+        # thân tủ vẽ trên layer nét thấy (mỗi người kỹ thuật một kiểu layer): dùng cả nét thấy
+        furn = FURN | {"visible"}
+        sc.notes.append("Mặt đứng gần như không có nét trên layer nội thất/nét cắt: đã dùng cả nét thấy để tách khối.")
     pdims = view_dims(d, p)
     edims = view_dims(d, e)
     pf = components(d, p, FURN, min_size=100.0)
+    if sum(len(q.parts) for q in pf) < 3 or furn is not FURN:  # mặt bằng vẽ thân tủ bằng nét thấy (không có layer nội thất)
+        pf = components(d, p, FURN | {"visible"}, min_size=100.0)
     ph = components(d, p, HIDDEN, min_size=100.0)
     pt = components(d, p, frozenset({"thin"}), min_size=100.0)
     shelf_rects: list[tuple] = []
@@ -279,20 +328,21 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
                 f2 = rh2.lo if rh2 else se.box[1]
                 shelf_rects.append((r[0] + sox, r[2] + sox, r[1] - f2))
 
-    comps: list[Component] = components(d, e, FURN, min_size=200.0)
+    comps: list[Component] = components(d, e, furn, min_size=200.0)
     hidden = seg.items_in(d, e.handles, HIDDEN)
     blocks: list[tuple] = []  # (khung khối trên mặt đứng, handles, mặt trước [(box, handle)], dạng)
     for c in comps:
         cb = c.box
         inside = [it for it in hidden if it[0][0] >= cb[0] - 1 and it[0][2] <= cb[2] + 1 and it[0][1] >= cb[1] - 1 and it[0][3] <= cb[3] + 1]
-        for leaf in seg.split_blocks(seg.items_in(d, c.handles, FURN) + inside):
-            body = [it for it in leaf if it[2] in FURN]
+        for leaf in seg.split_blocks(seg.items_in(d, c.handles, furn) + inside):
+            body = [it for it in leaf if it[2] in furn]
             if not body:
                 continue
             box = seg.box_of(body)
             if (box[2] - box[0]) < 100.0 or (box[3] - box[1]) < 100.0:
                 continue
-            fr = [] if "no_doors" in e.flags else seg.fronts(d, body, [it for it in leaf if it[2] in HIDDEN], box)
+            # hình "bỏ cánh": tiêu đề có thể đặt nhầm (người vẽ chép tiêu đề) -> vẫn nhận ô có ký hiệu mở cánh
+            fr = seg.fronts(d, body, [it for it in leaf if it[2] in HIDDEN], box, symbols_only="no_doors" in e.flags)
             blocks.append((box, [h for _b, h, _r in body if h], fr, seg.form_of(d, body, box, fr), len(seg.board_levels(leaf))))
     blocks.sort(key=lambda t: (t[0][0], t[0][1]))
     for i, (box, hs, fr, form, levels) in enumerate(blocks, 1):

@@ -177,13 +177,15 @@ def _same(a: Box, b: Box, tol: float = 3.0) -> bool:
     return all(abs(x - y) <= tol for x, y in zip(a, b))
 
 
-def fronts(d: Drawing2D, body: list[Item], marks: list[Item], box: Box) -> list[tuple[Box, str]]:
+def fronts(d: Drawing2D, body: list[Item], marks: list[Item], box: Box, symbols_only: bool = False) -> list[tuple[Box, str]]:
     """Mặt trước (cánh, ngăn kéo) của một khối: [(khung, handle)]."""
     area = (box[2] - box[0]) * (box[3] - box[1])
     rects = [(r, h) for _b, h, _r in body if h and (r := rect_of(d.entities[h]))]
     boards = [r for r, _h in rects if min(r[2] - r[0], r[3] - r[1]) <= BOARD_MAX]
     cands = [(r, h) for r, h in rects if (r[2] - r[0]) >= FRONT_MIN and (r[3] - r[1]) >= FRONT_MIN and (r[2] - r[0]) * (r[3] - r[1]) < 0.9 * area]
     segs = _segments(d, body)
+    if symbols_only:  # hình "bỏ cánh": hình chữ nhật là khoang/ngăn trong, chỉ nhận ô có ký hiệu mở cánh
+        cands = []
     # dấu X (hai đường chéo góc-góc ngược chiều) = khoang hở/thiết bị, không phải cánh; một đường chéo = ngăn kéo
     slopes: dict[tuple, set] = {}
     for b, h, _r in marks:

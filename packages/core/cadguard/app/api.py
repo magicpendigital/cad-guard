@@ -199,13 +199,17 @@ def check_dept(app: "AppData", dept: Any) -> dict | None:
 # ---------- bản vẽ, kiểm, giải thích ----------
 
 def list_drawings(app: AppData) -> dict:
+    from .versions import overview
+
     paths = app.ws.list_dxf(".", limit=MAX_DRAWINGS + 1, max_dirs=MAX_SCAN_DIRS)
+    vers = overview(app.ws.root)
     items = []
     for p in paths[:MAX_DRAWINGS]:
         rel = app.rel(p)
         st = p.stat()
         items.append({"path": rel, "name": p.name, "dir": rel.rsplit("/", 1)[0] if "/" in rel else "",
-                      "size_bytes": st.st_size, "is_output": bool(OUTPUT_RE.search(p.name))})
+                      "size_bytes": st.st_size, "is_output": bool(OUTPUT_RE.search(p.name)),
+                      **({"version": vers[rel]} if rel in vers else {})})
     return {"drawings": items, "total": min(len(paths), MAX_DRAWINGS), "truncated": len(paths) > MAX_DRAWINGS,
             "limit": MAX_DRAWINGS}
 
@@ -995,3 +999,24 @@ def handover(app: AppData, rel: Any, dept: Any) -> dict:
 __all__ = ["ApiError", "AppConfig", "AppData", "FIXABLE_RULES", "apply_changeset", "audit_all", "audit_file",
            "check_dept", "explain", "geometry", "get_changeset", "handover", "list_changesets", "list_drawings",
            "load_departments", "preview", "propose_changeset", "rules_table", "scene3d", "suggest_ops", "summary", "undo_changeset"]
+
+
+def version_action(app: AppData, rel: Any, action: str, target: Any = None) -> dict:
+    """Dòng phiên bản: xem (`info`), chọn bản đang dùng (`set`), hoàn tác/làm lại (`undo`/`redo`). Không xoá tệp nào."""
+    from . import versions
+
+    path = app.resolve(rel)
+    rp = app.rel(path)
+    try:
+        if action == "info":
+            return versions.info(app.ws.root, rp)
+        if action == "set":
+            app.resolve(target)  # chặn đường dẫn ngoài dự án
+            return versions.set_current(app.ws.root, rp, target)
+        if action == "undo":
+            return versions.undo(app.ws.root, rp)
+        if action == "redo":
+            return versions.redo(app.ws.root, rp)
+    except ValueError as exc:
+        raise ApiError(str(exc), 422) from None
+    raise ApiError("Thao tác phiên bản không hợp lệ.")
