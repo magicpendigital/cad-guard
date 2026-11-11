@@ -122,3 +122,63 @@ def test_production_gate_needs_confirmed_profile(cfg, kitchen):
     assert gate["done"] == 0 and any(t["action"] == {"id": "construction"} for t in gate["tasks"])
     g1 = build_graph(m, profile={"construction": True})
     assert next(x for x in g1["gates"] if x["id"] == "production")["done"] >= 1
+
+
+def test_fronts_hinge_side_pivot_and_drawer_slide():
+    """Đóng/mở cánh trên màn 3D: bên bản lề, trục xoay, ngăn kéo trượt; tay nắm đi theo cánh."""
+    from cadguard.scene.assemble import Front, Module2
+    from cadguard.scene.panels import hinge_sides
+
+    pair = [Front(id="A", kind="door", x0=0, x1=450, z0=0, z1=2000), Front(id="B", kind="door", x0=450, x1=900, z0=0, z1=2000)]
+    assert hinge_sides(pair, 0, 900) == {"A": "l", "B": "r"}  # cặp hai cánh mở đối xứng
+    assert hinge_sides([Front(id="R", kind="door", x0=500, x1=900, z0=0, z1=700)], 0, 900) == {"R": "r"}  # nửa phải
+    assert hinge_sides([Front(id="W", kind="door", x0=0, x1=900, z0=0, z1=700)], 0, 900) == {"W": "l"}
+    # tủ áo: 2 cánh trên, 2 cánh dưới (hai hàng), cột ngăn kéo không có bản lề
+    rows = pair + [Front(id="C", kind="door", x0=0, x1=450, z0=2000, z1=2400), Front(id="D", kind="door", x0=450, x1=900, z0=2000, z1=2400),
+                   Front(id="K", kind="drawer", x0=900, x1=1400, z0=0, z1=300)]
+    assert hinge_sides(rows, 0, 1400) == {"A": "l", "B": "r", "C": "l", "D": "r"}
+    m = Module2(id="M1", kind="tall", x=0, y=0, z0=0, w=1400, d=600, h=2400, fronts=rows)
+
+    class Sc:
+        modules = [m]
+
+    c = construction.defaults()
+    ps = panels_for(Sc, c)
+    bx = boxes(ps, "panel")
+    doors = {b["n"]: b for b in bx if b["k"] == "panel-door"}
+    assert len(doors) == 4 and all(b["m"]["open"] == "swing" and b["m"]["angle"] == 90 for b in doors.values())
+    left = next(b for b in doors.values() if b["m"]["hinge"] == "l")
+    xs = [q[0] for q in left["b"]]
+    assert left["m"]["pivot"][0] == pytest.approx(min(xs))  # trục ở mép bản lề
+    right = next(b for b in doors.values() if b["m"]["hinge"] == "r")
+    assert right["m"]["pivot"][0] == pytest.approx(max(q[0] for q in right["b"]))
+    # khe giữa hai cánh cùng hàng = door_gap
+    ab = sorted((b for b in doors.values() if b["z1"] < 2100), key=lambda b: b["b"][0][0])
+    assert ab[1]["b"][0][0] - ab[0]["b"][1][0] == pytest.approx(float(c["door_gap"]))
+    drw = next(b for b in bx if b["k"] == "panel-drawer")
+    assert drw["m"] == {"open": "slide", "slide": pytest.approx(0.6 * 600)}
+    handles = [b for b in bx if b["k"] == "panel-handle"]
+    assert len(handles) == 5 and all(any(h["n"].startswith(d + ".") and h["m"] == doors[d]["m"] for d in doors) or h["m"]["open"] == "slide"
+                                     for h in handles)
+    assert any(b["k"] == "panel-tray" for b in bx)  # lòng ngăn kéo thấy khi trượt ra
+    # tách lớp: trục dời theo cánh; xuyên thấu: bỏ cánh lẫn tay nắm
+    ex = {b["n"]: b for b in boxes(ps, "explode")}
+    for n, b in doors.items():
+        dy = ex[n]["b"][0][1] - b["b"][0][1]
+        assert ex[n]["m"]["pivot"][1] == pytest.approx(b["m"]["pivot"][1] + dy)
+    assert not [b for b in boxes(ps, "xray") if "m" in b]
+    # danh sách cắt không tính tay nắm/lòng ngăn kéo
+    assert cutlist(ps, c)["panels"] == len(ps)
+
+
+def test_block_view_fronts_have_gap_and_motion(cfg, kitchen):
+    root, m = kitchen
+    r = scene_api.view(m, root, "SYN.10")
+    fr = [b for b in r["boxes"] if b["k"] == "front"]
+    assert fr and all(b["m"]["open"] in ("swing", "slide") for b in fr)
+    gap = float(construction.defaults()["door_gap"])
+    row = sorted((b for b in fr if b["z0"] < 1000), key=lambda b: b["b"][0][0])
+    assert row[1]["b"][0][0] - row[0]["b"][1][0] >= gap - 1e-6  # khe giữa hai cánh (cộng khe đã vẽ trên mặt đứng)
+    assert [b["m"]["hinge"] for b in row][:2] == ["l", "r"]
+    assert sum(1 for b in r["boxes"] if b["k"] == "front-handle") == len(fr)
+    assert all("m" in b for b in r["panels"]["panel"] if b["k"] in ("panel-door", "panel-drawer", "panel-handle"))
