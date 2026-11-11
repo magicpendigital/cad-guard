@@ -204,6 +204,17 @@ kệ mở, tấm ốp; tách tủ cao làm ba (tủ treo + tủ dưới + tủ c
 - Dựng cả không gian: đánh giá ở `docs/research/phoi-canh-ca-khong-gian.md` (dựng được khung phòng + đặt hạng mục theo ký
   hiệu số trên mặt bằng tổng; ảnh diễn họa đẹp giao phần mềm diễn họa qua glTF).
 
+## 5f. Đóng/mở cánh trên màn 3D (11/11/2026)
+
+Lý do: người dùng mở tủ áo 2 cánh trong khung xem nhỏ, không thấy đường phân cách nên tưởng dựng sai (1 cánh).
+- Server (`scene/panels.py`): `hinge_sides` chọn bên bản lề theo hàng cánh (cùng khoảng cao, trái → phải, ghép cặp mở đối
+  xứng; hàng một cánh theo nửa khối), `front_motion` gửi `m = {open: swing, hinge: l|r, pivot: [x, y], angle: 90}` cho cánh,
+  `{open: slide, slide: 0,6 × sâu}` cho ngăn kéo; `front_extras` thêm tay nắm và lòng ngăn kéo (chỉ để xem, không vào danh
+  sách cắt). Chế độ Hình khối: `block_fronts` (gọi từ `scene_api._block_boxes`) trừ khe `door_gap` của hồ sơ kết cấu.
+- Trình xem (`app.js`): viền tối cho mọi tấm/khối, nút Mở cánh/Đóng cánh (hiệu ứng 0,6 s) + thanh trượt 0–100 % trên
+  `.v3d-tools`; xoay/dời đỉnh trong JS (`moveXY`), cả WebGL và canvas 2D; nhớ độ mở khi đổi Hình khối/Tấm ván/Tách lớp.
+- Chưa có: hướng mở đọc từ ký hiệu mở cánh trên bản vẽ (câu hỏi 4 dưới đây); hiện là quy tắc mặc định.
+
 ## 6. Cần khách trả lời trước P3
 
 1. Kiểu kết cấu chuẩn của xưởng: hông trùm hay nóc trùm; hậu rãnh (lùi, dày, sâu rãnh) hay bắt vít; chân tủ/len chân.

@@ -104,8 +104,7 @@ def view(model, root: Path, item: Any = None) -> dict:
         "items": [{**x, "name": _vi(str((d.groups.get(x["id"]) or {}).get("name") or "")), "sheet_names": _sheet_names(d, x["id"])}
                   for x in item_summary(d)],
         "readiness": readiness(sc),
-        "boxes": [{"b": [list(p) for p in b.base], "z0": b.z0, "z1": b.z1, "c": list(color_for(b.material)), "k": b.kind, "n": b.name}
-                  for b in bx[:MAX_BOXES]],
+        "boxes": _block_boxes(bx, sc, root),
         "truncated": len(bx) > MAX_BOXES,
         "modules": [{"id": m.id, "kind": m.kind, "form": m.form, "type_vi": _type_vi(m), "label": m.label, "fronts": len(m.fronts),
                      "shelves": m.shelves,
@@ -127,6 +126,16 @@ def view(model, root: Path, item: Any = None) -> dict:
         "provenance": provenance(sc, d, supp),
         **production(sc, root, model.file_hash),
     }
+
+
+def _block_boxes(bx, sc, root: Path) -> list[dict]:
+    """Hộp chế độ Hình khối; mặt trước có khe cánh (hồ sơ kết cấu), cách mở, tay nắm để trình xem đóng/mở cánh."""
+    from ..construction import effective
+    from ..scene.panels import block_fronts
+
+    out = [{"b": [list(p) for p in b.base], "z0": b.z0, "z1": b.z1, "c": list(color_for(b.material)), "k": b.kind, "n": b.name}
+           for b in bx[:MAX_BOXES]]
+    return block_fronts(out, sc, float(effective(root)["values"]["door_gap"]))[:MAX_BOXES]
 
 
 def _auto_splits(d, sc, supp, pending) -> list[dict]:

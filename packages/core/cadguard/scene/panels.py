@@ -91,6 +91,7 @@ def panels_for(scene, c: dict) -> list[Panel]:
             for i in range(1, n + 1):
                 zs = inner0 + i * step - t / 2
                 P("shelf", x0 + t, ys, zs, x1 - t, yback, zs + t, 1, n=i)
+        hinges = hinge_sides(m.fronts, x0, x1)
         for j, f in enumerate(m.fronts, 1):
             if c["door_overlay"] == "inset":
                 fx0, fx1, fz0, fz1 = max(f.x0, x0 + t) + gap / 2, min(f.x1, x1 - t) - gap / 2, max(f.z0, z0 + t) + gap / 2, min(f.z1, z1 - t) - gap / 2
@@ -99,7 +100,117 @@ def panels_for(scene, c: dict) -> list[Panel]:
                 fx0, fx1, fz0, fz1 = f.x0 + gap / 2, f.x1 - gap / 2, f.z0 + gap / 2, f.z1 - gap / 2
                 fy0, fy1 = m.y, m.y + td
             if fx1 - fx0 > 20 and fz1 - fz0 > 20:
-                P(f.kind if f.kind in ("door", "drawer") else "door", fx0, fy0, fz0, fx1, fy1, fz1, 4, n=j, front=f.id)
+                P(f.kind if f.kind in ("door", "drawer") else "door", fx0, fy0, fz0, fx1, fy1, fz1, 4, n=j, front=f.id,
+                  md=m.d, mkind=m.kind, t=t, hinge=hinges.get(f.id, "l"))
+    return out
+
+
+def hinge_sides(fronts, mx0: float, mx1: float) -> dict[str, str]:
+    """Bên bản lề của từng cánh trong một khối. Cánh cùng hàng (khoảng cao chồng nhau) xếp trái → phải rồi ghép cặp:
+    cặp hai cánh mở đối xứng (trái `l`, phải `r`); hàng một cánh: nằm nửa trái khối thì bản lề trái, nửa phải thì phải
+    (giữa/đủ khối: trái); hàng lẻ thì cánh cuối bản lề phải."""
+    doors = [f for f in fronts if f.kind != "drawer"]
+    out: dict[str, str] = {}
+    seen: set[str] = set()
+    mc = (mx0 + mx1) / 2
+    for f in sorted(doors, key=lambda q: (q.z0, q.x0)):
+        if f.id in seen:
+            continue
+        row = sorted([g for g in doors if g.id not in seen and min(f.z1, g.z1) - max(f.z0, g.z0) > 0.5 * min(f.z1 - f.z0, g.z1 - g.z0)],
+                     key=lambda q: q.x0)
+        seen.update(g.id for g in row)
+        if len(row) == 1:
+            out[f.id] = "r" if (f.x0 + f.x1) / 2 > mc + 1.0 else "l"
+            continue
+        for i, g in enumerate(row):
+            out[g.id] = "r" if (i % 2 == 1 or (i == len(row) - 1 and len(row) % 2 == 1)) else "l"
+    return out
+
+
+# --- Đóng/mở cánh trên trình xem (chỉ để hình dung, không vào danh sách cắt) ---
+OPEN_DEG = 90.0  # cánh mở tối đa
+SLIDE_FRAC = 0.6  # ngăn kéo trượt ra theo tỉ lệ chiều sâu khối
+HANDLE_COLOR = (0.30, 0.30, 0.32)
+TRAY_COLOR = (0.84, 0.76, 0.60)
+
+
+def front_motion(kind: str, fx0: float, fy0: float, fx1: float, md: float, hinge: str = "l") -> dict:
+    """Cách mở một mặt trước. Cánh: bản lề (`l`/`r`, xem `hinge_sides`) và trục đứng qua (x, y) ở mép bản lề,
+    mặt ngoài cánh; xoay ra phía trước (Y giảm) tới `angle` độ. Ngăn kéo: trượt ra phía trước `slide` mm."""
+    if kind == "drawer":
+        return {"open": "slide", "slide": round(SLIDE_FRAC * md, 1)}
+    return {"open": "swing", "hinge": hinge, "pivot": [fx0 if hinge == "l" else fx1, fy0], "angle": OPEN_DEG}
+
+
+def front_extras(kind: str, motion: dict, fx0: float, fy0: float, fz0: float, fx1: float, fy1: float, fz1: float,
+                 mkind: str, md: float, t: float) -> list[tuple[str, tuple[float, float, float, float, float, float]]]:
+    """Hộp phụ đi theo mặt trước: tay nắm (để phân biệt từng cánh) và lòng ngăn kéo (thấy khi trượt ra)."""
+    w, h = fx1 - fx0, fz1 - fz0
+    out: list[tuple[str, tuple]] = []
+    if kind == "drawer":
+        hw = min(0.4 * w, 320.0)
+        zc = fz1 - min(60.0, h / 2)
+        xc = (fx0 + fx1) / 2
+        out.append(("handle", (xc - hw / 2, fy0 - 25, zc - 8, xc + hw / 2, fy0, zc + 8)))
+        ins, th = max(t, 12.0) + 10, 12.0
+        tx0, tx1, ty0, ty1 = fx0 + ins, fx1 - ins, fy1, fy1 + max(0.85 * md - (fy1 - fy0), 50.0)
+        tz0, tz1 = fz0 + 20, fz0 + 20 + max(0.6 * h, 40.0)
+        if tx1 - tx0 > 2 * th and tz1 - tz0 > th:
+            out += [("tray", (tx0, ty0, tz0, tx0 + th, ty1, tz1)), ("tray", (tx1 - th, ty0, tz0, tx1, ty1, tz1)),
+                    ("tray", (tx0 + th, ty0, tz0, tx1 - th, ty1, tz0 + th)), ("tray", (tx0 + th, ty1 - th, tz0, tx1 - th, ty1, tz1))]
+        return out
+    ln = min(160.0, 0.3 * h)
+    if h < ln + 160:
+        zc = (fz0 + fz1) / 2
+    elif mkind == "base":
+        zc = fz1 - 80 - ln / 2
+    elif mkind == "wall":
+        zc = fz0 + 80 + ln / 2
+    else:
+        zc = min(max(1000.0, fz0 + 80 + ln / 2), fz1 - 80 - ln / 2)
+    xc = (fx1 - 45) if motion.get("hinge") == "l" else (fx0 + 45)
+    if w < 120:
+        xc = (fx0 + fx1) / 2
+    out.append(("handle", (xc - 8, fy0 - 25, zc - ln / 2, xc + 8, fy0, zc + ln / 2)))
+    return out
+
+
+def _box(x0, y0, z0, x1, y1, z1, color, kind, name, motion=None) -> dict:
+    d = {"b": [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], "z0": z0, "z1": z1, "c": list(color), "k": kind, "n": name}
+    if motion:
+        d["m"] = motion
+    return d
+
+
+def _shift(motion: dict, dx: float, dy: float) -> dict:
+    if "pivot" not in motion:
+        return dict(motion)
+    return {**motion, "pivot": [motion["pivot"][0] + dx, motion["pivot"][1] + dy]}
+
+
+def block_fronts(boxes_: list[dict], scene, gap: float) -> list[dict]:
+    """Chế độ Hình khối (`boxes2`): thêm khe giữa các mặt trước, cách mở (`m`), tay nắm và lòng ngăn kéo."""
+    by_front = {f.id: (m, f) for m in scene.modules for f in m.fronts}
+    sides = {k: v for m in scene.modules for k, v in hinge_sides(m.fronts, m.x, m.x + m.w).items()}
+    out: list[dict] = []
+    for b in boxes_:
+        hit = by_front.get(b["n"]) if str(b.get("k", "")).startswith("front") else None
+        if not hit:
+            out.append(b)
+            continue
+        m, f = hit
+        kind = "drawer" if f.kind == "drawer" else "door"
+        ys = [p[1] for p in b["b"]]
+        fx0, fx1, fz0, fz1 = f.x0 + gap / 2, f.x1 - gap / 2, f.z0 + gap / 2, f.z1 - gap / 2
+        fy0, fy1 = min(ys), max(ys)
+        if fx1 - fx0 <= 20 or fz1 - fz0 <= 20:
+            out.append(b)
+            continue
+        mo = front_motion(kind, fx0, fy0, fx1, m.d, sides.get(f.id, "l"))
+        out.append(_box(fx0, fy0, fz0, fx1, fy1, fz1, b["c"], b["k"], b["n"], mo))
+        for i, (part, (a, bb, cc, dd, e, g)) in enumerate(front_extras(kind, mo, fx0, fy0, fz0, fx1, fy1, fz1, m.kind, m.d, 17.0)):
+            out.append(_box(a, bb, cc, dd, e, g, HANDLE_COLOR if part == "handle" else TRAY_COLOR,
+                            f"front-{part}", f"{b['n']}.{part}{i}", mo))
     return out
 
 
@@ -142,8 +253,17 @@ def boxes(panels: list[Panel], mode: str = "panel") -> list[dict]:
                 else:
                     dz = (pz - cz) * k
             x0, x1, y0, y1 = p.x0 + dx, p.x1 + dx, p.y0 + dy, p.y1 + dy
-            out.append({"b": [[x0, y0], [x1, y0], [x1, y1], [x0, y1]], "z0": p.z0 + dz, "z1": p.z1 + dz,
-                        "c": list(COLORS.get(p.part, (0.8, 0.8, 0.8))), "k": "panel-" + p.part, "n": p.id})
+            mo = None
+            base_mo = None
+            if p.part in ("door", "drawer") and "md" in p.meta:
+                base_mo = front_motion(p.part, p.x0, p.y0, p.x1, p.meta["md"], p.meta.get("hinge", "l"))
+                mo = _shift(base_mo, dx, dy)
+            out.append(_box(x0, y0, p.z0 + dz, x1, y1, p.z1 + dz, COLORS.get(p.part, (0.8, 0.8, 0.8)), "panel-" + p.part, p.id, mo))
+            if mo:
+                for i, (part, (a, bb, cc, dd, e, g)) in enumerate(front_extras(
+                        p.part, base_mo, p.x0, p.y0, p.z0, p.x1, p.y1, p.z1, p.meta.get("mkind", ""), p.meta["md"], p.meta.get("t", 17.0))):
+                    out.append(_box(a + dx, bb + dy, cc + dz, dd + dx, e + dy, g + dz, HANDLE_COLOR if part == "handle" else TRAY_COLOR,
+                                    "panel-" + part, f"{p.id}.{part}{i}", mo))
     return out
 
 

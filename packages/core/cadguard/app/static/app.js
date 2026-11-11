@@ -1358,7 +1358,7 @@
     S.v3d.set(r.boxes);
   }
   // Khung xem: kéo mép dưới để đổi chiều cao (nhớ theo máy), góc nhìn nhanh, toàn màn hình.
-  function stageTools(stage) {
+  function stageTools(stage, fronts) {
     let h = null;
     try { h = localStorage.getItem("cg.stageH"); } catch (e) { h = null; }
     if (h && +h >= 260) stage.style.setProperty("--stage-h", h + "px");
@@ -1375,7 +1375,37 @@
       btn("⛶", "Toàn màn hình (Esc để thoát)", () => {
         if (document.fullscreenElement) document.exitFullscreen();
         else if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
-      }));
+      }),
+      fronts ? openTools() : null);
+  }
+  // Đóng/mở cánh: cánh xoay quanh bản lề, ngăn kéo trượt ra (server gửi `m` cho từng hộp). Nhớ độ mở khi dựng lại.
+  function openTools() {
+    const cur = () => (S.open3d || 0);
+    const label = () => (cur() > 0.5 ? "Đóng cánh" : "Mở cánh");
+    const rng = el("input", {type: "range", min: "0", max: "100", step: "1", value: String(Math.round(cur() * 100)),
+      "aria-label": "Độ mở cánh và ngăn kéo (%)", title: "Kéo để mở cánh/ngăn kéo từng phần"});
+    const tb = el("button", {class: "btn-s btn-sm", type: "button", title: "Mở/đóng tất cả cánh và ngăn kéo để thấy từng cánh và bên trong"}, label());
+    const sync = () => { tb.textContent = label(); tb.setAttribute("aria-pressed", cur() > 0.5 ? "true" : "false"); rng.value = String(Math.round(cur() * 100)); };
+    const onStep = (t) => { S.open3d = t; sync(); };
+    tb.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (S.v3d && S.v3d.open) S.v3d.open(cur() > 0.5 ? 0 : 1, true, onStep);
+    });
+    rng.addEventListener("input", (e) => {
+      e.stopPropagation();
+      if (S.v3d && S.v3d.open) S.v3d.open(+rng.value / 100, false, onStep);
+    });
+    for (const ev of ["pointerdown", "pointermove"]) rng.addEventListener(ev, (e) => e.stopPropagation());
+    sync();
+    return [tb, rng];
+  }
+  // Toạ độ XY của một đỉnh khi mặt trước mở t (0..1): xoay quanh trục bản lề đứng, hoặc trượt ra phía trước (Y giảm).
+  function moveXY(m, t, x, y) {
+    if (!m || !t) return [x, y];
+    if (m.open === "slide") return [x, y - t * (m.slide || 0)];
+    const a = (m.hinge === "r" ? 1 : -1) * t * (m.angle || 90) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    const dx = x - m.pivot[0], dy = y - m.pivot[1];
+    return [m.pivot[0] + dx * c - dy * s, m.pivot[1] + dx * s + dy * c];
   }
   async function showBench() {
     const bz = busy("Đang chấm điểm dựng 3D…", "Dựng lại từng hạng mục có đáp án theo từng cách đọc.");
@@ -1514,7 +1544,7 @@
     const host3 = el("div", {});
     const host2 = el("div", {});
     const cv = el("canvas", {"aria-label": "Mô hình 3D dựng từ bản vẽ, kéo chuột để xoay, cuộn để phóng to", role: "img"});
-    host3.append(cv, el("span", {class: "cap", text: "3D · kéo trái: xoay · kéo phải: dời · cuộn: phóng"}), stageTools(stage));
+    host3.append(cv, el("span", {class: "cap", text: "3D · kéo trái: xoay · kéo phải: dời · cuộn: phóng"}), stageTools(stage, r.counts.fronts > 0));
     if (mode !== "2d") stage.append(host3);
     if (mode !== "3d") stage.append(host2);
     const viewSel = el("select", {"aria-label": "Hình 2D để đối chiếu"},
@@ -1835,13 +1865,15 @@
     const U = n => gl.getUniformLocation(prog, n), aP = gl.getAttribLocation(prog, "p"), aC = gl.getAttribLocation(prog, "c");
     const bufP = gl.createBuffer(), bufC = gl.createBuffer(), bufE = gl.createBuffer();
     const ext = gl.getExtension("OES_element_index_uint");
-    let BOXES = [], yaw = 0.8, pitch = 0.6, zoom = 1, pan = [0, 0], drag = null, alive = true, nOpaque = 0, nAll = 0, ctr = [0, 0, 0], rad = 1;
+    let BOXES = [], yaw = 0.8, pitch = 0.6, zoom = 1, pan = [0, 0], drag = null, alive = true, nOpaque = 0, nAll = 0, nLines = 0, ctr = [0, 0, 0], rad = 1;
+    let P0 = null, Pcur = null, MOV = [], openT = S.open3d || 0, anim = 0;
     const light = (n, c, a) => {
       const l = 0.5 + 0.5 * Math.max(0, n[0] * -0.35 + n[1] * -0.45 + n[2] * 0.82);
       return [c[0] * l, c[1] * l, c[2] * l, a];
     };
     function build() {
-      const P = [], C = [], Eo = [], Et = [];
+      const P = [], C = [], Eo = [], Et = [], El = [];
+      MOV = [];
       const a = [1e18, 1e18, 1e18], bb = [-1e18, -1e18, -1e18];
       for (const o of BOXES) for (const p of o.b) for (const z of [o.z0, o.z1]) { const v = [p[0], p[1], z]; for (let i = 0; i < 3; i++) { a[i] = Math.min(a[i], v[i]); bb[i] = Math.max(bb[i], v[i]); } }
       ctr = [(a[0] + bb[0]) / 2, (a[1] + bb[1]) / 2, (a[2] + bb[2]) / 2];
@@ -1852,6 +1884,7 @@
         for (const t of tris) E.push(s0 + t);
       };
       for (const o of BOXES) {
+        const v0 = P.length / 3;
         const n = o.b.length, alpha = (o.k === "wall" || o.k === "ceiling") ? 0.35 : 1;
         const col = [o.c[0], o.c[1], o.c[2], alpha], E = alpha < 1 ? Et : Eo;
         const tri = earcut2(o.b);
@@ -1864,15 +1897,45 @@
           const p = o.b[i], q = o.b[(i + 1) % n], e = [q[0] - p[0], q[1] - p[1]], l = Math.hypot(e[0], e[1]) || 1;
           face([[p[0], p[1], o.z0], [q[0], q[1], o.z0], [q[0], q[1], o.z1], [p[0], p[1], o.z1]], [sg * e[1] / l, -sg * e[0] / l, 0], col, [0, 1, 2, 0, 2, 3], E);
         }
+        // viền tối (đường ráp) cho đồ nội thất: thấy rõ từng cánh, khe giữa hai cánh, mép tấm
+        if (alpha === 1 && o.k !== "floor") {
+          const s0 = P.length / 3, dk = [o.c[0] * 0.3, o.c[1] * 0.3, o.c[2] * 0.3, 1];
+          for (const z of [o.z0, o.z1]) for (const p of o.b) { P.push(p[0], p[1], z); C.push(dk[0], dk[1], dk[2], dk[3]); }
+          for (let i = 0; i < n; i++) { const j = (i + 1) % n; El.push(s0 + i, s0 + j, s0 + n + i, s0 + n + j, s0 + i, s0 + n + i); }
+        }
+        if (o.m) MOV.push([v0, P.length / 3, o.m]);
       }
-      nOpaque = Eo.length; nAll = Eo.length + Et.length;
-      gl.bindBuffer(gl.ARRAY_BUFFER, bufP); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(P), gl.STATIC_DRAW);
+      nOpaque = Eo.length; nAll = Eo.length + Et.length; nLines = El.length;
+      P0 = new Float32Array(P); Pcur = new Float32Array(P);
+      gl.bindBuffer(gl.ARRAY_BUFFER, bufP); gl.bufferData(gl.ARRAY_BUFFER, Pcur, gl.DYNAMIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, bufC); gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(C), gl.STATIC_DRAW);
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufE);
-      const all = Eo.concat(Et);
+      const all = Eo.concat(Et, El);
       gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, ext ? new Uint32Array(all) : new Uint16Array(all), gl.STATIC_DRAW);
     }
     const itype = ext ? gl.UNSIGNED_INT : gl.UNSIGNED_SHORT, isize = ext ? 4 : 2;
+    function pose() {  // đặt cánh/ngăn kéo theo độ mở hiện tại (chỉ sửa đỉnh của hộp có `m`)
+      if (!MOV.length || !Pcur) return;
+      for (const [a, z, m] of MOV) for (let i = a; i < z; i++) {
+        const q = moveXY(m, openT, P0[3 * i], P0[3 * i + 1]);
+        Pcur[3 * i] = q[0]; Pcur[3 * i + 1] = q[1];
+      }
+      gl.bindBuffer(gl.ARRAY_BUFFER, bufP); gl.bufferSubData(gl.ARRAY_BUFFER, 0, Pcur);
+    }
+    function open(target, animate, onStep) {
+      target = Math.max(0, Math.min(1, +target || 0));
+      if (anim) { cancelAnimationFrame(anim); anim = 0; }
+      if (!animate) { openT = target; pose(); draw(); if (onStep) onStep(openT); return; }
+      const from = openT, t0 = performance.now(), dur = 600;
+      const step = (now) => {
+        if (!alive) return;
+        const u = Math.min(1, (now - t0) / dur), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+        openT = from + (target - from) * e; pose(); draw();
+        if (onStep) onStep(openT);
+        anim = u < 1 ? requestAnimationFrame(step) : 0;
+      };
+      anim = requestAnimationFrame(step);
+    }
     function fit() {
       const w = Math.max(1, Math.round(cv.clientWidth * devicePixelRatio)), h = Math.max(1, Math.round(cv.clientHeight * devicePixelRatio));
       if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
@@ -1893,7 +1956,10 @@
       gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, bufE);
       gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL);
       gl.disable(gl.BLEND); gl.depthMask(true);
+      gl.enable(gl.POLYGON_OFFSET_FILL); gl.polygonOffset(1, 1);  // mặt lùi nhẹ để viền không bị chìm
       gl.drawElements(gl.TRIANGLES, nOpaque, itype, 0);
+      gl.disable(gl.POLYGON_OFFSET_FILL);
+      if (nLines) gl.drawElements(gl.LINES, nLines, itype, nAll * isize);
       if (nAll > nOpaque) {  // tường/trần trong suốt vẽ sau, không ghi độ sâu
         gl.enable(gl.BLEND); gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); gl.depthMask(false);
         gl.drawElements(gl.TRIANGLES, nAll - nOpaque, itype, nOpaque * isize);
@@ -1912,14 +1978,14 @@
     cv.addEventListener("pointerup", () => { drag = null; });
     cv.addEventListener("wheel", e => { e.preventDefault(); zoom *= e.deltaY < 0 ? 1.1 : 0.9; draw(); }, {passive: false});
     const ro = new ResizeObserver(fit); ro.observe(cv);
-    return {set(bx) { BOXES = bx; build(); fit(); }, redraw: draw, gl: true,
+    return {set(bx) { BOXES = bx; build(); pose(); fit(); }, redraw: draw, gl: true, open,
       zoom(f) { if (f === 0) { zoom = 1; pan = [0, 0]; } else zoom *= f; draw(); },
       view(y, p) { yaw = y; pitch = p; draw(); },
-      stop() { alive = false; ro.disconnect(); }};
+      stop() { alive = false; if (anim) cancelAnimationFrame(anim); ro.disconnect(); }};
   }
   function makeViewer2d(cv) {
     const cx = cv.getContext("2d");
-    let BOXES = [], yaw = 0.8, pitch = 0.6, zoom = 1, drag = null, alive = true;
+    let BOXES = [], yaw = 0.8, pitch = 0.6, zoom = 1, drag = null, alive = true, openT = S.open3d || 0, anim = 0;
     function fit() { cv.width = Math.max(1, cv.clientWidth * devicePixelRatio); cv.height = Math.max(1, cv.clientHeight * devicePixelRatio); draw(); }
     function bounds() {
       const a = [1e18, 1e18, 1e18], bb = [-1e18, -1e18, -1e18];
@@ -1936,10 +2002,11 @@
       const pr = (p) => { const x = p[0] - c[0], y = p[1] - c[1], z = p[2] - c[2], x1 = x * cy - y * sy, y1 = x * sy + y * cy; return [cv.width / 2 + x1 * k, cv.height / 2 - (z * cp + y1 * sp) * k, y1 * cp - z * sp]; };
       const faces = [];
       for (const o of BOXES) {
-        const n = o.b.length, top = o.b.map((p) => [p[0], p[1], o.z1]);
+        const ob = o.m ? o.b.map(p => moveXY(o.m, openT, p[0], p[1])) : o.b;
+        const n = ob.length, top = ob.map((p) => [p[0], p[1], o.z1]);
         faces.push({v: top, n: [0, 0, 1], c: o.c, k: o.k});
         for (let i = 0; i < n; i++) {
-          const p = o.b[i], q = o.b[(i + 1) % n], e = [q[0] - p[0], q[1] - p[1]], l = Math.hypot(e[0], e[1]) || 1;
+          const p = ob[i], q = ob[(i + 1) % n], e = [q[0] - p[0], q[1] - p[1]], l = Math.hypot(e[0], e[1]) || 1;
           faces.push({v: [[p[0], p[1], o.z0], [q[0], q[1], o.z0], [q[0], q[1], o.z1], [p[0], p[1], o.z1]], n: [e[1] / l, -e[0] / l, 0], c: o.c, k: o.k});
         }
       }
@@ -1957,7 +2024,7 @@
         cx.globalAlpha = ((f.k === "wall" && f.n[2] === 0) || f.k === "ceiling") ? 0.22 : 1;
         cx.fillStyle = "rgb(" + f.c.map((v) => Math.round(v * 255 * Math.min(1, f.l))).join(",") + ")";
         cx.fill();
-        cx.strokeStyle = cx.fillStyle; cx.lineWidth = 0.7; cx.stroke();
+        cx.strokeStyle = f.k === "wall" || f.k === "ceiling" ? cx.fillStyle : "rgba(40,36,30,0.85)"; cx.lineWidth = 0.9; cx.stroke();
       });
       cx.globalAlpha = 1;
     }
@@ -1969,8 +2036,22 @@
     cv.addEventListener("pointerup", up);
     cv.addEventListener("wheel", (e) => { e.preventDefault(); zoom *= e.deltaY < 0 ? 1.1 : 0.9; draw(); }, {passive: false});
     window.addEventListener("resize", fit);
-    return {set(bx) { BOXES = bx; fit(); }, redraw: draw, zoom(f) { zoom = f === 0 ? 1 : zoom * f; draw(); },
-      stop() { alive = false; window.removeEventListener("resize", fit); }};
+    function open(target, animate, onStep) {
+      target = Math.max(0, Math.min(1, +target || 0));
+      if (anim) { cancelAnimationFrame(anim); anim = 0; }
+      if (!animate) { openT = target; draw(); if (onStep) onStep(openT); return; }
+      const from = openT, t0 = performance.now();
+      const step = (now) => {
+        if (!alive) return;
+        const u = Math.min(1, (now - t0) / 600);
+        openT = from + (target - from) * (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2); draw();
+        if (onStep) onStep(openT);
+        anim = u < 1 ? requestAnimationFrame(step) : 0;
+      };
+      anim = requestAnimationFrame(step);
+    }
+    return {set(bx) { BOXES = bx; fit(); }, redraw: draw, open, zoom(f) { zoom = f === 0 ? 1 : zoom * f; draw(); },
+      stop() { alive = false; if (anim) cancelAnimationFrame(anim); window.removeEventListener("resize", fit); }};
   }
 
   // ---------- tab phải ----------
