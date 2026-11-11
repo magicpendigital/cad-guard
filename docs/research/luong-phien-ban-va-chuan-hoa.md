@@ -75,3 +75,21 @@ TRÌNH BÀY của một công ty/người vẽ một lần, người dùng duy�
 
 Bước sau (2): AI chú giải từng hạng mục từ ảnh tờ + nét (chia khối theo hình bỏ cánh, liên kết nhiều hình), bộ kiểm hình
 học, màn duyệt; (3) bộ đáp án đo độ chính xác; (4) xuất bản vẽ đã chuẩn hoá ra tệp mới.
+
+## 7. Bước 2 đã làm: chú giải hạng mục — chia khối tại vách thật (11/11/2026)
+
+- `scene/annotate.py`: vách đứng = hai nét song song cách 8–60 mm (hoặc hình chữ nhật mảnh) cao ≥ 60 % khối; đường ráp
+  hai cánh (một nét đơn) không phải vách. Hình đi kèm (cụm bản vẽ khác cùng khung tiêu đề, hoặc mặt đứng khác của hạng mục,
+  bề ngang ±15 %) căn X bằng bỏ phiếu vị trí vách. Đường chia bám đầu kích thước ngang nếu có.
+- Bộ kiểm hình học `check_split`: có vách thật ở vị trí đó (nét dẫn phải là nét của vách), không cắt qua cánh/ngăn kéo,
+  hai phần ≥ 150 mm, không chia tấm bù/tấm ốp. Đợt hai bên vách cùng cao độ = vách chia trong cùng tủ: không đề xuất.
+- Đề xuất bằng code tự hiện trên thanh cảnh báo màn 3D + đường cam đứt trên hình 2D; "Nhờ AI đọc bản vẽ" gửi các ứng
+  viên cho AI phân biệt ranh giới tủ / vách chia trong tủ (AI chỉ chọn trong ứng viên, qua cùng bộ kiểm; AI đồng ý với code
+  -> nhãn "Code + AI đồng ý"). Xác nhận -> khoá `split:<hạng mục>`; bộ dựng cắt khung khối, chia nét/cánh theo tâm,
+  đếm lại đợt; "Bỏ chia khối" để quay lại.
+- Đo: `test 2.dxf` (Demo) tủ áo 1800 -> 1200 (2 cánh) + 600 (cột ngăn kéo), rộng lấy từ kích thước ghi. Bộ 40 tờ: kệ TV
+  (khối ngăn kéo 3690 -> 3 đề xuất theo vách khoang hở; kệ mở có vách giữa không bị chia), bếp ướt 2, lò sưởi 2 đề xuất —
+  đều chỉ là đề xuất chờ người duyệt.
+
+Chưa làm: AI xem ẢNH tờ bản vẽ (hiện AI đọc nét/chữ/kích thước có cấu trúc); bộ đáp án đo độ chính xác (bước 3);
+xuất bản vẽ đã chuẩn hoá (bước 4).

@@ -367,6 +367,12 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
                 form = "filler"
             blocks.append((box, [h for _b, h, _r in body if h], fr, form, len(seg.board_levels(leaf))))
     blocks.sort(key=lambda t: (t[0][0], t[0][1]))
+    from .annotate import accepted, apply_splits
+
+    cuts = accepted(supp, group)  # chia khối người dùng đã Đồng ý (chú giải hạng mục)
+    if cuts:
+        blocks = sorted(apply_splits(d, blocks, cuts), key=lambda t: (t[0][0], t[0][1]))
+        sc.notes.append(f"Đã chia khối theo {len(cuts)} vách bạn đã Đồng ý (chú giải hạng mục).")
     for i, (box, hs, fr, form, levels) in enumerate(blocks, 1):
         _add_module(sc, f"M{i}", box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form, pt, levels)
 

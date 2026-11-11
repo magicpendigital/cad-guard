@@ -45,14 +45,16 @@ def start(app, rel: Any, item: Any, use_ai: Any, translate_backend: Any, experim
 
     def run() -> None:
         try:
-            raw = code_suggestions(d, sc.item, sc)
+            from ..scene.annotate import accepted, split_proposals
+
+            raw = code_suggestions(d, sc.item, sc) + split_proposals(d, sc, accepted(_supp, sc.item))
             if ai and backend is not None:
                 ctx = prompt_for(d, sc.item, sc)
                 system = ctx.pop("system")
                 reply = backend.complete(system, [{"role": "user", "content": json.dumps(ctx, ensure_ascii=False)}])
                 from ..scene.proposals import _parse
 
-                raw += [{**p, "origin": "llm"} for p in _parse(reply) if isinstance(p, dict)]
+                raw = _merge(raw, [{**p, "origin": "llm"} for p in _parse(reply) if isinstance(p, dict)], sc.item)
             r = scene_api.add_proposals(model, root, sc.item, raw)
             job["accepted"] = len(r["accepted"])
             job["rejected"] = [{"key": x["key"], "why": x.get("rejected")} for x in r["rejected"]][:20]
@@ -67,6 +69,25 @@ def start(app, rel: Any, item: Any, use_ai: Any, translate_backend: Any, experim
     else:
         run()
     return dict(job)
+
+
+def _merge(code: list[dict], llm: list[dict], item: str) -> list[dict]:
+    """AI đồng ý với đường chia code đã tìm (lệch ≤ 25 mm) -> một đề xuất nguồn "code+llm" kèm lý do của AI."""
+    out = list(code)
+    for p in llm:
+        if p.get("key") == f"split:{item}":
+            try:
+                x = float(str(p.get("value")))
+            except (TypeError, ValueError):
+                out.append(p)
+                continue
+            same = next((c for c in out if c.get("key") == p["key"] and abs(float(c["value"]) - x) <= 25.0), None)
+            if same is not None:
+                same["origin"] = "code+llm"
+                same["reason"] = (same.get("reason", "") + " AI: " + str(p.get("reason", ""))[:200]).strip()
+                continue
+        out.append(p)
+    return out
 
 
 def status(jid: Any) -> dict:

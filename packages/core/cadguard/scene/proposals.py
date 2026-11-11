@@ -23,12 +23,13 @@ LABELS = ("tủ bếp dưới", "tủ bếp trên", "tủ cao", "tủ áo", "k�
 MAX_PROPOSALS = 50
 
 SYSTEM = (
-    "Bạn hỗ trợ dựng 3D từ bản vẽ nội thất 2D (mỗi người kỹ thuật trình bày một kiểu). Được đề xuất ba loại: "
+    "Bạn hỗ trợ dựng 3D từ bản vẽ nội thất 2D (mỗi người kỹ thuật trình bày một kiểu). Được đề xuất bốn loại: "
     '(1) ghép mặt đứng với mặt bằng cùng hạng mục: {"key": "link:<mã mặt đứng>", "value": "<mã mặt bằng>"}; '
     '(2) gán nhãn khối: {"key": "label:<mã khối>", "value": "<một nhãn trong danh sách>"}; '
     '(3) điền số cho ô phần thiếu (khoá trong "gaps[].fields"): {"key": "<khoá ô>", "value": "<số mm>", "evidence": '
     '["<handle kích thước hoặc chữ trên bản vẽ có đúng số này>"]}. Số PHẢI đọc từ kích thước/chữ có sẵn trong "evidence" '
     "(vd. chiều sâu tủ ghi ở mặt cắt, ghi chú 'sâu 600'); không có bằng chứng thì không đề xuất. "
+    '(4) chia khối tại vách: chỉ chọn trong "split.split_candidates", làm theo "split.task". '
     'Trả đúng JSON {"proposals": [{"key", "value", "evidence", "reason"}]}, lý do ngắn bằng tiếng Việt nói rõ số lấy ở hình nào.')
 NUM_RE = re.compile(r"(?<![\d.])(\d{2,5}(?:[.,]\d+)?)(?![\d])")
 
@@ -89,7 +90,15 @@ def prompt_for(d: Drawing2D, group: str, scene) -> dict:
             "modules": [{"id": m.id, "kind": m.kind, "w": m.w, "d": m.d, "h": m.h, "z0": m.z0, "fronts": len(m.fronts),
                          "src_d": m.src["d"].kind if "d" in m.src else "missing"} for m in scene.modules],
             "gaps": [{"id": g.id, "kind": g.kind, "message": g.message, "fields": [f.key for f in g.fields]} for g in scene.gaps],
-            "evidence": [{"handle": h, **x} for h, x in list(pool.items())[:400]]}
+            "evidence": [{"handle": h, **x} for h, x in list(pool.items())[:400]],
+            "split": _split_ctx(d, scene)}
+
+
+def _split_ctx(d: Drawing2D, scene) -> dict:
+    from .annotate import llm_context, split_proposals
+
+    cands = split_proposals(d, scene)
+    return llm_context(d, scene, cands) if cands else {}
 
 
 def _parse(raw) -> list:
@@ -130,6 +139,23 @@ def validate(raw, d: Drawing2D, group: str, scene) -> tuple[list[dict], list[dic
                 why = "không có khối này"
             elif value not in LABELS:
                 why = "nhãn ngoài danh sách"
+        elif key == f"split:{group}":
+            from .annotate import check_split
+
+            try:
+                num = float(str(value).replace(",", "."))
+            except ValueError:
+                num = None
+            ev = [str(h).upper() for h in (p.get("evidence") or []) if isinstance(h, (str, int))][:10]
+            if num is None:
+                why = "toạ độ chia không phải số"
+            else:
+                good, msg = check_split(d, scene, num, ev)
+                if not good:
+                    why = msg
+                else:
+                    value = f"{num:.1f}"
+                    p = {**p, "evidence": ev}
         elif key in fields and fields[key].kind != "choice":
             pool = pool if pool is not None else _evidence_pool(d, group)
             try:

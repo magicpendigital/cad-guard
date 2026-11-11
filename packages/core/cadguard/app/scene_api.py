@@ -119,13 +119,26 @@ def view(model, root: Path, item: Any = None) -> dict:
                   "fields": [{**f.model_dump(), "labels": {o: _view_vi(d, o) for o in (f.options or []) if d.view(o)}}
                              for f in g.fields],
                   "explain": explain_gap(g, d, sc)} for g in sc.gaps],
-        "proposals": pending,
+        "proposals": pending + _auto_splits(d, sc, supp, pending),
+        "splits": __import__("cadguard.scene.annotate", fromlist=["accepted"]).accepted(supp, sc.item),
         "counts": {"modules": len(sc.modules), "fronts": sum(len(m.fronts) for m in sc.modules), "walls": len(sc.walls),
                    "gaps": len(sc.gaps)},
         "notes": sc.notes[:10],
         "provenance": provenance(sc, d, supp),
         **production(sc, root, model.file_hash),
     }
+
+
+def _auto_splits(d, sc, supp, pending) -> list[dict]:
+    """Đề xuất chia khối bằng code luôn hiện (không cần bấm), trừ chỗ đã có đề xuất lưu hoặc đã chia."""
+    from ..scene.annotate import accepted, split_proposals
+
+    try:
+        props = split_proposals(d, sc, accepted(supp, sc.item))
+    except Exception:  # noqa: BLE001 — gợi ý phụ, không làm hỏng màn 3D
+        return []
+    have = {p.get("value") for p in pending if p.get("key") == f"split:{sc.item}"}
+    return [p for p in props if p["value"] not in have]
 
 
 def production(sc, root: Path, file_hash: str) -> dict:
@@ -267,6 +280,8 @@ def _allowed(sc: Scene2, d, key: str):
         return "label"
     if key == f"main:{sc.item}":
         return "main"
+    if key == f"split:{sc.item}":
+        return "split"
     parts = key.split(":")
     if len(parts) == 3 and parts[0] == "module" and parts[2] in ("w", "d", "h", "z0") and parts[1] in {m.id for m in sc.modules}:
         return "dim"
@@ -283,6 +298,25 @@ def set_value(model, root: Path, item: Any, key: Any, value: Any) -> dict:
     if f is None:
         raise SceneApiError("Khoá không thuộc phần thiếu của cảnh hiện tại.")
     sval = str(value).strip()
+    if f == "split":  # chia khối tại vách (chú giải hạng mục): gộp vào danh sách đã chia; reset = bỏ hết
+        from ..scene.annotate import accepted, check_split
+
+        vals = read_supplement(root, model.file_hash)
+        have = accepted(supp, sc.item)
+        if sval == "reset":
+            vals.pop(key, None)
+        else:
+            try:
+                num = float(sval.replace(",", "."))
+            except ValueError:
+                raise SceneApiError("Toạ độ chia phải là số.") from None
+            ok, why = check_split(d, sc, num)
+            if not ok:
+                raise SceneApiError("Không chia được: " + why)
+            vals[key] = ";".join(f"{x:.1f}" for x in sorted(have + [num]))
+        sp, _ = _paths(root, model.file_hash)
+        _write(sp, {"schema": SUPPLEMENT_SCHEMA, "source_hash": model.file_hash, "origin": "user", "values": vals})
+        return view(model, root, sc.item)
     if sval == "reset" and f in ("dim", "main"):  # bỏ giá trị người dùng đã sửa: quay về số đo từ bản vẽ
         sp, _ = _paths(root, model.file_hash)
         vals = {k: v for k, v in read_supplement(root, model.file_hash).items() if k not in (key, scoped_key(key, sc.item))}

@@ -734,3 +734,5 @@ body.acad-panel .tabs{overflow-x:auto}
 .notice.warn{border-left-color:#f59e0b}
 .notice.info{border-left-color:#2563eb}
 .notice .tbl3d{font-size:12px;margin-top:6px}
+.v3d-stage svg .cut-ok{stroke:#15803d}
+.v3d-stage svg .cut-prop{stroke:#f59e0b;stroke-dasharray:40 25}

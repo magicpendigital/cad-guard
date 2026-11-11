@@ -1439,6 +1439,18 @@
       const tl = svgEl("title", {}); tl.textContent = `${m.id} — bấm để chọn`; rc.append(tl);
       root.append(rc);
     }
+    // đường chia khối: đã Đồng ý (liền, xanh) và đang đề xuất (đứt, cam) — chỉ trên mặt đứng chính
+    if (!isPlan) {
+      const onMain = r.modules.some(m => (pv.modules[m.id] || {}).elevation === viewId);
+      const line = (x, cls, tip) => {
+        const ln = svgEl("line", {x1: x, y1: y0, x2: x, y2: y1, class: cls, "stroke-width": sw * 3});
+        const t = svgEl("title", {}); t.textContent = tip; ln.append(t); root.append(ln);
+      };
+      if (onMain) {
+        for (const x of r.splits || []) line(x, "cut-ok", "Đã chia khối tại vách này");
+        for (const p of r.proposals) if (p.key === `split:${r.item}`) line(+p.value, "cut-prop", "Đề xuất chia khối: " + (p.reason || ""));
+      }
+    }
     svg.append(root);
     fill(host, svg, el("span", {class: "cap", text: g.label + (g.truncated ? " (đã cắt bớt)" : "")}));
   }
@@ -1533,15 +1545,19 @@
       if (k === "room:ceiling") return "Cao sàn – trần";
       if (k.startsWith("link:")) return "Ghép mặt đứng với mặt bằng";
       if (k.startsWith("label:")) return `Nhãn khối ${k.slice(6)}`;
+      if (k.startsWith("split:")) return "Chia khối tại vách";
       return k;
     };
     const props = r.proposals.map(p => el("div", {class: "gap3d prop3d"},
-      el("span", {class: "src-b " + (p.origin === "code" ? "src-geometry" : "src-user"), text: p.origin === "code" ? "Code đọc" : "AI đọc"}), " ",
-      b(keyVi(p.key)), ` = ${p.value}${/^module:|^room:/.test(p.key) ? " mm" : ""}`,
+      el("span", {class: "src-b " + (p.origin === "code" ? "src-geometry" : "src-user"),
+        text: {code: "Code đọc", llm: "AI đọc", "code+llm": "Code + AI đồng ý"}[p.origin] || "AI đọc"}), " ",
+      b(keyVi(p.key)), p.key.startsWith("split:") ? "" : ` = ${p.value}${/^module:|^room:/.test(p.key) ? " mm" : ""}`,
       p.reason ? el("div", {class: "g-why", text: p.reason}) : null,
       p.evidence && p.evidence.length ? el("small", {text: `Bằng chứng trên bản vẽ: ${p.evidence.length} kích thước/chữ (đã kiểm có đúng số này)`}) : null, " ",
       el("button", {type: "button", class: "btn", text: "Xác nhận", onclick: () => save(p.key, p.value)})));
     const warnMods = r.modules.filter(m => ["w", "d", "h", "z0"].some(k => m[k].kind === "default" || m[k].kind === "missing"));
+    const splitBar = (r.splits || []).length ? el("div", {class: "f-d"}, `Đã chia khối tại ${r.splits.length} vách bạn Đồng ý. `,
+      el("button", {class: "link sm", type: "button", onclick: () => save(`split:${r.item}`, "reset")}, "Bỏ chia khối")) : null;
     const banner = (r.gaps.length || r.proposals.length) ? el("div", {class: "warn3d", role: "alert"},
       el("div", {class: "w-head"}, b(`⚠ ${r.gaps.length} chỗ CAD Guard chưa đọc được từ bản vẽ`),
         warnMods.length ? ` · ${warnMods.length} khối đang dùng số tạm (tô màu cam trên 3D)` : "",
@@ -1568,7 +1584,7 @@
       el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), cutlistBox(r),
       r.notes.map(n => el("small", {text: n})));
     S.warn3d = new Set(warnMods.map(m => m.id));
-    fill(sheet, el("div", {class: "v3d"}, srcBar, banner, stage, bottom));
+    fill(sheet, el("div", {class: "v3d"}, srcBar, splitBar, banner, stage, bottom));
     if (S.v3d) { S.v3d.stop(); S.v3d = null; }
     if (mode !== "2d") {
       S.v3d = makeViewer(cv);
