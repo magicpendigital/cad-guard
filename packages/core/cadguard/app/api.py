@@ -948,6 +948,8 @@ def scene_action(app: AppData, rel: Any, action: str, body: dict) -> dict:
     try:
         if action == "set":
             return {"file": app.rel(path), **scene_api.set_value(model, root, body.get("item"), body.get("key"), body.get("value"))}
+        if action == "decide":
+            return {"file": app.rel(path), **scene_api.decide(model, root, body.get("item"), body.get("decision"), body.get("option"))}
         if action == "propose":
             return scene_api.add_proposals(model, root, body.get("item"), body.get("proposals"))
         if action == "prompt":

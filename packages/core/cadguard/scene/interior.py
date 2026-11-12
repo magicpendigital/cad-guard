@@ -36,7 +36,9 @@ def interior_score(d: Drawing2D, v: View) -> int:
 
 def classify(d: Drawing2D, views: list[View]) -> tuple[View, View, str] | None:
     """Hai+ mặt đứng cùng tiêu đề và cùng cờ (người vẽ chép tiêu đề): hình có nhiều ký hiệu mở cánh nhất là hình có
-    cánh, hình ít ký hiệu nhất (và ≤ 1/2) là hình bỏ cánh. Trả (hình có cánh, hình bỏ cánh, lý do) hoặc None."""
+    cánh, hình ít ký hiệu nhất (và ≤ 1/2) là hình bỏ cánh. Trả (hình có cánh, hình bỏ cánh, lý do) hoặc None.
+
+    Từ P4 KHÔNG còn gọi khi dựng: vai trò hình do `hypotheses.resolve` chấm các cách hiểu (ký hiệu cánh là một phần điểm)."""
     if len(views) < 2 or len({(v.title or "").strip().upper() for v in views}) != 1:
         return None
     sc = sorted(((door_symbol_area(d, v), v) for v in views), key=lambda t: -t[0])

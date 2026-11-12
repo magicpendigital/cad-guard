@@ -123,6 +123,8 @@ def view(model, root: Path, item: Any = None) -> dict:
         "counts": {"modules": len(sc.modules), "fronts": sum(len(m.fronts) for m in sc.modules), "walls": len(sc.walls),
                    "gaps": len(sc.gaps)},
         "notes": sc.notes[:24],
+        "decisions": _cards(sc),
+        "decided": sorted(__import__("cadguard.scene.hypotheses", fromlist=["decided"]).decided(supp, sc.item)),
         "provenance": provenance(sc, d, supp),
         **production(sc, root, model.file_hash),
     }
@@ -184,6 +186,47 @@ def _hollow(out: list[dict], sc, c: dict) -> list[dict]:
         else:
             res.append(b)
     return res
+
+
+def _cards(sc) -> list[dict]:
+    """Thẻ L4: quyết định máy đã đổi (auto) hoặc còn phân vân (unsure) — kèm điểm, bằng chứng từng phương án."""
+    from ..scene.hypotheses import cards
+
+    return [{**c, "options": [{k: v for k, v in o.items() if k != "keys"} | {"index": i} for i, o in enumerate(c["options"])]}
+            for c in cards(sc)]
+
+
+def decide(model, root: Path, item: Any, decision: Any, option: Any) -> dict:
+    """Người dùng chọn một phương án của thẻ "máy phân vân" (hoặc sửa lựa chọn máy đã tự đổi): ghi khoá của phương án
+    vào tệp bổ sung + đánh dấu quyết định đã chọn (`decided:<hạng mục>`). `option = -1`: bỏ chọn, để máy tự chọn lại."""
+    from ..scene.hypotheses import decided
+
+    if not isinstance(decision, str) or not isinstance(option, int) or isinstance(option, bool):
+        raise SceneApiError("Thiếu quyết định hoặc phương án.")
+    sc, _d, supp = build(model, root, item if isinstance(item, str) else None)
+    if sc is None:
+        raise SceneApiError("Không có hạng mục.")
+    vals = read_supplement(root, model.file_hash)
+    dkey = f"decided:{sc.item}"
+    done = decided(vals, sc.item)
+    if option == -1:
+        done.discard(decision)
+        if decision in ("role", "board"):
+            vals.pop(f"main:{sc.item}", None)
+            vals.pop(f"interior:{sc.item}", None)
+    else:
+        rep = next((r for r in ((sc._choice or {}).get("decisions") or []) if r["id"] == decision), None)
+        if rep is None or not 0 <= option < len(rep["options"]):
+            raise SceneApiError("Quyết định không còn trong cảnh hiện tại (bản vẽ hoặc lựa chọn đã đổi): tải lại màn 3D.")
+        vals.update(rep["options"][option]["keys"])
+        done.add(decision)
+    if done:
+        vals[dkey] = ";".join(sorted(done))
+    else:
+        vals.pop(dkey, None)
+    sp, _ = _paths(root, model.file_hash)
+    _write(sp, {"schema": SUPPLEMENT_SCHEMA, "source_hash": model.file_hash, "origin": "user", "values": vals})
+    return view(model, root, sc.item)
 
 
 def _auto_splits(d, sc, supp, pending) -> list[dict]:

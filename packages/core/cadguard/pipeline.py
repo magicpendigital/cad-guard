@@ -160,10 +160,18 @@ def run_item(model, root: Path, item: str, *, backend=None, force: bool = False,
     def s_consistency():
         from .scene.consistency import check as consistency_check
 
+        from .scene.hypotheses import cards
+
         r = consistency_check(ctx["sc"])
         n = r["counts"]
-        st = "warn" if n["conflict"] or n["warn"] else "ok"
-        return st, f"điểm {r['score']:.2f}: {n['conflict']} mâu thuẫn, {n['warn']} cần xem", {"score": r["score"], **n}
+        cs = cards(ctx["sc"])  # L4: chỗ máy phân vân giữa các cách hiểu (người chọn trên màn 3D)
+        unsure = sum(1 for c in cs if c["status"] == "unsure")
+        auto = sum(1 for c in cs if c["status"] == "auto")
+        st = "needs_review" if unsure else ("warn" if n["conflict"] or n["warn"] else "ok")
+        msg = f"điểm {r['score']:.2f}: {n['conflict']} mâu thuẫn, {n['warn']} cần xem"
+        if unsure or auto:
+            msg += f"; cách hiểu: {unsure} chỗ máy phân vân, {auto} chỗ máy tự chọn"
+        return st, msg, {"score": r["score"], **n, "unsure": unsure, "auto": auto}
 
     def s_review():
         need = [s["id"] for s in run["steps"] if s["status"] in ("needs_review", "warn", "error")]

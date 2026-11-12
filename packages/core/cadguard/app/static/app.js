@@ -1707,7 +1707,28 @@
         el("div", {class: "g-why", text: "Vì sao: " + x.why}), x.fix ? el("div", {class: "g-fix", text: x.fix}) : null,
         (x.refs || []).length ? el("button", {class: "link sm", type: "button", title: "Chọn các nét làm bằng chứng trong AutoCAD",
           onclick: () => showInAutocad({handles: x.refs, items: []})}, "Tới trong AutoCAD") : null))) : null;
-    fill(sheet, el("div", {class: "v3d"}, srcBar, splitBar, banner, structBox, consBox, stage, bottom));
+    // L4: chỗ mơ hồ máy đã dựng thử nhiều cách hiểu — đã tự đổi (auto) hoặc còn phân vân (unsure); người chọn thì lưu khoá
+    const decide = async (id, option) => {
+      try { render3d2(path, await api("/api/scene/decide", {file: path, item: r.item, decision: id, option}), true); } catch (e) { fail(e, "Chọn cách hiểu"); }
+    };
+    const DV = {auto: ["src-geometry", "Máy đã tự chọn"], unsure: ["src-default", "Máy phân vân"]};
+    const DID = {role: "vai trò hình", board: "nét đôi"};
+    const decs = r.decisions || [];
+    const decBox = decs.length || (r.decided || []).length ? el("details", {class: "struct3d", open: decs.some(c => c.status === "unsure")},
+      el("summary", {}, b(`Cách hiểu bản vẽ · ${decs.filter(c => c.status === "unsure").length} chỗ máy phân vân · ${decs.filter(c => c.status === "auto").length} chỗ máy đã tự chọn`),
+        " (máy dựng thử nhiều cách hiểu, chấm bằng ràng buộc + bằng chứng; bạn chọn thì máy giữ theo bạn)"),
+      decs.map(c => el("div", {class: "gap3d"}, el("span", {class: "src-b " + DV[c.status][0], text: DV[c.status][1]}), " ", b(c.title),
+        c.options.map(o => el("div", {class: o.chosen ? "g-fix" : "g-why"},
+          b(`${o.chosen ? "▶ " : ""}${Math.round(o.score * 100)}/100`), ` ${o.label}`,
+          o.conflicts ? ` · ${o.conflicts} mâu thuẫn kết cấu` : "",
+          " ", el("button", {class: "link sm", type: "button", title: "Dựng theo cách hiểu này và ghi nhớ lựa chọn", onclick: () => decide(c.id, o.index)},
+            o.chosen ? "Giữ cách này" : "Chọn cách này"),
+          (o.refs || []).length ? el("button", {class: "link sm", type: "button", title: "Chọn các nét làm bằng chứng trong AutoCAD",
+            onclick: () => showInAutocad({handles: o.refs, items: []})}, "Tới trong AutoCAD") : null)))),
+      (r.decided || []).length ? el("div", {class: "g-why"}, "Bạn đã chọn: ",
+        r.decided.map(id => el("button", {class: "link sm", type: "button", title: "Bỏ lựa chọn, để máy tự chấm và chọn lại",
+          onclick: () => decide(id, -1)}, `${DID[id] || id} · để máy chọn lại`))) : null) : null;
+    fill(sheet, el("div", {class: "v3d"}, srcBar, splitBar, banner, decBox, structBox, consBox, stage, bottom));
     if (S.v3d) { S.v3d.stop(); S.v3d = null; }
     if (mode !== "2d") {
       S.v3d = makeViewer(cv);

@@ -10,7 +10,8 @@ Ràng buộc (mỗi mục: mã, mức, khối/khoang, vì sao, gợi ý, `refs`)
   - K03 tấm ngang cắt ngang qua vách;
   - K04 tấm ngang xuyên qua ô thiết bị / hộc trong;
   - K05 đồ bên trong nằm ngoài khối;
-  - K06 thanh treo trong khoang thấp (< 800).
+  - K06 thanh treo trong khoang thấp (< 800);
+  - K07 hộc trong cao bất thường (> 600: thường là cả khoang bị đọc nhầm thành hộc).
 - Đối chiếu hình (H):
   - H01 đường ráp hai hàng cánh (hình có cánh) không có tấm ngang phía sau (hình bỏ cánh);
   - H02 số đo khối chưa có nguồn bản vẽ (mặc định).
@@ -27,6 +28,7 @@ W = {"conflict": 0.3, "warn": 0.1, "info": 0.0}
 SEAM_TOL = 60.0  # đường ráp hai hàng cánh cách tấm ngang tối đa
 HANG_MIN = 800.0
 DOOR_MIN = 400.0
+DRAWER_MAX = 600.0  # hộc trong cao hơn mức này: khoang bị đọc nhầm thành hộc
 
 
 def _ov(a0, a1, b0, b1) -> float:
@@ -87,6 +89,12 @@ def _unit_issues(u: Unit) -> list[dict]:
                     out.append(_issue("K06", "warn", u, f"Thanh treo chỉ cách đáy khoang {space:.0f} mm",
                                       f"Khoang treo áo nên cao ≥ {HANG_MIN:.0f} mm dưới thanh treo.",
                                       "Kiểm lại cao độ thanh treo / tấm ngang bên dưới.", q.get("refs", []), n))
+    # K07 — hộc trong cao bất thường
+    for q in inner:
+        if q.get("kind") == "drawer" and q["z1"] - q["z0"] > DRAWER_MAX:
+            out.append(_issue("K07", "conflict", u, f"Hộc trong cao {q['z1'] - q['z0']:.0f} mm",
+                              f"Hộc kéo bên trong hiếm khi cao quá {DRAWER_MAX:.0f} mm: có thể cả khoang bị đọc thành hộc.",
+                              "Kiểm ô có chữ hộc trên hình (thiếu nét chia ô?) hoặc chọn lại hình bỏ cánh.", q.get("refs", [])))
     # H01 — đường ráp giữa hai hàng cánh cần tấm ngang phía sau (khi đã đọc tầng ở hình bỏ cánh)
     if levels and u.interior and u.interior != u.elevation:
         # chỉ cánh bản lề thật (cao ≥ 400): ngăn kéo hẹp xếp chồng có thể bị xếp loại "cánh" nhưng không cần tấm sau đường ráp

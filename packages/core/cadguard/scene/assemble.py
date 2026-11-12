@@ -22,7 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, PrivateAttr
 
 from .build import Field_, Gap
 from .feasibility import common_width_dim, room_height_dim
@@ -119,6 +119,9 @@ class Scene2(BaseModel):
     gaps: list[Gap] = Field(default_factory=list)
     notes: list[str] = Field(default_factory=list)
     scene_hash: str = ""
+    # không lưu, không vào băm: cách hiểu đã dựng (hình chính, nguồn nội thất, chế độ đọc) và báo cáo chọn cách hiểu (L4)
+    _mode: dict = PrivateAttr(default_factory=dict)
+    _choice: dict | None = PrivateAttr(default=None)
 
     model_config = {"populate_by_name": True}
 
@@ -247,7 +250,7 @@ INNER_VI = {"partition": "vách đứng", "shelf": "tấm ngang", "glass": "đ�
 
 
 def _read_interiors(d: Drawing2D, sc, group: str, e: View, oxe: float, floor: float, furn, shelf_src, origin,
-                    e_no_doors: bool = False) -> None:
+                    e_no_doors: bool = False, force_mode: bool | None = None) -> None:
     """Nội thất từng khối: đọc ở hình bỏ cánh (nếu có, cùng mặt bằng) hoặc chính hình có cánh; đường khấu, vòng chú thích."""
     from . import interior as itr
     from . import primitives as prim
@@ -262,6 +265,9 @@ def _read_interiors(d: Drawing2D, sc, group: str, e: View, oxe: float, floor: fl
     # "bỏ cánh" mà gần như không có ký hiệu mở cánh (< 10 % diện tích hình)
     eb = e.box or (0, 0, 0, 0)
     interior_mode = (v is not e) or (e_no_doors and prim.door_symbol_area(d, e) < 0.1 * max((eb[2] - eb[0]) * (eb[3] - eb[1]), 1.0))
+    if force_mode is not None and v is e:  # cách hiểu L4 / người dùng: nét đôi ở hình chính là tấm (True) hay mép cánh (False)
+        interior_mode = force_mode
+    sc._mode.update({"main": e.id, "interior": v.id, "interior_mode": bool(interior_mode)})
     details = None
     sheet_hs = [h for s in d.structure.sheets if s.id == e.sheet_id for h in s.handles if h in d.entities]
     for m in sc.modules:
@@ -427,7 +433,24 @@ def _crop_to_dim(d: Drawing2D, e: View, refs: list[str], sc: Scene2) -> View:
     return replace(e, handles=keep, box=(lo, e.box[1], hi, e.box[3]))
 
 
-def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -> Scene2:
+def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None, hypotheses: bool = True) -> Scene2:
+    """Dựng cảnh một hạng mục. Mặc định qua L4 (`hypotheses.resolve`): sinh vài cách hiểu ở chỗ mơ hồ (vai trò hình, nét
+    đôi là tấm hay mép cánh, chia khối), chấm bằng ràng buộc + bằng chứng, chọn cách tốt nhất hoặc để thẻ "máy phân vân".
+    `hypotheses=False`: dựng đúng một cách hiểu theo khoá bổ sung (`build_once`)."""
+    if not hypotheses:
+        return build_once(d, group, supplement)
+    from .hypotheses import resolve
+
+    return resolve(d, group, supplement or {})
+
+
+NONE_VIEW = "none"  # giá trị khoá `interior:<hạng mục>`: không đọc nội thất ở hình riêng; = mã hình chính: đọc hình chính như hình bỏ cánh
+
+
+def build_once(d: Drawing2D, group: str, supplement: dict | None = None) -> Scene2:
+    """Dựng MỘT cách hiểu. Khoá `main:<hạng mục>` = hình dựng khối/cánh; `interior:<hạng mục>` = hình đọc nội thất
+    (mã hình khác), `none` (không có hình bỏ cánh: nét đôi ở hình chính là mép cánh) hoặc chính mã hình chính (hình chính
+    vẽ không cánh: nét đôi là tấm)."""
     supp = supplement or {}
     sc = Scene2(item=group)
     sc.notes.append("Quy ước: mặt đứng nhìn vào tường; ở mặt bằng tường phía Y lớn, mặt trước tủ phía Y nhỏ.")
@@ -440,30 +463,31 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
     links = _links(d, plans, elevs, supp, sc)
     for e, p, ox, refs, method in links.values():
         sc.links.append(Link(elevation=e.id, plan=p.id, method=method, offset_x=round(ox, 3), refs=refs))
-    from . import interior as itr
     from . import primitives as prim
 
     main = [lk for lk in links.values() if "no_doors" not in lk[0].flags] or list(links.values())
-    doors_view: str | None = None  # hình có cánh nhận theo nội dung (tiêu đề chép trùng "bỏ cánh")
-    inner_view: str | None = None
-    cls = itr.classify(d, [lk[0] for lk in links.values()])
-    if cls is not None:
-        doors_view, inner_view = cls[0].id, cls[1].id
-        main = [links[doors_view]] + [lk for lk in main if lk is not links[doors_view]]
-        sc.notes.append(cls[2])
+    # vai trò hình khi mơ hồ (tiêu đề chép trùng "bỏ cánh"…) KHÔNG chọn ở đây: L4 (`hypotheses.resolve`) dựng thử các cách
+    # hiểu bằng khoá `main:` / `interior:` rồi chọn theo điểm
     pick = supp.get(f"main:{group}")  # người dùng chọn mặt đứng dùng để dựng khối
     if pick in links:
         main = [links[pick]] + [lk for lk in main if lk is not links[pick]]
     if not main:
         return _finish(sc, d)
     e, p, ox, _refs, _m = main[0]
-    e_flags = set(e.flags) - ({"no_doors"} if e.id == doors_view else set())
+    e_flags = set(e.flags)
     e = _crop_to_dim(d, e, _refs, sc)
-    want = supp.get(f"interior:{group}") or inner_view  # người dùng chọn hình bỏ cánh
+    user_int = supp.get(f"interior:{group}")
+    want = user_int  # người dùng / L4 chọn hình bỏ cánh
     shelf_src = links.get(want) if want in links and want != e.id and links[want][1].id == p.id else None
-    if shelf_src is None:
-        shelf_src = next((lk for lk in links.values() if "no_doors" in lk[0].flags and lk[1].id == p.id and lk[0].id != e.id
-                          and lk[0].id != doors_view), None)
+    force_mode: bool | None = None
+    if user_int == NONE_VIEW:
+        force_mode = False
+    elif user_int and user_int == e.id:
+        force_mode = True
+    elif shelf_src is None:
+        shelf_src = next((lk for lk in links.values() if "no_doors" in lk[0].flags and lk[1].id == p.id and lk[0].id != e.id), None)
+    if shelf_src is not None:
+        e_flags -= {"no_doors"}  # đã có hình bỏ cánh riêng: hình chính là hình CÓ cánh (dù tiêu đề chép trùng)
     origin = (p.box[0], p.box[1])
 
     # sàn / trần
@@ -537,7 +561,7 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None) -
         sc.notes.append(f"Đã chia khối theo {len(cuts)} vách bạn đã Đồng ý (chú giải hạng mục).")
     for i, (box, hs, fr, form, levels) in enumerate(blocks, 1):
         _add_module(sc, f"M{i}", box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form, pt, levels, d)
-    _read_interiors(d, sc, group, e, ox - origin[0], floor, furn, shelf_src, origin, "no_doors" in e_flags)
+    _read_interiors(d, sc, group, e, ox - origin[0], floor, furn, shelf_src, origin, "no_doors" in e_flags, force_mode)
 
     # tường: nét tường của mặt bằng hạng mục
     walls, _rooms = read_walls(d, p)
@@ -610,5 +634,5 @@ def apply_supplement(data: dict, source_hash: str) -> tuple[dict, str | None]:
     return load_supplement(data, source_hash)
 
 
-__all__ = ["Front", "Link", "Module2", "Room2", "SCHEMA", "Scene2", "Src", "Wall2", "best_item", "build_from_model",
-           "build_item_scene", "item_summary"]
+__all__ = ["Front", "Link", "Module2", "NONE_VIEW", "Room2", "SCHEMA", "Scene2", "Src", "Wall2", "best_item",
+           "build_from_model", "build_item_scene", "build_once", "item_summary"]

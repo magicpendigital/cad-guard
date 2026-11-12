@@ -36,7 +36,10 @@ def _build(tmp_path, spec, styles):
 def test_duplicate_titles_pick_door_view_and_read_interior(tmp_path):
     spec = _wardrobe()
     sc, ans, d = _build(tmp_path, spec, ["trungtieude", "noithat"])
-    assert any("hình CÓ CÁNH" in n for n in sc.notes)
+    # không còn quy tắc riêng "tiêu đề trùng": vai trò hình do L4 chấm các cách hiểu (`hypotheses.resolve`)
+    assert any(n.startswith("Vai trò hình") or n.startswith("Máy chọn cách hiểu") for n in sc.notes)
+    role = next(r for r in sc._choice["decisions"] if r["id"] == "role")
+    assert len(role["options"]) >= 2 and next(o for o in role["options"] if o["chosen"])["score"] == max(o["score"] for o in role["options"])
     by_x = sorted(sc.modules, key=lambda m: m.x)
     want = [a for a in ans["modules"]]
     assert [len(m.fronts) for m in by_x] == [a["fronts"] for a in want]

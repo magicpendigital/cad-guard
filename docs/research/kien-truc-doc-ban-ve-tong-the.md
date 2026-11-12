@@ -1,6 +1,6 @@
 # Thiết kế: đọc bản vẽ nội thất theo kiến trúc tổng thể (11/11/2026)
 
-Trạng thái: **đã duyệt 11/11/2026**. P1, P2, P3 xong (§9); P4–P7 chưa làm.
+Trạng thái: **đã duyệt 11/11/2026**. P1, P2, P3, P4 xong (§9); P5–P7 chưa làm.
 
 ## 1. Vấn đề
 
@@ -245,3 +245,57 @@ Kết quả trên 102 hạng mục:
 Lần chạy đầu có H01 báo nhầm ở ngăn kéo hẹp bị xếp loại "cánh". Đã giới hạn H01 cho cánh cao ≥ 400; việc xếp loại cánh
 và ngăn kéo theo tỉ lệ sẽ xem lại ở P4. Các mã còn lại đã thử bằng ca hỏng dựng tay (`tests/test_consistency.py`); chưa
 có ca thật nào bộc lộ các mã này.
+
+**P4 — sinh cách hiểu và chọn theo điểm (12/11/2026).** `scene/hypotheses.py`:
+
+- `assemble.build_once` dựng **một** cách hiểu theo khoá bổ sung. `build_item_scene` (mọi nơi gọi: app, CLI, bộ đo,
+  trợ lý, bản đồ, cả tầng) nay đi qua `hypotheses.resolve`.
+- Mỗi cách hiểu là một bộ khoá bổ sung đã có, nên vẫn tất định:
+  - `main:` + `interior:` cho vai trò hình. Giá trị mới của `interior:`: `none` (không có hình bỏ cánh, nét đôi là mép
+    cánh) hoặc chính mã hình chính (đọc hình chính như hình bỏ cánh, nét đôi là tấm).
+  - `split:` cho chia khối.
+- Ba quyết định được dựng thử:
+  - `role` — khi có ≥ 2 mặt đứng "sinh đôi": cùng mặt bằng, thân tủ cùng bề rộng (lệch ≤ 10 %) và cùng vị trí (chồng
+    ≥ 80 %), và hoặc cùng tiêu đề, hoặc một hình có tiêu đề "bỏ cánh". Hai hướng nhìn khác tiêu đề (hướng A / hướng B của
+    quầy) không phải cặp.
+  - `board` — nét đôi ở hình chính là tấm hay mép cánh. Chỉ hỏi khi không có hình bỏ cánh riêng mà hình chính có chữ
+    nội thất.
+  - `split@x` — chia tại vách đề xuất hay giữ một khối (tối đa 3 đề xuất).
+- Điểm = 0,35 × nhất quán (P3) + 0,25 × ký hiệu cánh + 0,30 × ghi chú nội thất được giải thích + 0,10 × bề rộng khối có
+  kích thước.
+  - Ký hiệu cánh: hình dựng cánh nên nhiều ký hiệu cánh nhất. Hình chính có ký hiệu/khung cánh mà cảnh không có mặt
+    trước nào thì điểm phần này về 0. Có hình dáng bỏ cánh mà không dùng thì bị phạt.
+  - Ghi chú: chữ hộc / thiết bị / thanh treo / đèn / kính / đá ở các hình sinh đôi phải có đồ cùng loại gần đó. Đồ đọc
+    sai (hộc cao bất thường) không tính.
+- Thêm ràng buộc K07: hộc trong cao > 600 là mâu thuẫn (cả khoang bị đọc thành hộc).
+- Cách chọn:
+  - phương án nào thêm mâu thuẫn kết cấu so với cách hiểu ban đầu thì bị loại;
+  - máy chỉ đổi khi phương án khác hơn ≥ 0,05 điểm;
+  - chênh ít hơn mà cảnh khác nhau thì giữ cách ban đầu và hiện thẻ "máy phân vân";
+  - tối đa 16 lần dựng mỗi hạng mục.
+- Người chọn trên thẻ (`/api/scene/decide`) thì ghi khoá của phương án vào tệp bổ sung, kèm mã quyết định vào
+  `decided:<hạng mục>`. Máy không dựng thử lại quyết định đó cho tới khi người bấm "để máy chọn lại".
+
+**Gỡ quy tắc riêng.** `interior.classify` (hai mặt đứng chép trùng tiêu đề thì hình nhiều ký hiệu cánh là hình có cánh)
+không còn được gọi khi dựng. Khi đã có hình bỏ cánh riêng, hình chính luôn đọc như hình có cánh.
+
+Cổng kiểm trên 102 hạng mục (bộ 40 tờ thật, các tệp thử phiên Demo, 72 mẫu mô phỏng):
+- `build_once` không khoá cho kết quả giống hệt P3 (cùng mã băm);
+- qua L4: khối, cánh, nội thất, tấm ván, danh sách cắt, kiểm kết cấu **giống hệt** P3 ở cả 102 hạng mục; chỉ khác
+  dòng ghi chú (dòng "Vai trò hình …" / "Máy chọn cách hiểu …" thay dòng của quy tắc cũ);
+- ca TESt 2 (tệp gốc): L4 chấm 4 cách hiểu, giữ đúng hình có cánh / hình bỏ cánh, hơn cách kế tiếp 0,24 điểm;
+- tệp TEST.dxf của phiên Demo (tủ áo cùng kiểu vẽ, hai hình chép trùng tiêu đề, thứ tự hình ngược): cách dựng một lần
+  chọn nhầm hình bỏ cánh làm hình chính; L4 tự chọn lại đúng (0,93 so với 0,53), không cần quy tắc riêng;
+- 43 quyết định vai trò hình: 1 máy tự đổi (TEST.dxf), 42 giữ nguyên; 4 quyết định nét đôi: giữ cả 4; chia khối: 5
+  phân vân (đã hiện thành đề xuất chia khối, không lặp thẻ), 3 giữ;
+- lần thử đầu bị lỗi ở ba chỗ, đã sửa trước khi gộp:
+  - quầy bar hai hướng nhìn bị coi là cặp "có cánh / bỏ cánh" → thêm điều kiện tiêu đề;
+  - bàn trang điểm: cả khoang bị đọc thành hộc mà vẫn được tính là giải thích ghi chú → K07 và bỏ đồ đọc sai khỏi
+    phần ghi chú;
+  - kệ TV: phương án "không cánh" thắng vì phần ký hiệu cánh chưa phạt cảnh mất hết mặt trước → thêm luật về 0.
+
+Hiển thị: màn 3D có mục "Cách hiểu bản vẽ" (điểm từng phương án, nút "Chọn cách này", "Tới trong AutoCAD", "để máy
+chọn lại"); bước "Kiểm nhất quán" của bộ chạy luồng báo số chỗ phân vân (cần duyệt). Test: `tests/test_hypotheses.py`.
+
+Giới hạn: điểm "ghi chú" và "ký hiệu cánh" mới đo trên các ca hiện có; cần đáp án thật (10–20 hạng mục) để chỉnh trọng
+số. Chưa có quyết định "đường khấu hay cánh" và "chiều sâu lấy từ hình nào" (để P5).
