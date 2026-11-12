@@ -546,6 +546,8 @@
     if (r.event === "apply") return ["Áp dụng thay đổi trên ", f, r.output ? [" → ", b(r.output)] : ""];
     if (r.event === "undo") return ["Hoàn tác, xoá ", r.output ? b(r.output) : "tệp mới"];
     if (r.event === "handover") return ["Đánh dấu ", f, ` sẵn sàng giao cho ${(r.to || []).join(", ") || "xưởng"}`];
+    if (r.event === "scene") return ["Xác nhận dựng 3D đúng một hạng mục của ", f, r.edits ? ` (sau ${r.edits} chỗ sửa)` : " (không cần sửa)"];
+    if (r.event === "bench") return [`Chấm bộ đáp án 3D: ${r.exact}/${r.items} hạng mục chỉ code đã đúng hoàn toàn`];
     return [r.event];
   }
 
@@ -566,6 +568,8 @@
     let o;
     try { o = await api("/api/overview"); } catch (e) { fail(e); return; }
     const box = $("ovBody");
+    const sq = sceneQuality(o.scene);
+    if (!o.has_data && sq) { fill(box, sq); return; }
     if (!o.has_data) {
       fill(box, el("div", {class: "card"}, emptyBox("Chưa có số liệu tuần này", "Số liệu sinh từ lịch sử quét của dự án trên máy này. Quét vài bản vẽ ở màn Bản vẽ (hoặc “Quét cả thư mục”), rồi quay lại.")));
       return;
@@ -579,6 +583,7 @@
         kpi(fmt(o.open_errors), "Lỗi mức E đang mở", "theo lần quét mới nhất mỗi bản"),
         kpi(pct, "Đề xuất sửa được áp dụng", `trên ${o.changesets_proposed} đề xuất`),
         kpi(fmt(o.handovers), "Bản đánh dấu sẵn sàng bàn giao", "7 ngày gần nhất")),
+      sq,
       el("h2", {text: "Bàn giao giữa các phòng tuần này"}),
       el("p", {class: "lead lead-tight", text: "Lỗi bắt ở phòng trước rẻ hơn nhiều so với lỗi lọt sang phòng sau. Đây là chỗ cho thấy cad-guard có đáng không."}),
       el("div", {class: "flow"}, o.flows.map((f) => el("div", {class: "card"}, el("div", {class: "big", text: fmt(f.handed_over)}),
@@ -602,6 +607,48 @@
           el("td", {}, r.realtime_ok ? pill("ok", "Được bật") : pill("neu", "Chưa đo đủ"))))
           : el("tr", {}, el("td", {colspan: "5", class: "muted", text: "Chưa có dữ liệu."}))))),
       el("p", {class: "muted small mt8", text: "Độ chính xác của luật chỉ có sau khi đo trên mẫu đã gắn nhãn (kế hoạch P1c); cảnh báo khi đang vẽ chỉ bật cho luật đã đo đạt ngưỡng."}));
+  }
+
+  // P7: % hạng mục dựng 3D đúng mà không cần người sửa, theo tuần và theo kiểu vẽ (số tổng hợp từ lịch sử trên máy này)
+  const EDIT_VI = {dim: "số đo khối", view: "chọn hình (mặt đứng / hình bỏ cánh / ghép mặt bằng)", split: "chia khối",
+    decide: "chọn ở thẻ máy phân vân", label: "nhãn khối", room: "cao sàn–trần"};
+  function sceneQuality(q) {
+    if (!q || !q.has_data) return null;
+    const pc = (v) => v == null ? "–" : v + "%";
+    const t = q.total;
+    const maxK = Math.max(1, ...Object.values(q.kinds));
+    return el("div", {},
+      el("h2", {text: "Dựng 3D đúng không cần sửa"}),
+      el("p", {class: "lead lead-tight", text: "Một hạng mục được tính khi người dùng bấm “Xác nhận dựng đúng” ở màn 3D (hoặc lưu làm đáp án). “Không cần sửa” = chưa phải sửa số đo, chọn hình, chia khối hay chọn ở thẻ máy phân vân."}),
+      el("div", {class: "kpis"},
+        el("div", {class: "card kpi"}, el("div", {class: "v", text: pc(t.pct)}), el("div", {class: "l", text: "Đúng không cần sửa"}),
+          el("div", {class: "dlt", text: `${t.ok}/${t.items} hạng mục đã xác nhận · ${q.days} ngày`})),
+        el("div", {class: "card kpi"}, el("div", {class: "v", text: t.unsure_avg == null ? "–" : String(t.unsure_avg).replace(".", ",")}),
+          el("div", {class: "l", text: "Thẻ máy phân vân / hạng mục"}), el("div", {class: "dlt", text: "thấp mà vẫn đúng là tốt"})),
+        el("div", {class: "card kpi"}, el("div", {class: "v", text: pc(t.dim_pct)}), el("div", {class: "l", text: "Số đo lấy từ kích thước ghi"}),
+          el("div", {class: "dlt", text: "còn lại đo trên hình, mặc định hoặc người nhập"})),
+        el("div", {class: "card kpi"}, el("div", {class: "v", text: t.ms_median == null ? "–" : fmt(t.ms_median) + " ms"}),
+          el("div", {class: "l", text: "Thời gian dựng một hạng mục"}), el("div", {class: "dlt", text: "trung vị"}))),
+      el("div", {class: "card flush"}, el("table", {},
+        el("thead", {}, el("tr", {}, ["Tuần", "Hạng mục xác nhận", "Đúng không cần sửa", "Thẻ phân vân / hạng mục", "Theo đáp án (chỉ code)"].map((x) => el("th", {text: x})))),
+        el("tbody", {}, q.weeks.slice().reverse().map((w) => el("tr", {},
+          el("td", {text: `${w.week} (từ ${w.start.split("-").reverse().join("/")})`}), el("td", {text: fmt(w.items)}),
+          el("td", {}, w.items ? b(`${pc(w.pct)} (${w.ok}/${w.items})`) : "–"),
+          el("td", {text: w.unsure_avg == null ? "–" : String(w.unsure_avg).replace(".", ",")}),
+          el("td", {text: w.bench ? `${w.bench.exact}/${w.bench.items} hạng mục đúng hoàn toàn · điểm khối ${pc(w.bench.score_pct)}` : "–"})))))),
+      q.styles.length ? [el("h3", {text: "Theo kiểu vẽ"}),
+        el("div", {class: "card flush"}, el("table", {},
+          el("thead", {}, el("tr", {}, ["Kiểu vẽ (hồ sơ trình bày)", "Hạng mục", "Đúng không cần sửa", "Thẻ phân vân / hạng mục"].map((x) => el("th", {text: x})))),
+          el("tbody", {}, q.styles.map((g) => el("tr", {},
+            el("td", {text: g.name || (g.style === "-" ? "Chưa đặt tên (đặt ở Hồ sơ trình bày)" : "Kiểu vẽ " + g.style.slice(0, 6))}),
+            el("td", {text: fmt(g.items)}), el("td", {}, b(`${pc(g.pct)} (${g.ok}/${g.items})`)),
+            el("td", {text: g.unsure_avg == null ? "–" : String(g.unsure_avg).replace(".", ",")}))))))] : null,
+      Object.keys(q.kinds).length ? [el("h3", {text: "Người dùng phải sửa gì nhiều nhất"}),
+        el("div", {class: "card"}, el("div", {class: "bars"}, Object.entries(q.kinds).map(([k, n]) => {
+          const bar = el("i");
+          bar.style.width = (n / maxK * 100) + "%";
+          return el("div", {class: "bar"}, el("span", {text: EDIT_VI[k] || k}), el("span", {class: "tr"}, bar), el("span", {class: "nn", text: fmt(n)}));
+        })), el("div", {class: "privacy"}, icon("lock"), "Lịch sử chỉ chứa mã băm tệp, hạng mục và tên kiểu vẽ; không tên tệp, tên khách hay chữ trong bản vẽ."))] : null);
   }
 
   // ---------- BẢN VẼ: cột trái ----------
@@ -1682,12 +1729,25 @@
         if (!ok) return;
         try { const a = await api("/api/scene/answer", {file: path, item: r.item}); toast(`Đã lưu đáp án ${a.modules} khối.`); } catch (e) { fail(e, "Lưu đáp án"); }
       }});
+    const ed = r.edits || {total: 0, kinds: {}};
+    const cf = r.confirmed;
+    const okBtn = el("button", {type: "button", class: cf ? "btn-s btn-sm" : "btn-p btn-sm", text: cf ? "Xác nhận lại" : "Xác nhận dựng đúng",
+      title: "Khi mọi khối, số đo, cánh và nội thất đã đúng như bản vẽ: ghi một lần xác nhận. Màn Tổng quan đếm % hạng mục đúng mà không cần sửa, theo tuần và theo kiểu vẽ.",
+      onclick: async () => {
+        try {
+          const a = await api("/api/scene/confirm", {file: path, item: r.item});
+          toast(a.edits ? `Đã ghi: dựng đúng sau ${a.edits} chỗ bạn sửa.` : "Đã ghi: dựng đúng, không cần sửa.");
+          load3d(path, r.item);
+        } catch (e) { fail(e, "Xác nhận dựng đúng"); }
+      }});
+    const cfText = el("small", {class: "muted", text: cf ? ` Đã xác nhận ${when(cf.ts)}${cf.edits ? ` · sau ${cf.edits} chỗ sửa` : " · không cần sửa"}${cf.edits !== ed.total ? " · đã sửa thêm sau đó" : ""}`
+      : (ed.total ? ` Bạn đã sửa ${ed.total} chỗ ở hạng mục này.` : "")});
     const benchBtn = el("button", {type: "button", class: "btn-s btn-sm", text: "Chấm điểm 3D",
       title: "Chấm các cách đọc của CAD Guard trên mọi đáp án đã lưu trong dự án", onclick: () => showBench()});
     const bottom = el("div", {class: "v3d-bottom"},
       r.readiness ? el("div", {class: "ready3d"}, b(`Sẵn sàng: ${r.readiness.level}`),
         ` · ${r.readiness.modules} khối, ${r.readiness.complete} đủ 4 số đo · ${r.readiness.from_dimension_pct}% số đo lấy từ kích thước ghi trên bản vẽ, ${r.readiness.from_user_pct}% bạn đã sửa · ${r.readiness.gaps} phần thiếu`) : null,
-      el("div", {class: "bar-act"}, mode !== "3d" ? [el("span", {text: "Hình 2D: "}), viewSel] : null, el("label", {}, ceil, " hiện trần"), dl, ansBtn, benchBtn, el("small", {text: ` mã cảnh ${r.scene_hash}`})),
+      el("div", {class: "bar-act"}, mode !== "3d" ? [el("span", {text: "Hình 2D: "}), viewSel] : null, el("label", {}, ceil, " hiện trần"), r.modules.length ? okBtn : null, dl, ansBtn, benchBtn, el("small", {text: ` mã cảnh ${r.scene_hash}`}), cfText),
       el("table", {class: "tbl3d"}, head, rows), el("div", {text: room}), cutlistBox(r),
       r.notes.map(n => el("small", {text: n})));
     S.warn3d = new Set(warnMods.map(m => m.id));
@@ -1861,6 +1921,12 @@
         el("div", {class: "f-d", text: c.confirmed ? "Đã có hồ sơ lưu cho công ty/dự án này." : "Chưa lưu hồ sơ: đang đọc theo cách đoán mặc định."})), close),
       el("div", {class: "dr-b"},
         el("p", {class: "f-d", text: "Mỗi người kỹ thuật trình bày một kiểu. Khai một lần ở đây (hoặc để code/AI đề xuất rồi Đồng ý), CAD Guard sẽ đọc mọi bản vẽ kiểu này đúng cách. Bản vẽ không bị sửa."}),
+        (() => {
+          const nm = el("input", {type: "text", maxlength: "60", value: c.name || "", placeholder: "vd. Công ty A – tủ bếp", "aria-label": "Tên kiểu vẽ"});
+          return el("div", {class: "w-act"}, el("label", {}, "Tên kiểu vẽ / công ty ", nm),
+            el("button", {class: "btn-s btn-sm", type: "button", onclick: () => savePatch({name: nm.value}, "Đã lưu tên kiểu vẽ.")}, "Lưu tên"),
+            el("small", {class: "muted", text: " Màn Tổng quan tách chỉ số “đúng không cần sửa” theo tên này."}));
+        })(),
         el("div", {class: "w-act"},
           el("button", {class: "btn-s btn-sm", type: "button", onclick: () => propose(false)}, "Đề xuất bằng code"),
           el("button", {class: "btn-p btn-sm", type: "button", onclick: () => propose(true)}, "Nhờ AI xem bản vẽ")),

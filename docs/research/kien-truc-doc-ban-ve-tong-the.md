@@ -1,6 +1,6 @@
 # Thiết kế: đọc bản vẽ nội thất theo kiến trúc tổng thể (11/11/2026)
 
-Trạng thái: **đã duyệt 11/11/2026**. P1–P6 xong (§9); P7 chưa làm.
+Trạng thái: **đã duyệt 11/11/2026**. P1–P7 xong (§9).
 
 ## 1. Vấn đề
 
@@ -393,3 +393,30 @@ Giới hạn:
   khác nhau ở ca lạ;
 - hằng số kết cấu (khoang treo tối thiểu ở bộ chấm, nhịp đợt…) vẫn ở hồ sơ kết cấu xưởng / code, không thuộc hồ sơ
   trình bày.
+
+**P7 — chỉ số "đúng không cần sửa" theo tuần / kiểu vẽ (12/11/2026).**
+
+- **Cách đếm.** Màn 3D có nút **Xác nhận dựng đúng**. Lưu làm đáp án cũng tính là một lần xác nhận. Mỗi lần xác nhận
+  ghi sự kiện `scene` vào lịch sử dự án (`.cadguard/history.jsonl`):
+  - mã băm tệp, mã băm hạng mục, mã băm tên kiểu vẽ;
+  - số chỗ người đã sửa theo loại (`scene_api.edit_counts`): số đo khối, chọn hình (mặt đứng chính / hình bỏ cánh /
+    ghép mặt bằng), chia khối, chọn ở thẻ máy phân vân, nhãn khối, cao sàn–trần;
+  - số thẻ phân vân / tự đổi, % số đo lấy từ kích thước ghi, thời gian dựng.
+
+  "Đúng không cần sửa" là được xác nhận khi chưa có chỗ sửa nào.
+- **Theo tuần** (thứ Hai → Chủ nhật, 8 tuần, `history.scene_quality`): mỗi hạng mục chỉ lấy lần xác nhận mới nhất
+  trong tuần. Cột "theo đáp án" là lần chấm bộ đáp án cuối tuần (sự kiện `bench`: số hạng mục mà chỉ code đã đúng hoàn
+  toàn, kể cả nội thất, và điểm khối).
+- **Theo kiểu vẽ:** hồ sơ trình bày có thêm trường `name` (tên kiểu vẽ / công ty). Lịch sử chỉ ghi mã băm của tên; màn
+  Tổng quan đổi mã băm về tên bằng hồ sơ và nhật ký hồ sơ trên máy (`drafting.known_names`). Tính trên 28 ngày gần nhất.
+  Cùng khoảng đó có thêm "người dùng phải sửa gì nhiều nhất".
+- **Chỉ số phụ** (§6): thẻ phân vân / hạng mục, % số đo có nguồn "Ghi", thời gian dựng (trung vị).
+- Màn Tổng quan có mục **Dựng 3D đúng không cần sửa**: 4 ô số, bảng theo tuần, bảng theo kiểu vẽ, biểu đồ loại sửa.
+  Mục này hiện cả khi tuần đó chưa quét luật nào.
+
+Giới hạn:
+- số chỉ có khi người dùng bấm xác nhận. Hạng mục không ai xác nhận thì không được đếm, nên tỉ lệ có thể lệch về
+  phía hạng mục dễ;
+- chỗ sửa còn nằm trong tệp bổ sung: lần dựng sau, dù code đã tự đúng, vẫn bị tính là đã sửa cho tới khi người dùng
+  bỏ giá trị đó;
+- chưa tách theo người vẽ, vì bản vẽ chưa có trường người vẽ đọc được chắc chắn.

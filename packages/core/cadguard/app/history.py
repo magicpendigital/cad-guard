@@ -5,6 +5,11 @@ và mã băm nội dung), phòng, chuẩn, đếm theo mức và theo luật. Kh
 dẫn. Giao diện (chỉ trên máy này) đổi mã băm về tên tệp bằng cách băm lại danh sách tệp hiện có của dự án.
 
 Dữ liệu này nuôi màn Việc của tôi và Tổng quan tuần; không gửi đi đâu.
+
+Sự kiện dựng 3D (P7, chỉ số "đúng không cần sửa"):
+- `scene`: người dùng xác nhận một hạng mục dựng đúng. Ghi mã băm tệp + mã băm hạng mục, mã băm tên kiểu vẽ (hồ sơ
+  trình bày), số chỗ người đã sửa theo loại, số thẻ máy phân vân / tự đổi, % số đo lấy từ kích thước ghi, thời gian dựng;
+- `bench`: một lần chấm bộ đáp án 3D (số hạng mục, số hạng mục "chỉ code" đúng hoàn toàn, điểm).
 """
 from __future__ import annotations
 
@@ -22,7 +27,8 @@ DIR = ".cadguard"
 FILE = "history.jsonl"
 SALT_FILE = "history.salt"
 MAX_READ = 20000
-EVENTS = ("audit", "apply", "undo", "handover")
+EVENTS = ("audit", "apply", "undo", "handover", "scene", "bench")
+EDIT_KINDS = ("dim", "view", "split", "decide", "label", "room")
 _ID_RE = re.compile(r"^[0-9a-f]{12}$")
 _RULE_RE = re.compile(r"^[A-Za-z0-9.\-]{1,32}$")
 _lock = threading.Lock()
@@ -195,6 +201,10 @@ def home(events: list[dict], dept: dict, departments: list[dict], name_of: Calla
             item["ops"] = e.get("ops")
         elif e["event"] == "handover":
             item["to"] = [next((d["name"] for d in departments if d["id"] == t), t) for t in e.get("to") or []]
+        elif e["event"] == "scene":
+            item["edits"] = int(e.get("edits", 0))
+        elif e["event"] == "bench":
+            item.update(items=e.get("items"), exact=e.get("exact"))
         recent.append(item)
     return {"frequent_rules": frequent, "pipe": pipe, "inbox": inbox[:6], "recent": recent,
             "files": {name_of(f): s for f, s in states.items() if name_of(f)}}
@@ -237,4 +247,71 @@ def overview(events: list[dict], departments: list[dict], title_of: Callable[[st
             "has_data": bool(week)}
 
 
-__all__ = ["History", "audit_entry", "file_states", "home", "latest_audits", "overview"]
+def scene_entry(file_id: str, item_id: str, content_hash: str, style: str, info: dict, answer: bool = False) -> dict:
+    """Trường của sự kiện `scene` (chỉ số, mã băm; không tên hạng mục/tệp/kiểu vẽ)."""
+    kinds = {k: int(v) for k, v in (info.get("kinds") or {}).items() if k in EDIT_KINDS and int(v) > 0}
+    return {"file": file_id, "item": item_id, "sha": (content_hash or "")[:16] or None, "style": style,
+            "edits": sum(kinds.values()), "kinds": kinds, "unsure": int(info.get("unsure", 0)), "auto": int(info.get("auto", 0)),
+            "modules": int(info.get("modules", 0)), "dim_pct": int(info.get("dim_pct", 0)), "ms": int(info.get("ms", 0)),
+            "answer": bool(answer)}
+
+
+def week_start(t: datetime) -> datetime:
+    d = t.replace(hour=0, minute=0, second=0, microsecond=0)
+    return d - timedelta(days=d.weekday())
+
+
+def _latest(events: list[dict]) -> list[dict]:
+    """Lần xác nhận mới nhất của mỗi (tệp, hạng mục)."""
+    out: dict[tuple, dict] = {}
+    for e in events:
+        out[(e.get("file"), e.get("item"))] = e
+    return list(out.values())
+
+
+def _agg(rows: list[dict]) -> dict:
+    n = len(rows)
+    ok = sum(1 for e in rows if not e.get("edits"))
+    ms = sorted(int(e.get("ms", 0)) for e in rows)
+    return {"items": n, "ok": ok, "pct": round(100 * ok / n) if n else None,
+            "unsure_avg": round(sum(int(e.get("unsure", 0)) for e in rows) / n, 2) if n else None,
+            "dim_pct": round(sum(int(e.get("dim_pct", 0)) for e in rows) / n) if n else None,
+            "ms_median": ms[n // 2] if n else None}
+
+
+def scene_quality(events: list[dict], style_name: Callable[[str], str | None], weeks: int = 8, days: int = 28) -> dict:
+    """Chỉ số "đúng không cần sửa" theo tuần (thứ Hai → Chủ nhật) và theo kiểu vẽ.
+
+    Mỗi tuần: lấy lần xác nhận mới nhất của từng hạng mục trong tuần đó; "đúng không cần sửa" = người dùng xác nhận đúng mà
+    chưa sửa gì (số đo, chọn hình, chia khối, chọn ở thẻ máy phân vân…). Theo kiểu vẽ và loại sửa: `days` ngày gần nhất.
+    Bộ đáp án: lần chấm cuối mỗi tuần (điểm "chỉ code" so với đáp án người kỹ thuật ghi)."""
+    sc = [e for e in events if e["event"] == "scene"]
+    bench = [e for e in events if e["event"] == "bench"]
+    now = _now()
+    w0 = week_start(now)
+    rows = []
+    for i in range(weeks - 1, -1, -1):
+        a = w0 - timedelta(days=7 * i)
+        b = a + timedelta(days=7)
+        cur = _latest([e for e in sc if a <= e["_t"] < b])
+        bl = [e for e in bench if a <= e["_t"] < b]
+        last = bl[-1] if bl else None
+        rows.append({"week": a.strftime("%G-W%V"), "start": a.date().isoformat(), **_agg(cur),
+                     "bench": {k: last.get(k) for k in ("answers", "items", "exact", "score_pct")} if last else None})
+    while rows and not rows[0]["items"] and not rows[0]["bench"]:  # bỏ các tuần trống trước tuần có số đầu tiên
+        rows.pop(0)
+    recent = _latest([e for e in sc if e["_t"] >= now - timedelta(days=days)])
+    groups: dict[str, list[dict]] = {}
+    for e in recent:
+        groups.setdefault(e.get("style") or "-", []).append(e)
+    styles = [{"style": k, "name": (style_name(k) if k != "-" else None), **_agg(v)} for k, v in groups.items()]
+    styles.sort(key=lambda x: -x["items"])
+    kinds = Counter()
+    for e in recent:
+        kinds.update(e.get("kinds") or {})
+    return {"weeks": rows, "styles": styles, "kinds": dict(kinds.most_common()), "days": days,
+            "total": _agg(recent), "has_data": bool(sc or bench)}
+
+
+__all__ = ["EDIT_KINDS", "History", "audit_entry", "file_states", "home", "latest_audits", "overview", "scene_entry",
+           "scene_quality", "week_start"]

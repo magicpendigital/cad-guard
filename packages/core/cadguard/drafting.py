@@ -7,6 +7,8 @@ Thay vì viết lại bản vẽ, CAD Guard học CÁCH HIỂU một lần, ngư
 - `number_tag`: thẻ thuộc tính khung tên chứa số bản vẽ (rỗng = tự dò; không có số thì nhóm hạng mục theo tiêu đề hình).
 - `keywords`: [{text, meaning}] chữ ghi chú trên mặt đứng và nghĩa (MEANINGS), vd. "TẤM FIX" -> filler (tấm bù, không
   phải tủ). Có bộ mặc định (nguồn "Mặc định"), người dùng thêm/bỏ.
+- `name`: tên kiểu vẽ / công ty (vd. "Công ty A – tủ bếp"), để màn Tổng quan tách chỉ số "đúng không cần sửa" theo
+  kiểu vẽ. Lịch sử chỉ ghi mã băm của tên.
 - `params`: {tên: số} thông số đọc nét (`scene/params.PARAMS`: khe chồng nét một tấm, vùng chân/nóc, dày tấm, ký hiệu
   nhỏ nhất…), mỗi số có khoảng hợp lệ. Kiểu vẽ mới (tấm dày, chân cao…) chỉnh ở đây, không sửa code.
 
@@ -86,7 +88,7 @@ def effective(project_root: Path | None = None) -> dict:
     roles: dict[str, str] = {}
     origin: dict[str, str] = {}
     kws = {up(k["text"]): {**k, "origin": "default"} for k in DEFAULT_KEYWORDS}
-    number_tag, removed = "", set()
+    number_tag, removed, name = "", set(), ""
     from .scene.params import clean
 
     params: dict[str, float] = {}
@@ -105,14 +107,16 @@ def effective(project_root: Path | None = None) -> dict:
         if d.get("number_tag"):
             number_tag = str(d["number_tag"])
             origin["number_tag"] = scope
+        if d.get("name"):
+            name, origin["name"] = str(d["name"])[:60], scope
     confirmed = any(scope in p and p[scope].is_file() for scope in ("machine", "project"))
-    return {"schema": SCHEMA, "layer_roles": roles, "number_tag": number_tag,
+    return {"schema": SCHEMA, "name": name, "layer_roles": roles, "number_tag": number_tag,
             "keywords": [k for t, k in sorted(kws.items()) if t not in removed], "params": params, "origin": origin,
             "confirmed": confirmed}
 
 
 def save(project_root: Path | None, scope: str, patch: dict) -> dict:
-    """Ghép `patch` ({layer_roles, keywords, removed_keywords, number_tag, params}) vào hồ sơ của phạm vi `scope`."""
+    """Ghép `patch` ({name, layer_roles, keywords, removed_keywords, number_tag, params}) vào hồ sơ của phạm vi `scope`."""
     from .scene.params import PARAMS
     from .scene.views2d import ROLES
 
@@ -154,6 +158,11 @@ def save(project_root: Path | None, scope: str, patch: dict) -> dict:
     data = {"schema": SCHEMA, "layer_roles": roles, "keywords": list(kws.values()), "removed_keywords": sorted(removed)}
     if params:
         data["params"] = params
+    nm = " ".join(str(patch.get("name", cur.get("name", "")) or "").split())
+    if len(nm) > 60:
+        raise ValueError("Tên kiểu vẽ tối đa 60 ký tự.")
+    if nm:
+        data["name"] = nm
     tag = patch.get("number_tag", cur.get("number_tag", ""))
     if tag:
         data["number_tag"] = str(tag)[:40]
@@ -162,6 +171,26 @@ def save(project_root: Path | None, scope: str, patch: dict) -> dict:
     with (path.parent / "drafting-log.jsonl").open("a", encoding="utf-8") as fh:
         fh.write(json.dumps({"at": time.strftime("%Y-%m-%d %H:%M:%S"), "scope": scope, "patch": patch}, ensure_ascii=False) + "\n")
     return effective(project_root)
+
+
+def known_names(project_root: Path | None) -> list[str]:
+    """Mọi tên kiểu vẽ đã từng đặt (hồ sơ hiện tại + nhật ký), để màn Tổng quan đổi mã băm tên về tên trên máy này."""
+    out: list[str] = []
+    for p in paths(project_root).values():
+        if (n := _read(p).get("name")):
+            out.append(str(n))
+        try:
+            lines = (p.parent / "drafting-log.jsonl").read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for ln in lines[-2000:]:
+            try:
+                n = (json.loads(ln).get("patch") or {}).get("name")
+            except (ValueError, AttributeError):
+                continue
+            if isinstance(n, str) and n.strip():
+                out.append(" ".join(n.split())[:60])
+    return list(dict.fromkeys(out))
 
 
 def reset(project_root: Path | None, scope: str) -> dict:

@@ -232,7 +232,13 @@ class CadGuardApp:
         data = self.d()
         titles, realtime = self._rule_meta()
         cs = api.list_changesets(data)["changesets"]
-        return history.overview(data.history.read(), data.departments["departments"], titles.get, realtime.get, cs)
+        events = data.history.read()
+        out = history.overview(events, data.departments["departments"], titles.get, realtime.get, cs)
+        from ..drafting import known_names
+
+        styles = {data.history.file_id("style:" + n): n for n in known_names(data.ws.root)}
+        out["scene"] = history.scene_quality(events, styles.get)
+        return out
 
     def setup_status(self) -> dict:
         from .. import setup
@@ -383,6 +389,7 @@ class CadGuardApp:
             ("POST", "/api/scene/cutlist"): lambda q, b: api.scene_action(d(), b.get("file"), "cutlist", b),
             ("POST", "/api/space"): lambda q, b: api.scene_action(d(), b.get("file"), "space", b),
             ("POST", "/api/scene/answer"): lambda q, b: api.scene_action(d(), b.get("file"), "answer", b),
+            ("POST", "/api/scene/confirm"): lambda q, b: api.scene_action(d(), b.get("file"), "confirm", b),
             ("POST", "/api/bench3d"): lambda q, b: api.bench3d(d()),
             ("POST", "/api/space/set"): lambda q, b: api.scene_action(d(), b.get("file"), "space_set", b),
             ("POST", "/api/space/glb"): lambda q, b: api.scene_action(d(), b.get("file"), "space_glb", b),

@@ -836,6 +836,48 @@ def preview(app: AppData, rel: Any, wait: Any = None, layout: Any = "Model") -> 
 MAX_BOXES = 5000
 
 
+def _style_id(app: AppData) -> str:
+    """Mã băm tên kiểu vẽ (hồ sơ trình bày) cho lịch sử; "-" khi chưa đặt tên."""
+    from ..drafting import effective
+
+    name = effective(app.ws.root).get("name") or ""
+    return app.history.file_id("style:" + name) if name else "-"
+
+
+def _confirmed(app: AppData, path, model, res: dict) -> dict:
+    """Lần xác nhận "dựng đúng" mới nhất của hạng mục trên đúng nội dung bản vẽ này (từ lịch sử dự án)."""
+    item = res.get("item")
+    if not item:
+        return res
+    h = app.history
+    fid, iid = h.file_id(app.rel(path)), h.file_id(app.rel(path) + "#" + str(item))
+    sha = (model.file_hash or "")[:16]
+    last = None
+    for e in h.read():
+        if e["event"] == "scene" and e.get("file") == fid and e.get("item") == iid and e.get("sha") == sha:
+            last = e
+    res["confirmed"] = {"ts": last["ts"], "edits": int(last.get("edits", 0))} if last else None
+    return res
+
+
+def scene_confirm(app: AppData, rel: Any, item: Any, answer: bool = False) -> dict:
+    """P7: người dùng xác nhận hạng mục dựng đúng -> ghi sự kiện `scene` (chỉ số + mã băm) vào lịch sử dự án."""
+    from . import history
+    from . import scene_api
+
+    path = app.resolve(rel)
+    model = app.model(path)
+    try:
+        info = scene_api.confirm_info(model, app.ws.root, item)
+    except scene_api.SceneApiError as exc:
+        raise ApiError(str(exc), 422) from None
+    h = app.history
+    fid, iid = h.file_id(app.rel(path)), h.file_id(app.rel(path) + "#" + info["item"])
+    e = h.record("scene", **history.scene_entry(fid, iid, model.file_hash, _style_id(app), info, answer=answer))
+    return {"item": info["item"], "edits": info["edits"], "kinds": info["kinds"], "unsure": info["unsure"],
+            "confirmed": {"ts": e["ts"], "edits": info["edits"]}}
+
+
 def scene3d(app: AppData, rel: Any, item: Any = None) -> dict:
     """Cảnh 3D tất định ở chế độ chỉ xem: hộp + màu vật liệu, không tên tệp/đường dẫn.
 
@@ -850,7 +892,7 @@ def scene3d(app: AppData, rel: Any, item: Any = None) -> dict:
     model = app.model(path)
     if item or scene_api.has_items(model):
         try:
-            return {"file": app.rel(path), **scene_api.view(model, app.ws.root, item)}
+            return _confirmed(app, path, model, {"file": app.rel(path), **scene_api.view(model, app.ws.root, item)})
         except scene_api.SceneApiError as exc:
             raise ApiError(str(exc), 422) from None
     sc = build_scene(model)
@@ -947,9 +989,11 @@ def scene_action(app: AppData, rel: Any, action: str, body: dict) -> dict:
     root = app.ws.root
     try:
         if action == "set":
-            return {"file": app.rel(path), **scene_api.set_value(model, root, body.get("item"), body.get("key"), body.get("value"))}
+            return _confirmed(app, path, model, {"file": app.rel(path), **scene_api.set_value(model, root, body.get("item"), body.get("key"), body.get("value"))})
         if action == "decide":
-            return {"file": app.rel(path), **scene_api.decide(model, root, body.get("item"), body.get("decision"), body.get("option"))}
+            return _confirmed(app, path, model, {"file": app.rel(path), **scene_api.decide(model, root, body.get("item"), body.get("decision"), body.get("option"))})
+        if action == "confirm":
+            return scene_confirm(app, rel, body.get("item"))
         if action == "propose":
             return scene_api.add_proposals(model, root, body.get("item"), body.get("proposals"))
         if action == "prompt":
@@ -960,8 +1004,10 @@ def scene_action(app: AppData, rel: Any, action: str, body: dict) -> dict:
             return scene_api.cutlist_file(model, root, body.get("item"))
         if action == "source":
             return scene_api.source_geometry(model, root, body.get("item"), body.get("view"))
-        if action == "answer":
-            return scene_api.save_answer(model, root, body.get("item"), body.get("note"), app.rel(path))
+        if action == "answer":  # đáp án = người kỹ thuật xác nhận hạng mục đúng: ghi luôn một lần xác nhận
+            res = scene_api.save_answer(model, root, body.get("item"), body.get("note"), app.rel(path))
+            scene_confirm(app, rel, res["item"], answer=True)
+            return res
         if action == "space":
             return {"file": app.rel(path), **scene_api.space_view(model, root)}
         if action == "space_set":
@@ -1048,4 +1094,11 @@ def bench3d(app: AppData) -> dict:
 
     from . import scene_api
 
-    return scene_api.bench(app.ws.root, read_model)
+    res = scene_api.bench(app.ws.root, read_model)
+    scored = [r for r in res["rows"] if "code" in (r.get("scores") or {})]
+    if scored:  # P7: điểm "chỉ code" so với đáp án, theo tuần trên màn Tổng quan
+        app.history.record("bench", answers=res["answers"], items=len(scored),
+                           exact=sum(1 for r in scored if r["scores"]["code"]["score"] >= 1.0  # đúng hoàn toàn, kể cả nội thất
+                                     and r["scores"]["code"].get("inner_ok", 0) == r["scores"]["code"].get("inner_answers", 0)),
+                           score_pct=(res["summary"].get("code") or {}).get("score_pct"))
+    return res

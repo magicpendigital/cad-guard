@@ -83,6 +83,60 @@ def build(model, root: Path, item: str | None):
     return sc, d, supp
 
 
+def edit_counts(raw: dict, sc, d) -> dict:
+    """Số chỗ người đã sửa cho hạng mục, theo loại (`history.EDIT_KINDS`): số đo khối, chọn hình (mặt đứng chính / hình bỏ
+    cánh / ghép mặt bằng), chia khối, chọn ở thẻ máy phân vân, nhãn khối, cao sàn–trần. Chọn ở thẻ đã gồm khoá hình nó ghi."""
+    from ..scene.hypotheses import decided
+
+    it = sc.item
+    kinds: dict[str, int] = {}
+
+    def add(k: str, n: int = 1) -> None:
+        if n > 0:
+            kinds[k] = kinds.get(k, 0) + n
+
+    done = decided(raw, it)
+    mods = {m.id for m in sc.modules}
+    elev = {v.id for v in d.views_of(it, "elevation")}
+    add("decide", len(done))
+    for k, v in raw.items():
+        sub = k.split("|", 1)[1] if k.startswith(it + "|") else (k if "|" not in k else None)
+        if sub is None:
+            continue
+        if sub.startswith("module:"):  # khoá chung cũ (không kèm mã hạng mục): chỉ tính khi khối có trong hạng mục
+            if "|" in k or (sub.split(":") + [""])[1] in mods:
+                add("dim")
+        elif sub.startswith("label:"):
+            if "|" in k or sub[6:] in mods:
+                add("label")
+        elif sub.startswith("room:"):
+            add("room")
+        elif sub in (f"main:{it}", f"interior:{it}"):
+            if not done & {"role", "board"}:
+                add("view")
+        elif sub.startswith("link:") and sub[5:] in elev:
+            add("view")
+        elif sub == f"split:{it}":
+            add("split", len([x for x in str(v).split(";") if x.strip()]))
+    return {"total": sum(kinds.values()), "kinds": kinds}
+
+
+def confirm_info(model, root: Path, item: Any) -> dict:
+    """Số liệu của một lần người dùng xác nhận "hạng mục này dựng đúng" (P7): chỗ đã sửa, thẻ phân vân, nguồn số đo."""
+    import time
+
+    t0 = time.perf_counter()
+    sc, d, _supp = build(model, root, item if isinstance(item, str) else None)
+    ms = int((time.perf_counter() - t0) * 1000)
+    if sc is None or not sc.modules:
+        raise SceneApiError("Hạng mục chưa có khối nào để xác nhận.")
+    ed = edit_counts(read_supplement(root, model.file_hash), sc, d)
+    dec = (sc._choice or {}).get("decisions") or []
+    return {"item": sc.item, "kinds": ed["kinds"], "edits": ed["total"], "modules": len(sc.modules),
+            "unsure": sum(1 for r in dec if r["status"] == "unsure"), "auto": sum(1 for r in dec if r["status"] == "auto"),
+            "dim_pct": readiness(sc)["from_dimension_pct"], "ms": ms}
+
+
 def has_items(model) -> bool:
     d = _drawing(model)
     return any(x["plans"] and x["elevations"] for x in item_summary(d))
@@ -125,6 +179,7 @@ def view(model, root: Path, item: Any = None) -> dict:
         "notes": sc.notes[:24],
         "decisions": _cards(sc),
         "decided": sorted(__import__("cadguard.scene.hypotheses", fromlist=["decided"]).decided(supp, sc.item)),
+        "edits": edit_counts(read_supplement(root, model.file_hash), sc, d),
         "provenance": provenance(sc, d, supp),
         **production(sc, root, model.file_hash),
     }
