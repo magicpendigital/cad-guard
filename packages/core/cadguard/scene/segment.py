@@ -11,6 +11,8 @@ Tất định, chỉ đọc nét. Dùng cho `assemble.build_item_scene`.
 """
 from __future__ import annotations
 
+from .params import P
+
 from .primitives import box_of, items_in  # noqa: F401 — lớp nguyên tố L1 (tên cũ giữ cho nơi gọi)
 from .views2d import Drawing2D, rect_of
 
@@ -43,7 +45,7 @@ def _cuts(items: list[Item], axis: int, keep: tuple = ()) -> list[list[Item]]:
     a2 = 1 - axis
 
     def board_at(p, pos):
-        return any((b[axis + 2] - b[axis]) <= BOARD_MAX and (b[a2 + 2] - b[a2]) >= 0.5 * across
+        return any((b[axis + 2] - b[axis]) <= P("board_max") and (b[a2 + 2] - b[a2]) >= 0.5 * across
                    and (abs(b[axis] - pos) <= EPS or abs(b[axis + 2] - pos) <= EPS) for b, _h, _r in p)
 
     merged = [pieces[0]]
@@ -64,7 +66,7 @@ def _cuts(items: list[Item], axis: int, keep: tuple = ()) -> list[list[Item]]:
     while len(pieces) > 1 and i < len(pieces):
         pb = box_of(pieces[i])
         kept = axis == 0 and any(pb[0] - 1 <= x <= pb[2] + 1 for x in keep)  # có ghi chú "tấm fix": tấm bù hẹp, không gộp
-        if size(pieces[i]) < PIECE_MIN and not kept:
+        if size(pieces[i]) < P("piece_min") and not kept:
             thin = pieces.pop(i)  # tấm mỏng nhập vào mảnh trước (hông phải của tủ trái); mảnh đầu nhập mảnh sau
             pieces[i - 1 if i > 0 else 0] += thin
             i = 0
@@ -78,7 +80,7 @@ def board_levels(items: list[Item]) -> list[float]:
     b0 = box_of(items)
     w = b0[2] - b0[0]
     return sorted(round((b[1] + b[3]) / 2) for b, _h, _r in items
-                  if (b[3] - b[1]) <= BOARD_MAX and (b[2] - b[0]) >= 0.6 * w and b[1] > b0[1] + BOARD_MAX and b[3] < b0[3] - BOARD_MAX)
+                  if (b[3] - b[1]) <= P("board_max") and (b[2] - b[0]) >= 0.6 * w and b[1] > b0[1] + P("board_max") and b[3] < b0[3] - P("board_max"))
 
 
 def _same_levels(a: list[float], b: list[float]) -> bool:
@@ -95,7 +97,7 @@ def split_blocks(items: list[Item], depth: int = 0, keep: tuple = ()) -> list[li
             return [leaf for p in ps for leaf in split_blocks(p, depth + 1, keep)]
     box = box_of(items)
     w = box[2] - box[0]
-    caps = [it for it in items if (it[0][3] - it[0][1]) <= BOARD_MAX and (it[0][2] - it[0][0]) >= 0.9 * w
+    caps = [it for it in items if (it[0][3] - it[0][1]) <= P("board_max") and (it[0][2] - it[0][0]) >= 0.9 * w
             and (it[0][3] >= box[3] - EPS or it[0][1] <= box[1] + EPS)]
     rest = [it for it in items if it not in caps]
     if not caps or len(rest) < 2:
@@ -117,7 +119,7 @@ def split_blocks(items: list[Item], depth: int = 0, keep: tuple = ()) -> list[li
             lb = box_of(leaf)
             if min(cb[2], lb[2]) - max(cb[0], lb[0]) <= EPS:
                 continue
-            if abs(lb[3] - cb[1]) <= BOARD_MAX or abs(lb[1] - cb[3]) <= BOARD_MAX:
+            if abs(lb[3] - cb[1]) <= P("board_max") or abs(lb[1] - cb[3]) <= P("board_max"):
                 leaf.append(((max(cb[0], lb[0]), cb[1], min(cb[2], lb[2]), cb[3]), c[1] if first else "", c[2]))
                 first = False
     return out
@@ -166,9 +168,9 @@ def _same(a: Box, b: Box, tol: float = 3.0) -> bool:
 def fronts(d: Drawing2D, body: list[Item], marks: list[Item], box: Box, symbols_only: bool = False) -> list[tuple[Box, str]]:
     """Mặt trước (cánh, ngăn kéo) của một khối: [(khung, handle)]."""
     rects = [(r, h) for _b, h, _r in body if h and (r := rect_of(d.entities[h]))]
-    boards = [r for r, _h in rects if min(r[2] - r[0], r[3] - r[1]) <= BOARD_MAX]
+    boards = [r for r, _h in rects if min(r[2] - r[0], r[3] - r[1]) <= P("board_max")]
     # loại đường bao trùng khung khối (lệch ≤ 5 mm); cánh/ngăn kéo đơn phủ gần hết mặt khối vẫn là mặt trước
-    cands = [(r, h) for r, h in rects if (r[2] - r[0]) >= FRONT_MIN and (r[3] - r[1]) >= FRONT_MIN and not _same(r, box, 5.0)]
+    cands = [(r, h) for r, h in rects if (r[2] - r[0]) >= P("front_min") and (r[3] - r[1]) >= P("front_min") and not _same(r, box, 5.0)]
     segs = _segments(d, body)
     if symbols_only:  # hình "bỏ cánh": hình chữ nhật là khoang/ngăn trong, chỉ nhận ô có ký hiệu mở cánh
         cands = []
@@ -188,7 +190,7 @@ def fronts(d: Drawing2D, body: list[Item], marks: list[Item], box: Box, symbols_
         pts = list(d.entities[h].pts or [])
         if not any(abs(x0 - x1) > 1 and abs(y0 - y1) > 1 for (x0, y0), (x1, y1) in zip(pts, pts[1:])):
             continue
-        if (b[2] - b[0]) < FRONT_MIN or (b[3] - b[1]) < FRONT_MIN or b[0] < box[0] - 1 or b[2] > box[2] + 1 or b[1] < box[1] - 1 or b[3] > box[3] + 1:
+        if (b[2] - b[0]) < P("front_min") or (b[3] - b[1]) < P("front_min") or b[0] < box[0] - 1 or b[2] > box[2] + 1 or b[1] < box[1] - 1 or b[3] > box[3] + 1:
             continue
         cov = (_covered(segs, "x", b[0], b[1], b[3]), _covered(segs, "x", b[2], b[1], b[3]),
                _covered(segs, "z", b[1], b[0], b[2]), _covered(segs, "z", b[3], b[0], b[2]))

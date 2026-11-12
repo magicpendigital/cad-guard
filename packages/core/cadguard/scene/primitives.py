@@ -16,6 +16,8 @@ Các lớp trên (`interior`, `segment`, `assemble`) dùng hàm ở đây thay c
 """
 from __future__ import annotations
 
+from .params import P
+
 from dataclasses import asdict, dataclass, field
 
 from .views2d import Drawing2D, View, entity_box, rect_of
@@ -200,7 +202,7 @@ def is_curve_mark(p: list[tuple[float, float]], tol: float = 5.0) -> bool:
 
 
 def is_callout(e, role: str | None) -> bool:
-    return e.type == "CIRCLE" and role not in BODY and float(getattr(e, "radius", 0) or 0) >= CALLOUT_R
+    return e.type == "CIRCLE" and role not in BODY and float(getattr(e, "radius", 0) or 0) >= P("callout_r")
 
 
 def is_annotation(d: Drawing2D, h: str) -> bool:
@@ -217,7 +219,7 @@ def is_opening(d: Drawing2D, h: str) -> bool:
     p = pts(e)
     if is_curve_mark(p):
         return False
-    return any(abs(x1 - x0) >= SYMBOL_MIN and abs(y1 - y0) >= SYMBOL_MIN for (x0, y0), (x1, y1) in zip(p, p[1:]))
+    return any(abs(x1 - x0) >= P("symbol_min") and abs(y1 - y0) >= P("symbol_min") for (x0, y0), (x1, y1) in zip(p, p[1:]))
 
 
 def door_symbol_area(d: Drawing2D, v: View) -> float:
@@ -240,7 +242,7 @@ def front_rects(d: Drawing2D, v: View) -> int:
         if d.roles.get(e.layer) in ("hidden", "dim", "text", "frame", None):
             continue
         r = rect_of(e)
-        if r and (r[2] - r[0]) >= SYMBOL_MIN and (r[3] - r[1]) >= SYMBOL_MIN:
+        if r and (r[2] - r[0]) >= P("symbol_min") and (r[3] - r[1]) >= P("symbol_min"):
             n += 1
     return n
 
@@ -250,7 +252,7 @@ def xbox(d: Drawing2D, handles, x: float, z: float):
     rects = []
     for h in handles:
         r = rect_of(d.entities[h])
-        if r and r[0] <= x <= r[2] and r[1] <= z <= r[3] and (r[2] - r[0]) >= SYMBOL_MIN and (r[3] - r[1]) >= SYMBOL_MIN:
+        if r and r[0] <= x <= r[2] and r[1] <= z <= r[3] and (r[2] - r[0]) >= P("symbol_min") and (r[3] - r[1]) >= P("symbol_min"):
             rects.append((r, h))
     for r, h in sorted(rects, key=lambda t: (t[0][2] - t[0][0]) * (t[0][3] - t[0][1])):
         diag = 0
@@ -274,11 +276,12 @@ def supported(x: float, z: float, vs: list[Seg], x0: float, x1: float) -> bool:
 
 
 def board_stacks(segs: list[Seg], x0: float, x1: float, z0: float, z1: float, vs: list[Seg] | None = None,
-                 edge: float = EDGE_ZONE) -> list[dict]:
+                 edge: float | None = None) -> list[dict]:
     """Tấm NGANG trong khung [x0, x1] × [z0, z1] (toạ độ của hình): chồng nét ngang cách nhau ≤ STACK_GAP. Một nét đơn
     chỉ tính khi dài ≥ 60 % khung (cách vẽ đợt bằng một nét). Bỏ tấm cách đáy/nóc ≤ `edge` (chân, đáy, nóc, phào). Có `vs`
     (nét đứng thân tủ): tấm phải tựa — ít nhất một đầu chạm cạnh khung hoặc một nét đứng đi qua cao độ tấm.
     Trả [{z0, z1, lines, x0, x1, refs, conf}]."""
+    edge = P("edge_zone") if edge is None else edge
     w = x1 - x0
     cand = sorted((s for s in segs if s[0] >= x0 - 5 and s[1] <= x1 + 5 and (s[1] - s[0]) >= 150.0
                    and z0 - 1 <= s[2] <= z1 + 1), key=lambda s: (s[2], s[0]))
@@ -288,7 +291,7 @@ def board_stacks(segs: list[Seg], x0: float, x1: float, z0: float, z1: float, vs
         home = None
         for st in reversed(stacks):
             last = st[-1]
-            if s[2] - last[2] > STACK_GAP:
+            if s[2] - last[2] > P("stack_gap"):
                 continue
             ov = min(s[1], last[1]) - max(s[0], last[0])
             ln = (s[1] - s[0], last[1] - last[0])
@@ -316,9 +319,10 @@ def board_stacks(segs: list[Seg], x0: float, x1: float, z0: float, z1: float, vs
     return out
 
 
-def vertical_boards(vs: list[Seg], hs: list[Seg], box: Box, edge: float = EDGE_ZONE) -> list[dict]:
+def vertical_boards(vs: list[Seg], hs: list[Seg], box: Box, edge: float | None = None) -> list[dict]:
     """Tấm ĐỨNG (vách) trong khung: hai nét đứng cách nhau 14–60 mm, cao ≥ 150, không sát cạnh khung (40 mm), hai đầu tựa
     lên tấm ngang hoặc đáy/nóc khung (cạnh lòng ngăn kéo, khung cánh thì không). Trả [{x0, x1, z0, z1, refs}]."""
+    edge = P("edge_zone") if edge is None else edge
     bx0, bz0, bx1, bz1 = box
     vv = sorted((s for s in vs if (s[1] - s[0]) >= 150 and bx0 + 40 < s[2] < bx1 - 40), key=lambda s: s[2])
 
@@ -369,7 +373,7 @@ def extract(d: Drawing2D, v: View, body: frozenset[str] = BODY) -> Primitives:
         if b is None:
             continue
         r = rect_of(e)
-        if r and role not in ("hidden", "dim", "text", "frame", None) and (r[2] - r[0]) >= SYMBOL_MIN and (r[3] - r[1]) >= SYMBOL_MIN:
+        if r and role not in ("hidden", "dim", "text", "frame", None) and (r[2] - r[0]) >= P("symbol_min") and (r[3] - r[1]) >= P("symbol_min"):
             out.frames.append(Frame(r, [h]))
         if is_callout(e, role):
             out.symbols.append(Symbol("callout", b, [h]))

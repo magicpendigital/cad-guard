@@ -1,6 +1,6 @@
 # Thiết kế: đọc bản vẽ nội thất theo kiến trúc tổng thể (11/11/2026)
 
-Trạng thái: **đã duyệt 11/11/2026**. P1–P5 xong (§9); P6–P7 chưa làm.
+Trạng thái: **đã duyệt 11/11/2026**. P1–P6 xong (§9); P7 chưa làm.
 
 ## 1. Vấn đề
 
@@ -350,3 +350,46 @@ Giới hạn:
 - ký hiệu mặt cắt đặt ở mặt bằng chưa dùng, mới dùng ký hiệu trên mặt đứng;
 - tủ treo ở mặt cắt không có kích thước sàn–trần thì lấy đáy thân tủ làm sàn, nên dải cao có thể lệch;
 - tấm đọc ở mặt cắt được trải suốt bề ngang khối (mặt cắt không cho biết bề ngang).
+
+**P6 — tri thức là dữ liệu (12/11/2026).**
+
+- **Thông số đọc nét** (`scene/params.py`): 12 số trước đây là hằng số trong code nay là khoá `params` của hồ sơ trình
+  bày. Mỗi số có mặc định và khoảng hợp lệ:
+  - khe chồng nét của một tấm, vùng chân/nóc, dày tấm trên mặt đứng;
+  - mảnh nhỏ nhất khi tách khối, cánh nhỏ nhất, ký hiệu nhỏ nhất, bán kính vòng chú thích;
+  - dày đợt ở hình bỏ cánh, dày kính, khoảng cách ghi chú tới tấm, khoang treo, cột ngăn kéo.
+
+  Code đọc qua `P(tên)`; khi dựng, `build_item_scene` / `build_once` đặt giá trị của hồ sơ (`drafting.read` → `d.params`).
+  Hồ sơ không khai gì thì kết quả giống hệt P5 (cùng mã băm trên 102 hạng mục).
+- **Đề xuất hồ sơ đi qua L4** (`drafting.impact`, `hypotheses.quality`):
+  - mỗi đề xuất (code hoặc AI: vai trò layer, nghĩa ghi chú, nay thêm thông số) được dựng thử: đọc lại bản vẽ với
+    hồ sơ + đề xuất, dựng tới 4 hạng mục, so điểm cách hiểu và số khối/cánh/nội thất;
+  - màn "Hồ sơ trình bày" hiện "Thử dựng lại N hạng mục: điểm a → b/100". Điểm giảm thì cảnh báo. Chỉ ghi vào hồ sơ
+    khi người dùng Đồng ý;
+  - đề xuất thông số qua harness: tên có trong danh sách, số trong khoảng, khác giá trị đang dùng, có bằng chứng là
+    nét/chữ có thật.
+- **Code đề xuất thêm:** layer bị đoán là "kích thước"/"chữ" theo tên mà không chứa kích thước/chữ nào, chỉ có nét vẽ,
+  thì đề xuất là thân đồ.
+- Màn "Hồ sơ trình bày" có bảng **Thông số đọc nét** (sửa, lưu cả máy / dự án, bỏ về mặc định).
+
+**Tiêu chí P6: thêm một kiểu vẽ mới chỉ bằng hồ sơ.** Kiểu mô phỏng `kieumoi` ("công ty khác"):
+- thân tủ trên layer `KT-DOGO`, tên làm code đoán là layer kích thước;
+- đợt mica dày 19 mm, ghi chú "MICA" (code mặc định coi kính dày ≤ 14 và chưa biết chữ "MICA").
+
+Trên 18 hạng mục kiểu này (chỉ code):
+
+| Hồ sơ | Điểm | Nội thất |
+|---|---|---|
+| mặc định | 0 % | 0 % |
+| + đề xuất của code (layer → thân đồ; L4: 84 → 100/100) | 100 % | 71 % |
+| + từ khoá "MICA" = kính và thông số dày kính 20 (dạng đề xuất AI phải đưa, đã qua harness) | 100 % | 100 % |
+
+Không sửa dòng code nào cho kiểu này. Hồ sơ mẫu: `synth.PROFILE_KIEUMOI`. Test: `tests/test_drafting_params.py`.
+
+Giới hạn:
+- code chưa tự đề xuất thông số (chỉ AI và người dùng), vì muốn đề xuất phải dựng thử nhiều giá trị; để sau khi có
+  đáp án thật;
+- điểm L4 dùng cho đề xuất là điểm cách hiểu (nhất quán + bằng chứng), không phải điểm so với đáp án; hai số này có thể
+  khác nhau ở ca lạ;
+- hằng số kết cấu (khoang treo tối thiểu ở bộ chấm, nhịp đợt…) vẫn ở hồ sơ kết cấu xưởng / code, không thuộc hồ sơ
+  trình bày.

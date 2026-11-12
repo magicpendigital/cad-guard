@@ -7,6 +7,8 @@ Thay vì viết lại bản vẽ, CAD Guard học CÁCH HIỂU một lần, ngư
 - `number_tag`: thẻ thuộc tính khung tên chứa số bản vẽ (rỗng = tự dò; không có số thì nhóm hạng mục theo tiêu đề hình).
 - `keywords`: [{text, meaning}] chữ ghi chú trên mặt đứng và nghĩa (MEANINGS), vd. "TẤM FIX" -> filler (tấm bù, không
   phải tủ). Có bộ mặc định (nguồn "Mặc định"), người dùng thêm/bỏ.
+- `params`: {tên: số} thông số đọc nét (`scene/params.PARAMS`: khe chồng nét một tấm, vùng chân/nóc, dày tấm, ký hiệu
+  nhỏ nhất…), mỗi số có khoảng hợp lệ. Kiểu vẽ mới (tấm dày, chân cao…) chỉnh ở đây, không sửa code.
 
 Lưu cả máy (`<config>/drafting.yaml`) hoặc riêng dự án (`.cadguard/drafting.yaml`), có nhật ký. Đề xuất bằng code
 (`propose_code`) và bằng AI (`propose_ai` + `check`): mọi đề xuất phải dẫn bằng chứng có thật trong bản vẽ (layer có
@@ -85,6 +87,9 @@ def effective(project_root: Path | None = None) -> dict:
     origin: dict[str, str] = {}
     kws = {up(k["text"]): {**k, "origin": "default"} for k in DEFAULT_KEYWORDS}
     number_tag, removed = "", set()
+    from .scene.params import clean
+
+    params: dict[str, float] = {}
     for scope in ("machine", "project"):
         if scope not in p:
             continue
@@ -95,16 +100,20 @@ def effective(project_root: Path | None = None) -> dict:
             if isinstance(k, dict) and k.get("text") and k.get("meaning") in MEANINGS:
                 kws[up(k["text"])] = {"text": up(k["text"]), "meaning": k["meaning"], "origin": scope}
         removed |= {up(x) for x in d.get("removed_keywords") or []}
+        for k, v in clean(d.get("params")).items():
+            params[k], origin[f"param:{k}"] = v, scope
         if d.get("number_tag"):
             number_tag = str(d["number_tag"])
             origin["number_tag"] = scope
     confirmed = any(scope in p and p[scope].is_file() for scope in ("machine", "project"))
     return {"schema": SCHEMA, "layer_roles": roles, "number_tag": number_tag,
-            "keywords": [k for t, k in sorted(kws.items()) if t not in removed], "origin": origin, "confirmed": confirmed}
+            "keywords": [k for t, k in sorted(kws.items()) if t not in removed], "params": params, "origin": origin,
+            "confirmed": confirmed}
 
 
 def save(project_root: Path | None, scope: str, patch: dict) -> dict:
-    """Ghép `patch` ({layer_roles, keywords, removed_keywords, number_tag}) vào hồ sơ của phạm vi `scope`."""
+    """Ghép `patch` ({layer_roles, keywords, removed_keywords, number_tag, params}) vào hồ sơ của phạm vi `scope`."""
+    from .scene.params import PARAMS
     from .scene.views2d import ROLES
 
     if scope not in ("machine", "project") or (scope == "project" and project_root is None):
@@ -127,7 +136,24 @@ def save(project_root: Path | None, scope: str, patch: dict) -> dict:
         kws[t] = {"text": t, "meaning": k["meaning"]}
     removed = {up(x) for x in cur.get("removed_keywords") or []} | {up(x) for x in patch.get("removed_keywords") or []}
     removed -= set(kws)
+    params = {k: v for k, v in (cur.get("params") or {}).items() if k in PARAMS}
+    for k, v in (patch.get("params") or {}).items():
+        if k not in PARAMS:
+            raise ValueError(f"Thông số không có: {k}")
+        if v == "reset":
+            params.pop(k, None)
+            continue
+        try:
+            num = float(str(v).replace(",", "."))
+        except ValueError:
+            raise ValueError(f"Thông số {k} phải là số.") from None
+        lo, hi = PARAMS[k][1], PARAMS[k][2]
+        if not lo <= num <= hi:
+            raise ValueError(f"Thông số {k} phải trong khoảng {lo:g}–{hi:g}.")
+        params[k] = num
     data = {"schema": SCHEMA, "layer_roles": roles, "keywords": list(kws.values()), "removed_keywords": sorted(removed)}
+    if params:
+        data["params"] = params
     tag = patch.get("number_tag", cur.get("number_tag", ""))
     if tag:
         data["number_tag"] = str(tag)[:40]
@@ -145,13 +171,31 @@ def reset(project_root: Path | None, scope: str) -> dict:
     return effective(project_root)
 
 
-def read(model, project_root: Path | None = None):
-    """Đọc bản vẽ 2D theo hồ sơ trình bày đang dùng (vai trò layer, thẻ số bản vẽ, nghĩa từ khoá)."""
+def with_patch(prof: dict, patch: dict | None) -> dict:
+    """Hồ sơ `prof` cộng thêm `patch` (chỉ trong bộ nhớ, không ghi): để thử một đề xuất trước khi Đồng ý."""
+    from .scene.params import clean
+
+    if not patch:
+        return prof
+    out = {**prof, "layer_roles": {**prof["layer_roles"], **(patch.get("layer_roles") or {})},
+           "params": {**prof.get("params", {}), **clean(patch.get("params"))}}
+    kws = {up(k["text"]): k for k in prof["keywords"]}
+    for k in patch.get("keywords") or []:
+        if k.get("meaning") in MEANINGS and k.get("text"):
+            kws[up(k["text"])] = {"text": up(k["text"]), "meaning": k["meaning"], "origin": "thử"}
+    out["keywords"] = list(kws.values())
+    return out
+
+
+def read(model, project_root: Path | None = None, patch: dict | None = None):
+    """Đọc bản vẽ 2D theo hồ sơ trình bày đang dùng (vai trò layer, thẻ số bản vẽ, nghĩa từ khoá, thông số đọc nét).
+    `patch`: thử thêm một đề xuất (không ghi hồ sơ)."""
     from .scene.views2d import read_drawing
 
-    prof = effective(project_root)
+    prof = with_patch(effective(project_root), patch)
     d = read_drawing(model, roles=prof["layer_roles"] or None, number_tag=prof["number_tag"] or None)
     d.keywords = prof["keywords"]
+    d.params = prof["params"]
     return d
 
 
@@ -181,22 +225,31 @@ def _layer_use(d) -> dict[str, dict]:
         for h in v.handles:
             e = d.entities[h]
             if e.type in ("LINE", "LWPOLYLINE", "ARC", "CIRCLE"):
-                u = use.setdefault(e.layer, {"lines": 0, "role": d.roles.get(e.layer, "other"), "sample": h})
+                u = use.setdefault(e.layer, {"lines": 0, "annot": 0, "role": d.roles.get(e.layer, "other"), "sample": h})
                 u["lines"] += 1
+            elif e.type in ("DIMENSION", "TEXT", "MTEXT"):
+                u = use.setdefault(e.layer, {"lines": 0, "annot": 0, "role": d.roles.get(e.layer, "other"), "sample": h})
+                u["annot"] += 1
     return use
 
 
 def propose_code(d, prof: dict) -> list[dict]:
     """Gợi ý bằng code: layer nét thấy/khác mang phần lớn nét của hình hạng mục mà layer nội thất gần như trống ->
-    vai trò thân đồ; chữ ghi chú trên bản vẽ khớp nghĩa đã biết nhưng chưa có trong hồ sơ."""
+    vai trò thân đồ (kể cả layer bị đoán là kích thước/chữ theo tên mà chỉ chứa nét vẽ); chữ ghi chú trên bản vẽ khớp
+    nghĩa đã biết nhưng chưa có trong hồ sơ."""
     out = []
     use = _layer_use(d)
     furn = sum(u["lines"] for u in use.values() if u["role"] in ("furniture", "cut"))
     for la, u in sorted(use.items(), key=lambda kv: -kv[1]["lines"]):
-        if u["role"] in ("visible", "other", "thin") and la not in prof["layer_roles"] and u["lines"] >= 8 and u["lines"] > 2 * furn:
+        misnamed = u["role"] in ("dim", "text") and u["annot"] == 0  # tên giống layer kích thước/chữ nhưng chỉ có nét vẽ
+        if (u["role"] in ("visible", "other", "thin") or misnamed) and la not in prof["layer_roles"] and u["lines"] >= 8 \
+                and u["lines"] > 2 * furn:
             out.append({"kind": "layer_role", "target": la, "value": "furniture", "evidence": [u["sample"]], "origin": "code",
                         "reason": f"Layer “{la}” có {u['lines']} nét trong mặt đứng/mặt bằng các hạng mục, layer nội thất/nét cắt "
-                                  f"chỉ có {furn}: nhiều khả năng thân tủ vẽ trên layer này."})
+                                  f"chỉ có {furn}"
+                                  + (f"; tên layer làm code đoán là “{ROLE_VI.get(u['role'], u['role'])}” nhưng layer không có "
+                                     "kích thước/chữ nào" if misnamed else "")
+                                  + ": nhiều khả năng thân tủ vẽ trên layer này."})
     known = {up(k["text"]) for k in prof["keywords"]}
     seen = set()
     for h, t, _g in _texts(d):
@@ -214,13 +267,18 @@ AI_SYSTEM = (
     "đoán sai, role thuộc {roles}; (2) từ khoá ghi chú và nghĩa, meaning thuộc {meanings}. Chỉ đề xuất điều có trong dữ liệu; "
     "mỗi đề xuất kèm evidence là handle mẫu đã cho. Trả JSON {{\"proposals\": [{{\"kind\": \"layer_role\"|\"keyword\", "
     "\"target\": \"<tên layer hoặc chữ khoá>\", \"value\": \"<role hoặc meaning>\", \"evidence\": [\"<handle>\"], "
-    "\"reason\": \"<ngắn, tiếng Việt>\"}}]}}.")
+    "\"reason\": \"<ngắn, tiếng Việt>\"}}]}}. Được đề xuất thêm (3) thông số đọc nét khi bản vẽ vẽ khác mặc định: kind "
+    "\"param\", target thuộc {params}, value là số trong khoảng ở \"params\" (vd. kính dày 19 mm thì glass_max 20), evidence là "
+    "handle nét/chữ cho thấy điều đó.")
 
 
 def ai_context(d, prof: dict) -> dict:
+    from .scene.params import table
+
     use = _layer_use(d)
     texts = _texts(d)
-    return {"layers": [{"layer": la, "role": u["role"], "lines_in_item_views": u["lines"], "sample_handle": u["sample"]}
+    return {"params": [{k: x[k] for k in ("name", "label", "value", "min", "max")} for x in table(prof.get("params"))],
+            "layers": [{"layer": la, "role": u["role"], "lines_in_item_views": u["lines"], "sample_handle": u["sample"]}
                        for la, u in sorted(use.items(), key=lambda kv: -kv[1]["lines"])[:60]],
             "notes": [{"handle": h, "text": t[:80], "item": g} for h, t, g in texts[:200]],
             "known_keywords": prof["keywords"]}
@@ -229,7 +287,9 @@ def ai_context(d, prof: dict) -> dict:
 def propose_ai(backend, d, prof: dict) -> list[dict]:
     from .scene.views2d import ROLES
 
-    reply = backend.complete(AI_SYSTEM.format(roles=", ".join(ROLES), meanings=", ".join(MEANINGS)),
+    from .scene.params import PARAMS
+
+    reply = backend.complete(AI_SYSTEM.format(roles=", ".join(ROLES), meanings=", ".join(MEANINGS), params=", ".join(PARAMS)),
                              [{"role": "user", "content": json.dumps(ai_context(d, prof), ensure_ascii=False)}])
     m = re.search(r"\{.*\}", reply or "", re.S)
     try:
@@ -263,11 +323,48 @@ def check(p: dict, d, prof: dict) -> tuple[bool, str]:
         if not any(h in texts and t in texts[h] for h in ev):
             return False, "chữ này không có trong ghi chú được dẫn"
         return True, ""
+    if kind == "param":
+        from .scene.params import PARAMS
+
+        if target not in PARAMS:
+            return False, "thông số không có"
+        try:
+            num = float(str(value).replace(",", "."))
+        except ValueError:
+            return False, "giá trị không phải số"
+        if not PARAMS[target][1] <= num <= PARAMS[target][2]:
+            return False, "ngoài khoảng hợp lệ"
+        if abs(num - prof.get("params", {}).get(target, PARAMS[target][0])) < 1e-6:
+            return False, "trùng giá trị đang dùng"
+        if not any(h in d.entities for h in ev):
+            return False, "thiếu bằng chứng (nét/chữ trên bản vẽ cho thấy cần đổi)"
+        return True, ""
     return False, "loại đề xuất không hỗ trợ"
 
 
-def propose(d, prof: dict, backend=None) -> dict:
-    """Chạy code (+ AI nếu có), qua harness, gộp trùng. Trả {items, rejected}."""
+def impact(model, project_root, patch: dict, groups: list[str] | None = None, limit: int = 4) -> dict:
+    """L4 chấm một đề xuất hồ sơ: dựng các hạng mục với hồ sơ hiện tại và với hồ sơ + đề xuất, so điểm cách hiểu
+    (`hypotheses.quality`) và số khối/cánh/nội thất. Không ghi gì."""
+    from .scene.assemble import item_summary
+    from .scene.hypotheses import quality
+
+    d0 = read(model, project_root)
+    d1 = read(model, project_root, patch)
+    gs = groups or [x["id"] for x in item_summary(d0) if x["plans"] and x["elevations"]][:limit]
+    rows = []
+    for g in gs:
+        a, b = quality(d0, g), quality(d1, g)
+        rows.append({"item": g, "before": a["total"], "after": b["total"], "changed": a["sig"] != b["sig"],
+                     "modules": [a["modules"], b["modules"]], "fronts": [a["fronts"], b["fronts"]], "inner": [a["inner"], b["inner"]]})
+    n = max(len(rows), 1)
+    before, after = sum(r["before"] for r in rows) / n, sum(r["after"] for r in rows) / n
+    return {"items": rows, "before": round(before, 3), "after": round(after, 3), "delta": round(after - before, 3),
+            "changed": sum(r["changed"] for r in rows)}
+
+
+def propose(d, prof: dict, backend=None, model=None, project_root=None) -> dict:
+    """Chạy code (+ AI nếu có), qua harness, gộp trùng. Có `model`: mỗi đề xuất kèm `impact` (L4 chấm bằng cách dựng
+    lại các hạng mục với hồ sơ + đề xuất). Trả {items, rejected}."""
     raw = propose_code(d, prof)
     if backend is not None:
         raw += propose_ai(backend, d, prof)
@@ -284,12 +381,20 @@ def propose(d, prof: dict, backend=None) -> dict:
         items.append({"id": f"{p['kind']}:{key[1]}", "kind": p["kind"], "target": key[1], "value": p["value"],
                       "reason": str(p.get("reason") or "")[:300], "origin": p.get("origin", "code"),
                       "evidence": [str(h).upper() for h in p.get("evidence") or []][:5]})
+    if model is not None:
+        for it in items[:12]:
+            try:
+                it["impact"] = impact(model, project_root, patch_for(it))
+            except Exception:  # noqa: BLE001 — chấm thêm, không làm hỏng đề xuất
+                it["impact"] = None
     return {"items": items, "rejected": rejected[:30]}
 
 
 def patch_for(item: dict) -> dict:
     if item["kind"] == "layer_role":
         return {"layer_roles": {item["target"]: item["value"]}}
+    if item["kind"] == "param":
+        return {"params": {item["target"]: float(str(item["value"]).replace(",", "."))}}
     return {"keywords": [{"text": item["target"], "meaning": item["value"]}]}
 
 

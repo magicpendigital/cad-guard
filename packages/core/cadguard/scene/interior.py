@@ -15,6 +15,8 @@ nét khuất nên bị coi như nét tủ.
 """
 from __future__ import annotations
 
+from .params import P
+
 from .primitives import (BODY, DRAW_TYPES, EDGE_ZONE, SYMBOL_MIN, board_stacks, door_symbol_area, front_rects,
                          has_meaning, hsegs, is_callout, is_curve_mark, meaning, pts, text_items, vertical_boards, vsegs, xbox)
 from .primitives import cell as _cell
@@ -95,7 +97,7 @@ def read_interior(d: Drawing2D, v: View, ox: float, floor: float, body: frozense
             if mean not in ("glass", "stone") or not (L["x0"] - 50 <= tx <= L["x1"] + 50):
                 continue
             dist = min(abs(tz - L["z0"]), abs(tz - L["z1"]))
-            if dist <= NOTE_DIST and (best is None or dist < best[0]):
+            if dist <= P("note_dist") and (best is None or dist < best[0]):
                 best = (dist, mean, h)
         for other in lv:  # chữ thuộc tầng gần hơn thì không gán cho tầng này
             if best and other is not L:
@@ -103,7 +105,7 @@ def read_interior(d: Drawing2D, v: View, ox: float, floor: float, body: frozense
                 if min(abs(tz - other["z0"]), abs(tz - other["z1"])) < best[0]:
                     best = None
         if best:
-            if best[1] == "glass" and L["z1"] - L["z0"] <= GLASS_MAX:
+            if best[1] == "glass" and L["z1"] - L["z0"] <= P("glass_max"):
                 L["kind"], L["note"] = "glass", best[2]
             elif best[1] == "stone" and len(L["lines"]) >= 2:
                 L["kind"], L["note"] = "stone", best[2]
@@ -126,7 +128,7 @@ def read_interior(d: Drawing2D, v: View, ox: float, floor: float, body: frozense
                                           "text": t, "refs": [h] + ([xb[1]] if xb else [])})
         elif mean == "drawer" and interior:
             cell = _cell(hs, vs, tx, tz, box)
-            if not cell or (cell[2] - cell[0]) < SYMBOL_MIN or (cell[3] - cell[1]) < 80:
+            if not cell or (cell[2] - cell[0]) < P("symbol_min") or (cell[3] - cell[1]) < 80:
                 continue
             c = (cell[0] + ox, cell[1] - floor, cell[2] + ox, cell[3] - floor)
             cov = sum(max(0.0, min(f.x1, c[2]) - max(f.x0, c[0])) * max(0.0, min(f.z1, c[3]) - max(f.z0, c[1]))
@@ -146,7 +148,7 @@ def read_interior(d: Drawing2D, v: View, ox: float, floor: float, body: frozense
         rw, rh = r[2] - r[0], r[3] - r[1]
         if 10 <= rh <= 40 and rw >= 0.6 * (bx1 - bx0):
             below = max([z for z in tops if z < r[1]] + [bz0])
-            if has_rod_note or r[1] - below >= HANG_MIN:
+            if has_rod_note or r[1] - below >= P("hang_min"):
                 out["rods"].append({"x0": r[0] + ox, "x1": r[2] + ox, "z": (r[1] + r[3]) / 2 - floor, "refs": [h]})
     # đèn: nét khuất ngang đơn gần chữ "ĐÈN"
     hid = _hsegs(d, inside, frozenset({"hidden"}))

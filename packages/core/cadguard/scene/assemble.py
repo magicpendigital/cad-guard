@@ -19,6 +19,8 @@ Quy ước hướng: mặt đứng nhìn vào tường, tường ở phía Y l�
 
 from __future__ import annotations
 
+from .params import P
+
 import hashlib
 import json
 
@@ -232,8 +234,8 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
         back = max((q.box[3] for q in pf), default=p.box[3])
         m.y, m.d, m.src["d"] = round(back - dd - origin[1], 3), dd, Src(kind="default")
     def _drawer_column(b) -> bool:  # ≥ 3 mặt trước thấp (< 450) cùng cột (cùng hai mép trái/phải): cột ngăn kéo
-        col = [c for c, _h in fr if abs(c[0] - b[0]) <= 5 and abs(c[2] - b[2]) <= 5 and (c[3] - c[1]) < DRAWER_COL_H]
-        return (b[3] - b[1]) < DRAWER_COL_H and len(col) >= 3
+        col = [c for c, _h in fr if abs(c[0] - b[0]) <= 5 and abs(c[2] - b[2]) <= 5 and (c[3] - c[1]) < P("drawer_col_h")]
+        return (b[3] - b[1]) < P("drawer_col_h") and len(col) >= 3
 
     for j, (b, hf) in enumerate(sorted(fr, key=lambda t: (t[0][0], t[0][1])), 1):
         kindf = "drawer" if (b[3] - b[1]) < 0.6 * (b[2] - b[0]) or _drawer_column(b) else "door"
@@ -444,11 +446,11 @@ def build_item_scene(d: Drawing2D, group: str, supplement: dict | None = None, h
     """Dựng cảnh một hạng mục. Mặc định qua L4 (`hypotheses.resolve`): sinh vài cách hiểu ở chỗ mơ hồ (vai trò hình, nét
     đôi là tấm hay mép cánh, chia khối), chấm bằng ràng buộc + bằng chứng, chọn cách tốt nhất hoặc để thẻ "máy phân vân".
     `hypotheses=False`: dựng đúng một cách hiểu theo khoá bổ sung (`build_once`)."""
-    if not hypotheses:
-        return build_once(d, group, supplement)
     from .hypotheses import resolve
+    from .params import scope
 
-    return resolve(d, group, supplement or {})
+    with scope(getattr(d, "params", None)):  # thông số đọc nét của hồ sơ trình bày (P6)
+        return resolve(d, group, supplement or {}) if hypotheses else build_once(d, group, supplement)
 
 
 NONE_VIEW = "none"  # giá trị khoá `interior:<hạng mục>`: không đọc nội thất ở hình riêng; = mã hình chính: đọc hình chính như hình bỏ cánh
@@ -458,7 +460,13 @@ def build_once(d: Drawing2D, group: str, supplement: dict | None = None) -> Scen
     """Dựng MỘT cách hiểu. Khoá `main:<hạng mục>` = hình dựng khối/cánh; `interior:<hạng mục>` = hình đọc nội thất
     (mã hình khác), `none` (không có hình bỏ cánh: nét đôi ở hình chính là mép cánh) hoặc chính mã hình chính (hình chính
     vẽ không cánh: nét đôi là tấm)."""
-    supp = supplement or {}
+    from .params import scope
+
+    with scope(getattr(d, "params", None)):
+        return _build_once(d, group, supplement or {})
+
+
+def _build_once(d: Drawing2D, group: str, supp: dict) -> Scene2:
     sc = Scene2(item=group)
     sc.notes.append("Quy ước: mặt đứng nhìn vào tường; ở mặt bằng tường phía Y lớn, mặt trước tủ phía Y nhỏ.")
     plans = [v for v in d.views_of(group, "plan") if v.box]
@@ -533,7 +541,7 @@ def build_once(d: Drawing2D, group: str, supplement: dict | None = None) -> Scen
         se, _sp, sox = shelf_src[0], shelf_src[1], shelf_src[2]
         for h in se.handles:
             r = rect_of(d.entities[h])
-            if r and d.roles.get(d.entities[h].layer) in FURN and (r[3] - r[1]) <= SHELF_MAX and (r[2] - r[0]) >= 150:
+            if r and d.roles.get(d.entities[h].layer) in FURN and (r[3] - r[1]) <= P("shelf_max") and (r[2] - r[0]) >= 150:
                 rh2 = room_height_dim(d, se)
                 f2 = rh2.lo if rh2 else se.box[1]
                 shelf_rects.append((r[0] + sox, r[2] + sox, r[1] - f2))

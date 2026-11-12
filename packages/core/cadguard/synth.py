@@ -45,7 +45,13 @@ STYLES: dict[str, dict[str, Any]] = {
     "noithat": {"label": "Nội thất chỉ vẽ ở hình bỏ cánh: tấm hai nét, đợt kính, thanh treo, hộc trong + vách", "companion": True,
                 "interior": True},
     "khuat_chuthich": {"label": "Đường khấu bo cong + vòng chú thích \"ghép mòi 45°\" vẽ trên layer nét khuất", "marks": True},
+    # P6: kiểu vẽ của "công ty khác" — code mặc định đọc sai, chỉ cần hồ sơ trình bày (layer, từ khoá, thông số), không sửa code
+    "kieumoi": {"label": "Công ty khác: thân tủ trên layer KT-DOGO, đợt mica dày 19 ghi \"MICA\" (cần hồ sơ trình bày)",
+                "body": "KT-DOGO", "companion": True, "interior": True, "glass_th": 19.0, "glass_note": "TẤM MICA TRONG 19MM"},
 }
+# hồ sơ trình bày đọc đúng kiểu "kieumoi" (dùng trong test + tài liệu)
+PROFILE_KIEUMOI = {"layer_roles": {"KT-DOGO": "furniture"}, "keywords": [{"text": "MICA", "meaning": "glass"}],
+                   "params": {"glass_max": 20}}
 INNER_KINDS = ("shelf", "glass", "rod", "drawer", "partition")
 
 
@@ -230,15 +236,16 @@ def interior_plan(m: dict) -> dict:
     return out
 
 
-def _interior(msp, m, x0, z0, x1, body):
+def _interior(msp, m, x0, z0, x1, body, style=None):
     """Vẽ nội thất một khối ở hình bỏ cánh (kiểu "noithat")."""
+    style = style or {}
     ip = interior_plan(m)
     a, b = x0 + T, x1 - T
     for kind, z in ip["levels"]:
-        th = 10.0 if kind == "glass" else T
+        th = float(style.get("glass_th", 10.0)) if kind == "glass" else T
         _lines2(msp, a, b, z0 + z, th, body)
         if kind == "glass":
-            msp.add_text("KÍNH CƯỜNG LỰC 10MM", height=30, dxfattribs={"layer": "SYN_Text", "insert": (a + 20, z0 + z - 80)})
+            msp.add_text(style.get("glass_note", "KÍNH CƯỜNG LỰC 10MM"), height=30, dxfattribs={"layer": "SYN_Text", "insert": (a + 20, z0 + z - 80)})
     if ip["rod"]:
         _rect(msp, a, z0 + ip["rod"] - 15, b, z0 + ip["rod"] + 15, "SYN_Khuat")
     if ip["drawers"]:
@@ -273,7 +280,7 @@ def _elevation(msp, mods, ex, fz, body, style, fronts=True):
         if not style.get("shared"):
             _rect(msp, x0, z0, x1, z1, body)  # đường bao khối
         if not fronts and style.get("interior") and m.get("use"):
-            _interior(msp, m, x0, z0, x1, body)
+            _interior(msp, m, x0, z0, x1, body, style)
             continue
         if not fronts:
             n = int(m.get("shelves") or 0)
@@ -308,7 +315,7 @@ def draw(spec: dict, style_keys: list[str], path: Path) -> dict:
     body = style.get("body", "SYN_Noithat")
     doc = ezdxf.new("R2018", setup=True)
     doc.header["$INSUNITS"] = 4
-    for name in LAYERS:
+    for name in LAYERS + ([body] if body not in LAYERS else []):
         doc.layers.add(name)
     doc.layers.get("SYN_Khuat").dxf.linetype = "DASHED"
     _company_frame(doc)
@@ -440,4 +447,4 @@ def generate(out_dir: Path, n: int = 12, seed: int = 1, specs: list[dict] | None
     return {"dir": str(out_dir), "items": rows}
 
 
-__all__ = ["DESIGNER_SYSTEM", "STYLES", "design_specs", "design_specs_ai", "draw", "generate", "validate_spec"]
+__all__ = ["DESIGNER_SYSTEM", "PROFILE_KIEUMOI", "STYLES", "design_specs", "design_specs_ai", "draw", "generate", "validate_spec"]

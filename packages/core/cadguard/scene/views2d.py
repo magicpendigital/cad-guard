@@ -405,6 +405,7 @@ class Drawing2D:
     enc: dict = field(default_factory=dict)
     guess: object = True
     keywords: list = field(default_factory=list)  # hồ sơ trình bày: [{text, meaning}] (drafting.py)
+    params: dict = field(default_factory=dict)  # hồ sơ trình bày: thông số đọc nét (`scene/params.py`)
 
     def view(self, vid: str) -> View | None:
         return next((v for v in self.views if v.id == vid), None)

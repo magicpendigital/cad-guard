@@ -342,6 +342,19 @@ def _describe(ctx: Ctx, sc: Scene2, did: str) -> str:
     return "không chia khối ở đây."
 
 
+def quality(d: Drawing2D, group: str) -> dict:
+    """Điểm cách hiểu đã chọn của một hạng mục (cùng thước đo với `resolve`) + số đếm, để so hai hồ sơ trình bày."""
+    from .assemble import build_item_scene
+
+    sc = build_item_scene(d, group, {})
+    try:
+        s = score(Ctx(d, group, sc), sc)["total"]
+    except Exception:  # noqa: BLE001
+        s = 0.0
+    return {"total": s, "sig": _sig(sc), "modules": len(sc.modules), "fronts": sum(len(m.fronts) for m in sc.modules),
+            "inner": sum(len(m.inner) for m in sc.modules)}
+
+
 def cards(sc: Scene2) -> list[dict]:
     """Thẻ cho màn 3D: quyết định máy đã đổi (auto) hoặc còn phân vân (unsure)."""
     ch = getattr(sc, "_choice", None) or {}
@@ -349,4 +362,4 @@ def cards(sc: Scene2) -> list[dict]:
     return [r for r in ch.get("decisions", []) if r["status"] == "auto" or (r["status"] == "unsure" and not r["id"].startswith("split@"))]
 
 
-__all__ = ["MARGIN", "cards", "decided", "decisions", "resolve", "score"]
+__all__ = ["MARGIN", "cards", "decided", "decisions", "quality", "resolve", "score"]

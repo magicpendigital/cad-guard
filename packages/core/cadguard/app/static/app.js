@@ -1824,9 +1824,17 @@
     const showProps = (items, rejected) => {
       fill(props, items.length ? items.map((p) => el("div", {class: "gap3d prop3d"},
         el("span", {class: "src-b " + (p.origin === "code" ? "src-geometry" : "src-user"), text: p.origin === "code" ? "Code" : "AI"}), " ",
-        p.kind === "layer_role" ? [b(`Layer “${p.target}”`), ` là ${c.roles[p.value] || p.value}`] : [b(`“${p.target}”`), ` nghĩa là ${c.meanings[p.value] || p.value}`],
+        p.kind === "layer_role" ? [b(`Layer “${p.target}”`), ` là ${c.roles[p.value] || p.value}`]
+          : p.kind === "param" ? [b(`Thông số “${(c.param_table.find((t) => t.name === p.target) || {}).label || p.target}”`), ` = ${p.value}`]
+          : [b(`“${p.target}”`), ` nghĩa là ${c.meanings[p.value] || p.value}`],
         el("div", {class: "g-why", text: p.reason}),
-        el("button", {class: "btn-p btn-sm", type: "button", onclick: () => savePatch(p.kind === "layer_role" ? {layer_roles: {[p.target]: p.value}} : {keywords: [{text: p.target, meaning: p.value}]},
+        // L4 chấm đề xuất: dựng lại các hạng mục với hồ sơ + đề xuất, so điểm cách hiểu (không ghi gì cho tới khi Đồng ý)
+        p.impact ? el("div", {class: p.impact.delta > 0 ? "g-fix" : "g-why"},
+          `Thử dựng lại ${p.impact.items.length} hạng mục: điểm cách hiểu ${Math.round(p.impact.before * 100)} → ${Math.round(p.impact.after * 100)}/100`,
+          p.impact.changed ? `, ${p.impact.changed} hạng mục dựng khác đi` : ", không hạng mục nào đổi",
+          p.impact.delta < 0 ? " · điểm giảm: cân nhắc trước khi Đồng ý" : "") : null,
+        el("button", {class: "btn-p btn-sm", type: "button", onclick: () => savePatch(p.kind === "layer_role" ? {layer_roles: {[p.target]: p.value}}
+          : p.kind === "param" ? {params: {[p.target]: p.value}} : {keywords: [{text: p.target, meaning: p.value}]},
           "Đã đồng ý và lưu vào hồ sơ.", {items: items.filter((x) => x !== p), rejected})}, "Đồng ý"),
         " ", el("button", {class: "link sm", type: "button", onclick: () => showProps(items.filter((x) => x !== p), rejected)}, "Bỏ qua")))
         : el("div", {class: "f-d", text: "Không có đề xuất mới: hồ sơ hiện tại đã đọc được bản vẽ này."}),
@@ -1863,7 +1871,17 @@
         el("h3", {text: "Ghi chú và nghĩa"}),
         el("table", {class: "tbl3d"}, el("tr", {}, ["Chữ trên bản vẽ", "Nghĩa", "Nguồn", ""].map((t) => el("th", {text: t}))), kwRows),
         el("div", {class: "w-act"}, kwText, kwMean,
-          el("button", {class: "btn-s btn-sm", type: "button", onclick: () => kwText.value.trim() && savePatch({keywords: [{text: kwText.value, meaning: kwMean.value}]})}, "Thêm"))),
+          el("button", {class: "btn-s btn-sm", type: "button", onclick: () => kwText.value.trim() && savePatch({keywords: [{text: kwText.value, meaning: kwMean.value}]})}, "Thêm")),
+        el("h3", {text: "Thông số đọc nét"}),
+        el("p", {class: "f-d", text: "Số code dùng để đọc nét (mm). Kiểu vẽ khác mặc định (tấm dày, kính dày, ký hiệu nhỏ…) thì chỉnh ở đây, không cần sửa code."}),
+        el("table", {class: "tbl3d"}, el("tr", {}, ["Thông số", "Giá trị", "Mặc định", "Nguồn", ""].map((t) => el("th", {text: t}))),
+          (c.param_table || []).map((t) => {
+            const inp = el("input", {type: "number", step: "any", min: String(t.min), max: String(t.max), value: String(t.value), "aria-label": t.label});
+            return el("tr", {}, el("td", {text: t.label}), el("td", {}, inp), el("td", {text: `${t.default} (${t.min}–${t.max})`}),
+              el("td", {}, el("span", {class: "src-b " + (t.custom ? "src-user" : "src-default"), text: t.custom ? (ORIG[c.origin["param:" + t.name]] || "đã sửa") : "mặc định"})),
+              el("td", {}, el("button", {class: "btn-s btn-sm", type: "button", onclick: () => savePatch({params: {[t.name]: inp.value}})}, "Lưu"),
+                t.custom ? el("button", {class: "link sm", type: "button", onclick: () => savePatch({params: {[t.name]: "reset"}})}, "Bỏ") : null));
+          }))),
       el("div", {class: "dr-f"}, el("label", {}, "Lưu cho ", scope), el("span", {class: "spacer"}),
         el("button", {class: "btn-s", type: "button", onclick: async () => {
           try { await api("/api/drafting/save", {scope: scope.value, reset: true}); toast("Đã bỏ hồ sơ đã lưu ở phạm vi này."); reload(); openDrafting(); } catch (e) { fail(e, "Hồ sơ trình bày"); }

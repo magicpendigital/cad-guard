@@ -26,7 +26,9 @@ def view(app, rel: Any = None) -> dict:
         layers = [{"layer": la, "role": d.roles.get(la, "other"), "lines": u["lines"],
                    "origin": prof["origin"].get(f"layer:{la}", "code")}
                   for la, u in sorted(use.items(), key=lambda kv: -kv[1]["lines"])[:40]]
-    return {**prof, "meanings": drafting.MEANINGS, "roles": drafting.ROLE_VI, "layers": layers}
+    from ..scene.params import table
+
+    return {**prof, "meanings": drafting.MEANINGS, "roles": drafting.ROLE_VI, "layers": layers, "param_table": table(prof["params"])}
 
 
 def start(app, rel: Any, use_ai: Any, translate_backend: Any, experimental: bool = False, prefer: Any = None) -> dict:
@@ -54,7 +56,7 @@ def start(app, rel: Any, use_ai: Any, translate_backend: Any, experimental: bool
     def run() -> None:
         try:
             prof = drafting.effective(root)
-            r = drafting.propose(drafting.read(model, root), prof, backend)
+            r = drafting.propose(drafting.read(model, root), prof, backend, model=model, project_root=root)
             job["items"], job["rejected"] = r["items"], r["rejected"]
             job["state"] = "done"
         except Exception as exc:  # noqa: BLE001
