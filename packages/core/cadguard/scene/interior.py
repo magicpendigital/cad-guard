@@ -77,6 +77,16 @@ def read_interior(d: Drawing2D, v: View, ox: float, floor: float, body: frozense
     # hình có cánh: đợt sau cánh (đợt kính sau cánh kính…) vẽ nét khuất -> tính cả nét khuất cho tầng; thanh treo, vách,
     # hộc trong, đèn chỉ đọc ở hình bỏ cánh thật (ở hình có cánh nét đứng đôi là mép cánh/tay nắm)
     lv = levels(hs if interior else hs + _hsegs(d, inside, frozenset({"hidden"})), bx0, bx1, bz0, bz1, vs)
+    if not interior and fronts:
+        # hình có cánh: chồng nét ngang trùng đường ráp giữa hai ngăn kéo (cạnh trên ngăn dưới + cạnh dưới ngăn trên) là MÉP
+        # CÁNH, không phải tấm (P5: đối chiếu khoang ↔ mặt trước)
+        # Chỉ mép NGĂN KÉO: ngăn kéo xếp chồng không cần tấm giữa; đường ráp hai hàng CÁNH thường có tấm phía sau (giữ).
+        def seam(L):  # MỌI nét của chồng là cạnh ngăn kéo phủ ≥ 1/2 bề ngang tấm (thêm nét nào khác = có tấm thật)
+            edges = [fz + floor for f in fronts if f.kind == "drawer"
+                     and min(L["x1"], f.x1 - ox) - max(L["x0"], f.x0 - ox) >= 0.5 * (L["x1"] - L["x0"]) for fz in (f.z0, f.z1)]
+            lines = L.get("lines") or [L["z0"], L["z1"]]
+            return bool(edges) and all(any(abs(z - e) <= 6 for e in edges) for z in lines)
+        lv = [L for L in lv if not seam(L)]
     for L in lv:  # loại tầng theo ghi chú gần nhất (kính, đá)
         L["kind"] = "shelf"
         best = None

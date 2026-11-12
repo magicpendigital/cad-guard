@@ -313,12 +313,15 @@ def draw(spec: dict, style_keys: list[str], path: Path) -> dict:
     doc.layers.get("SYN_Khuat").dxf.linetype = "DASHED"
     _company_frame(doc)
     msp = doc.modelspace()
-    k = 20
+    both = bool(style.get("section") and style.get("companion"))  # mặt cắt đứng cùng hàng mặt đứng: cần tờ lớn hơn
+    k = 25 if both else 20
     ref = msp.add_blockref(CO_FRAME, (0, 0), dxfattribs={"layer": "SYN-KHUNG", "xscale": k, "yscale": k})
     ref.add_auto_attribs({"DU_AN": "DỰ ÁN MÔ PHỎNG", "TEN_BAN_VE": "CHI TIẾT " + spec["name"],
-                          "SO_BAN_VE": f"{spec['id']}. 01" if style.get("number", True) else "", "TI_LE": "1/20", "NGAY": "11/11/2026"})
+                          "SO_BAN_VE": f"{spec['id']}. 01" if style.get("number", True) else "", "TI_LE": f"1/{k}", "NGAY": "11/11/2026"})
     mods = _layout(spec)
     total = max(m["x"] + m["w"] for m in mods)
+    cabs0 = [m for m in mods if m["z0"] == 0 and m["form"] == "cabinet"] or [m for m in mods if m["z0"] == 0]
+    sec_w = sum(max(q["d"] for q in cabs0 if q["h"] == hh) + 900 for hh in {m["h"] for m in cabs0}) if both else 0.0
     room_h = float(spec.get("room_h") or 2700)
     ex, fz = 600.0, 2300.0  # mặt đứng ở trên, mặt bằng ở dưới; mọi thứ nằm trong khung tờ (viền trong từ 200)
     # tường hai bên + sàn + trần, kích thước sàn – trần
@@ -343,7 +346,7 @@ def draw(spec: dict, style_keys: list[str], path: Path) -> dict:
             _marks(msp, m, ex + m["x"], fz + m["z0"], ex + m["x"] + m["w"], fz + m["z0"] + m["h"])
     _title(msp, f"MẶT ĐỨNG BỎ CÁNH {spec['name']}" if style.get("dup_title") else f"MẶT ĐỨNG {spec['name']}", (ex, fz - 450))
     if style.get("companion"):  # hình bỏ cánh đặt cạnh, tiêu đề riêng
-        cx = ex + total + 900
+        cx = ex + total + 900 + sec_w
         _elevation(msp, mods, cx, fz, body, style, fronts=False)
         _dim(msp, (cx, fz + room_h), (cx + total, fz + room_h), (cx + total / 2, fz + room_h + 200))
         if style.get("companion_title", True):
@@ -367,12 +370,32 @@ def draw(spec: dict, style_keys: list[str], path: Path) -> dict:
     if not style.get("plan_outline", True):  # đường mép trước mảnh (nét thấy) để biết vị trí, không khép kín theo khối
         msp.add_line((ex, py + dmax - dmax), (ex + total, py + dmax - dmax), dxfattribs={"layer": "SYN_Tuong"})
     _title(msp, f"MẶT BẰNG {spec['name']}", (ex, py - 450))
-    if style.get("section"):  # mặt cắt 1-1 qua khối sâu nhất: ngang = chiều sâu, dọc = cao
-        mm = max(floor_mods or mods, key=lambda q: q["d"])
-        sx, sz = ex + total + 900, 700.0
-        _rect(msp, sx, sz, sx + mm["d"], sz + mm["h"], "SYN_Netcat")
-        _dim(msp, (sx, sz + mm["h"]), (sx + mm["d"], sz + mm["h"]), (sx + mm["d"] / 2, sz + mm["h"] + 150))
-        _title(msp, f"MẶT CẮT 1-1 {spec['name']}", (sx, sz - 450))
+    cut_ids: set[int] = set()
+    if style.get("section"):
+        # mỗi nhóm khối sàn cùng cao một mặt cắt "i-i": thân tủ (ngang = sâu, dọc = cao) + tấm ngang của khối được cắt;
+        # ký hiệu mặt cắt (block có thuộc tính nhãn) đặt trên mặt đứng ở MỌI khối giống hệt khối được cắt (sâu, cao, tấm)
+        if "SYN_MC" not in doc.blocks:
+            mb = doc.blocks.new("SYN_MC")
+            mb.add_circle((0, 0), 4, dxfattribs={"layer": "SYN_Kyhieu"})
+            mb.add_attdef("SO", (-3, -1.5), dxfattribs={"height": 2.5, "layer": "SYN_Kyhieu"})
+        cabs = [m for m in floor_mods if m["form"] == "cabinet"] or floor_mods
+        sx, sz = (ex + total + 900, fz) if both else (ex + total + 900, 700.0)
+        for i, hh in enumerate(sorted({m["h"] for m in cabs}), 1):
+            grp = [m for m in cabs if m["h"] == hh]
+            mm = max(grp, key=lambda q: q["d"])
+            lv = [(k_, z) for k_, z in interior_plan(mm)["levels"]] if mm.get("use") else                 [("shelf", T + j * (mm["h"] - 2 * T) / (int(mm.get("shelves") or 0) + 1)) for j in range(1, int(mm.get("shelves") or 0) + 1)]
+            _rect(msp, sx, sz, sx + mm["d"], sz + mm["h"], "SYN_Netcat")
+            for _k, z in lv:
+                _lines2(msp, sx + T, sx + mm["d"] - T, sz + z, T, "SYN_Netcat")
+            _dim(msp, (sx, sz + mm["h"]), (sx + mm["d"], sz + mm["h"]), (sx + mm["d"] / 2, sz + mm["h"] + 150))
+            _title(msp, f"MẶT CẮT {i}-{i} {spec['name']}", (sx, sz - 450))
+            for m in grp:
+                same = m["d"] == mm["d"] and m.get("use") == mm.get("use") and m.get("shelves") == mm.get("shelves")                     and m.get("inner_drawers") == mm.get("inner_drawers")
+                if same:
+                    cut_ids.add(id(m))
+                    ref = msp.add_blockref("SYN_MC", (ex + m["x"] + m["w"] / 2, fz + m["h"] / 2), dxfattribs={"layer": "SYN_Kyhieu", "xscale": k, "yscale": k})
+                    ref.add_auto_attribs({"SO": f"{i}-{i}"})
+            sx += mm["d"] + 900
     doc.saveas(path)
     inner = bool(style.get("interior") and style.get("companion"))
 
@@ -381,6 +404,8 @@ def draw(spec: dict, style_keys: list[str], path: Path) -> dict:
              "form": m["form"], "fronts": len(m["fronts"])}
         if inner and m.get("use"):  # đáp án nội thất: số tầng/đợt kính/thanh treo/hộc trong/vách đọc từ hình bỏ cánh
             r["inner"] = interior_plan(m)["count"]
+        elif id(m) in cut_ids and not style.get("companion"):  # tấm đọc ở mặt cắt (không có hình bỏ cánh): mọi tầng là tấm ngang
+            r["inner"] = {"shelf": len(interior_plan(m)["levels"]) if m.get("use") else int(m.get("shelves") or 0)}
         return r
 
     return {"modules": [row(m) for m in sorted(mods, key=lambda q: (q["x"], q["z0"]))]}

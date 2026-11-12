@@ -38,6 +38,7 @@ FRONT_MIN = 150.0
 SHELF_MAX = 40.0
 SLAB_MM = 20.0
 DEFAULT_WALL_H = 2700.0
+DRAWER_COL_H = 450.0  # mặt trước thấp hơn mức này, xếp ≥ 3 cái cùng cột: ngăn kéo (dù hẹp, tỉ lệ giống cánh)
 DEFAULT_DEPTH = {"wall": 350.0, "base": 560.0}  # chỉ để hiện khối thiếu chiều sâu; luôn kèm gap
 
 
@@ -81,6 +82,8 @@ class Module2(BaseModel):
     # ký hiệu đặc biệt: đường khấu/bo cong (curve), vòng chú thích (callout) — không dựng thành tấm, kèm chữ/chi tiết
     features: list[dict] = Field(default_factory=list)
     interior: str = ""  # hình dùng để đọc nội thất
+    # mặt cắt nối với khối (`sections.py`): [{view, label, via mark|height, depth, depth_src, refs, levels}]
+    sections: list[dict] = Field(default_factory=list)
 
 
 class Wall2(BaseModel):
@@ -228,8 +231,12 @@ def _add_module(sc, mid, box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf,
         dd = DEFAULT_DEPTH["wall" if kind == "wall" else "base"]
         back = max((q.box[3] for q in pf), default=p.box[3])
         m.y, m.d, m.src["d"] = round(back - dd - origin[1], 3), dd, Src(kind="default")
+    def _drawer_column(b) -> bool:  # ≥ 3 mặt trước thấp (< 450) cùng cột (cùng hai mép trái/phải): cột ngăn kéo
+        col = [c for c, _h in fr if abs(c[0] - b[0]) <= 5 and abs(c[2] - b[2]) <= 5 and (c[3] - c[1]) < DRAWER_COL_H]
+        return (b[3] - b[1]) < DRAWER_COL_H and len(col) >= 3
+
     for j, (b, hf) in enumerate(sorted(fr, key=lambda t: (t[0][0], t[0][1])), 1):
-        kindf = "drawer" if (b[3] - b[1]) < 0.6 * (b[2] - b[0]) else "door"
+        kindf = "drawer" if (b[3] - b[1]) < 0.6 * (b[2] - b[0]) or _drawer_column(b) else "door"
         m.fronts.append(Front(id=f"{mid}.F{j}", kind=kindf, x0=round(b[0] + ox - origin[0], 3), x1=round(b[2] + ox - origin[0], 3),
                               z0=round(b[1] - floor, 3), z1=round(b[3] - floor, 3), refs=[hf]))
     m.shelves = sum(1 for sx0, sx1, sz in shelf_rects if sx0 >= x0p - 1 and sx1 <= x1p + 1 and z0 < sz < z1)
@@ -562,6 +569,10 @@ def build_once(d: Drawing2D, group: str, supplement: dict | None = None) -> Scen
     for i, (box, hs, fr, form, levels) in enumerate(blocks, 1):
         _add_module(sc, f"M{i}", box, hs, fr, e, p, ox, origin, floor, edims, pdims, pf, ph, shelf_rects, supp, form, pt, levels, d)
     _read_interiors(d, sc, group, e, ox - origin[0], floor, furn, shelf_src, origin, "no_doors" in e_flags, force_mode)
+    from . import sections as secmod  # P5: mặt cắt cho chiều sâu + cao độ tấm của khối nó cắt qua
+
+    secmod.link(d, group, sc, e)
+    secmod.apply(sc, sc.notes, d, p, origin)
 
     # tường: nét tường của mặt bằng hạng mục
     walls, _rooms = read_walls(d, p)

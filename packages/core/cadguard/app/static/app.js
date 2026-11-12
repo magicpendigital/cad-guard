@@ -1461,9 +1461,10 @@
       msg: r.answers ? "Điểm = số khối đúng hoàn toàn (4 số đo lệch ≤ 2 mm, đúng dạng, đúng số cánh) / số khối." :
         "Chưa có đáp án. Ở màn 3D, khi một hạng mục đã đúng hết, bấm “Lưu làm đáp án”."});
     if (r.answers) {
-      n.append(el("table", {class: "tbl3d"}, el("tr", {}, ["Cách đọc", "Điểm", "Đúng số khối", "Rộng", "Sâu", "Cao", "Cao độ"].map(t => el("th", {text: t}))),
+      n.append(el("table", {class: "tbl3d"}, el("tr", {}, ["Cách đọc", "Điểm", "Đúng số khối", "Rộng", "Sâu", "Cao", "Cao độ", "Nội thất"].map(t => el("th", {text: t}))),
         Object.entries(r.summary).map(([k, s]) => el("tr", {}, el("td", {text: PL[k] || k}), el("td", {}, b(s.score_pct + "%")), el("td", {text: s.count_ok_pct + "%"}),
-          ["w", "d", "h", "z0"].map(x => el("td", {text: s.dims_pct[x] + "%"}))))));
+          ["w", "d", "h", "z0"].map(x => el("td", {text: s.dims_pct[x] + "%"})),
+          el("td", {text: s.inner_pct == null ? "–" : s.inner_pct + "%", title: "Khối có đáp án nội thất đọc đúng số tấm, đợt kính, thanh treo, hộc, vách"})))));
       n.append(el("table", {class: "tbl3d"}, el("tr", {}, ["Hạng mục", ...Object.keys(r.summary).map(k => PL[k] || k)].map(t => el("th", {text: t}))),
         r.rows.map(row => el("tr", {}, el("td", {text: row.item_name || row.item}),
           row.skipped ? el("td", {text: row.skipped}) : Object.keys(r.summary).map(k => el("td", {text: row.scores[k] ? `${row.scores[k].correct}/${row.scores[k].modules_answer}` : "—"}))))));

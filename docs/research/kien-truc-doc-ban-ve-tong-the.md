@@ -1,6 +1,6 @@
 # Thiết kế: đọc bản vẽ nội thất theo kiến trúc tổng thể (11/11/2026)
 
-Trạng thái: **đã duyệt 11/11/2026**. P1, P2, P3, P4 xong (§9); P5–P7 chưa làm.
+Trạng thái: **đã duyệt 11/11/2026**. P1–P5 xong (§9); P6–P7 chưa làm.
 
 ## 1. Vấn đề
 
@@ -299,3 +299,54 @@ chọn lại"); bước "Kiểm nhất quán" của bộ chạy luồng báo s�
 
 Giới hạn: điểm "ghi chú" và "ký hiệu cánh" mới đo trên các ca hiện có; cần đáp án thật (10–20 hạng mục) để chỉnh trọng
 số. Chưa có quyết định "đường khấu hay cánh" và "chiều sâu lấy từ hình nào" (để P5).
+
+**P5 — đối chiếu nhiều hình (12/11/2026).** `scene/sections.py` + bộ chấm nhất quán.
+
+- **Nối mặt cắt ↔ khối:**
+  - ký hiệu mặt cắt (nhãn "1-1", "X2"…) nằm trên mặt đứng dựng khối, X trong khoảng khối: cắt mọi khối cùng cột.
+    Ký hiệu trỏ tới một hình mà hình đó không phủ dải cao của khối thì thử các mặt cắt cùng nhãn (bộ 40 tờ thật có
+    nhiều tờ cùng nhãn "Y1", "Y2");
+  - mặt cắt không có ký hiệu nào trỏ tới: nối khi thân tủ trong mặt cắt phủ đúng dải cao của khối (lệch ≤ 30 mm).
+    Hai mặt cắt cho hai số sâu khác nhau thì không dùng.
+- **Đọc ở dải cao của khối:** sâu = bề ngang thân tủ ở nửa giữa dải cao. Có kích thước ghi đúng đoạn đó thì nguồn là
+  kích thước, không thì đo nét. Tấm = chồng nét ngang trong khung đó.
+- **Dùng (`Module2.sections` ghi lại mọi mặt cắt đã nối):**
+  - sâu cho khối đang mặc định;
+  - thay sâu đo nét ở mặt bằng khi mặt cắt nối bằng ký hiệu có kích thước ghi (bằng chứng mạnh hơn);
+  - khối không bị cắt: dùng sâu của mặt cắt cùng loại khối khi mặt bằng có mép trước đúng ở khoảng sâu đó tính từ
+    tường (hai hình cùng xác nhận);
+  - tấm cho khối chưa có tầng/vách nào và không có hình bỏ cánh.
+- **Khoang ↔ mặt trước:**
+  - ở hình có cánh, chồng nét ngang mà mọi nét đều là mép ngăn kéo thì không phải tấm. Đường ráp hai hàng cánh vẫn giữ,
+    vì tủ thật thường có tấm phía sau (ca TESt 2: hình bỏ cánh có tấm ở 1925, sau đường ráp 1890–1915);
+  - ≥ 3 mặt trước thấp (< 450) cùng cột là ngăn kéo, dù hẹp. Trước đây máy xếp loại theo tỉ lệ cao/rộng nên gọi nhầm
+    là cánh.
+- **Mâu thuẫn mới (cần xem):**
+  - H03 sâu ở mặt cắt khác sâu đang dùng > 30 mm (một mục mỗi khối);
+  - H04 tấm ở mặt cắt (tại vị trí ký hiệu) không có ở hình đứng;
+  - H05 vách ở hình bỏ cánh nằm giữa một cánh.
+- **Bộ đo** thêm chỉ số **nội thất**: khối có đáp án nội thất đọc đúng số tấm / đợt kính / thanh treo / hộc / vách. Ảnh
+  chụp đáp án lưu cả số này. Kiểu mô phỏng "sâu chỉ ở mặt cắt" nay có ký hiệu mặt cắt trên mặt đứng, mỗi nhóm cao một mặt
+  cắt, và tấm vẽ trong mặt cắt.
+
+Kết quả (mã P4 trên `main` so với P5, chỉ code):
+
+| Bộ | P4 | P5 |
+|---|---|---|
+| 72 mẫu có mặt cắt (4 tổ hợp kiểu vẽ × 18) | điểm 40 %, sâu 40 %, nội thất 73/82 | điểm 100 %, sâu 100 %, nội thất 82/82 |
+| synth5 (36 mẫu ngẫu nhiên) | điểm 91,7 % | 100 % |
+| synth4 (36 mẫu) | 100 %, nội thất 16/16 | 100 %, 16/16 |
+
+Bộ 40 tờ thật và các tệp thử phiên Demo:
+- chỉ đổi một khối: tủ treo fur.68 sâu 601 (đo nét mặt bằng) → 350 (kích thước ghi ở mặt cắt Y1);
+- TESt 2 giữ nguyên;
+- bộ chấm báo thêm H03 ở hai khối mà mặt bằng và mặt cắt lệch (sâu đo nét 1455 so với 558 ở mặt cắt; 595 so với 495)
+  và H04 ở một tấm chỉ có ở mặt cắt (tủ treo fur.68, cao 2312), để người xem; không mâu thuẫn kết cấu nào.
+
+Test: `tests/test_sections.py`.
+
+Giới hạn:
+- mặt cắt nằm (cắt ngang) chưa đọc;
+- ký hiệu mặt cắt đặt ở mặt bằng chưa dùng, mới dùng ký hiệu trên mặt đứng;
+- tủ treo ở mặt cắt không có kích thước sàn–trần thì lấy đáy thân tủ làm sàn, nên dải cao có thể lệch;
+- tấm đọc ở mặt cắt được trải suốt bề ngang khối (mặt cắt không cho biết bề ngang).

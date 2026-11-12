@@ -52,7 +52,7 @@ def test_ai_only_when_code_left_work(ws, tmp_path):
     fixtures.make_company_kitchen(p)
     from cadguard import drafting
 
-    drafting.save(p.parent, "project", {"layer_roles": {"SYN_Khuat": "other"}})
+    drafting.save(p.parent, "project", {"layer_roles": {"SYN_Khuat": "other", "SYN_Netcat": "other"}})
     r2 = pipeline.run_item(read_dxf(p), p.parent, "SYN.10", backend=Fake())
     ai = next(s for s in r2["steps"] if s["id"] == "ai")
     assert calls and ai["status"] in ("ok", "needs_review") and r2["state"] == "needs_review"

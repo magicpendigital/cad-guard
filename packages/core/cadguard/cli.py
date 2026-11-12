@@ -1110,7 +1110,8 @@ def cmd_bench3d(args: argparse.Namespace) -> int:
     print(f"Đáp án: {r['answers']} hạng mục")
     for pl, s in r["summary"].items():
         print(f"  {pl:13s} điểm {s['score_pct']:3d}% · đúng số khối {s['count_ok_pct']:3d}% · rộng {s['dims_pct']['w']}% sâu {s['dims_pct']['d']}% "
-              f"cao {s['dims_pct']['h']}% cao độ {s['dims_pct']['z0']}%")
+              f"cao {s['dims_pct']['h']}% cao độ {s['dims_pct']['z0']}%"
+              + (f" · nội thất {s['inner_pct']}%" if s.get("inner_pct") is not None else ""))
     for row in r["rows"]:
         if "skipped" in row:
             print(f"  - {row['item_name'] or row['item']}: bỏ qua ({row['skipped']})")

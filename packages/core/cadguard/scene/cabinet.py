@@ -69,6 +69,7 @@ class Unit(BaseModel):
     plan: str = ""
     ebox: list[float] = Field(default_factory=list)
     interior: str = ""
+    sections: list[dict] = Field(default_factory=list)  # = Module2.sections (mặt cắt nối với khối)
     annotations: list[dict] = Field(default_factory=list)  # = Module2.features
     root: Node
 

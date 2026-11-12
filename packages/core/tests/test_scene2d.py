@@ -126,12 +126,13 @@ def test_item_scene_low_worktop_fixture(synthetic):
 
 def test_missing_depth_is_gap_then_user_supplement(synthetic):
     m, _ = _kitchen(synthetic)
-    sc, _ = build_from_model(m, "SYN.10", roles={"SYN_Khuat": "other"})  # không còn nét khuất -> không biết sâu tủ treo
+    no_depth = {"SYN_Khuat": "other", "SYN_Netcat": "other"}  # không nét khuất ở mặt bằng, mặt cắt không nét thân tủ
+    sc, _ = build_from_model(m, "SYN.10", roles=no_depth)  # -> không biết sâu tủ treo
     assert len(sc.modules) == 2 and len(sc.gaps) == 1  # khối thiếu sâu vẫn hiện, sâu mặc định có nhãn
     assert max(sc.modules, key=lambda x: x.z0).src["d"].kind == "default"
     g = sc.gaps[0]
     assert g.kind == "missing_value" and g.fields[0].key.endswith(":d")
-    sc2, _ = build_from_model(m, "SYN.10", {g.fields[0].key: "320"}, roles={"SYN_Khuat": "other"})
+    sc2, _ = build_from_model(m, "SYN.10", {g.fields[0].key: "320"}, roles=no_depth)
     up = max(sc2.modules, key=lambda x: x.z0)
     assert up.d == 320.0 and up.src["d"].kind == "user" and not sc2.gaps
 

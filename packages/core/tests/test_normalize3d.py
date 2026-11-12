@@ -45,7 +45,8 @@ def kitchen_no_hidden(tmp_path):
     m = read_dxf(p)
     from cadguard.scene.views2d import read_drawing as rd
 
-    d = rd(m, roles={"SYN_Khuat": "other"})  # không còn nét khuất -> tủ treo thiếu chiều sâu
+    # không còn nét khuất ở mặt bằng, mặt cắt không còn nét thân tủ (chỉ kích thước) -> code không tự đọc được sâu tủ treo
+    d = rd(m, roles={"SYN_Khuat": "other", "SYN_Netcat": "other"})
     return m, d, build_item_scene(d, "SYN.10")
 
 

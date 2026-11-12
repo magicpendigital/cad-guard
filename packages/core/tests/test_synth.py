@@ -43,7 +43,7 @@ def test_generate_and_bench_full_score_with_suggestions(tmp_path):
     assert a["created_by"] == "synth" and a["styles"][0] == "chuan"
 
 
-def test_depth_only_in_section_needs_suggest_step(tmp_path):
+def test_depth_only_in_section_is_read_by_code(tmp_path):
     spec = next(s for s in synth.design_specs(3, seed=5) if s["kind"] == "tv")
     out = tmp_path / "s"
     out.mkdir()
@@ -54,7 +54,8 @@ def test_depth_only_in_section_needs_suggest_step(tmp_path):
     p.write_text(json.dumps({"schema": bench3d.SCHEMA, "source_hash": m.file_hash, "file": "tv.dxf", "item": spec["id"],
                              "modules": ans["modules"]}, ensure_ascii=False), encoding="utf-8")
     res = bench3d.run(out, lambda a: bench3d.find_model(out, a, read_dxf))
-    assert res["summary"]["code"]["dims_pct"]["d"] < 100 and res["summary"]["code+suggest"]["score_pct"] == 100
+    # P5: mặt cắt có ký hiệu trên mặt đứng -> code tự đọc sâu, không cần bước gợi ý
+    assert res["summary"]["code"]["dims_pct"]["d"] == 100 and res["summary"]["code+suggest"]["score_pct"] == 100
 
 
 def test_ai_designer_specs_are_validated():

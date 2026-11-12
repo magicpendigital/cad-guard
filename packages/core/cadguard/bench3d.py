@@ -21,6 +21,7 @@ SCHEMA = "cg.scene-answer/1"
 DIR = ".cadguard/answers"
 TOL = 2.0
 DIMS = ("w", "d", "h", "z0")
+INNER = ("shelf", "glass", "rod", "drawer", "partition")  # đếm nội thất theo loại (tấm ngang, đợt kính, thanh treo, hộc, vách)
 PIPELINES = ("code", "code+suggest", "code+ai")
 
 
@@ -34,8 +35,8 @@ def answer_path(root: Path, file_hash: str, item: str) -> Path:
 
 def snapshot(sc) -> list[dict]:
     mods = sorted(sc.modules, key=lambda m: (round(m.x), m.z0))
-    return [{"x": round(m.x, 1), **{k: round(float(getattr(m, k)), 1) for k in DIMS}, "form": m.form, "fronts": len(m.fronts)}
-            for m in mods]
+    return [{"x": round(m.x, 1), **{k: round(float(getattr(m, k)), 1) for k in DIMS}, "form": m.form, "fronts": len(m.fronts),
+             "inner": {k: sum(1 for q in m.inner if q.get("kind") == k) for k in INNER}} for m in mods]
 
 
 def save_answer(root: Path, model, sc, item_name: str = "", note: str = "", file_rel: str = "") -> dict:
@@ -86,8 +87,11 @@ def score(pred: list[dict], ans: list[dict], tol: float = TOL) -> dict:
     dims_ok = {k: 0 for k in DIMS}
     good = 0
     detail = []
+    inner_ok = 0
     for i, j in pairs:
         a, p = ans[i], pred[j]
+        if "inner" in a:  # nội thất: đúng khi số đếm từng loại có trong đáp án khớp
+            inner_ok += all((p.get("inner") or {}).get(k, 0) == v for k, v in a["inner"].items())
         ok = {k: abs(a[k] - p[k]) <= tol for k in DIMS}
         for k in DIMS:
             dims_ok[k] += ok[k]
@@ -98,7 +102,8 @@ def score(pred: list[dict], ans: list[dict], tol: float = TOL) -> dict:
     n = max(len(ans), len(pred), 1)
     return {"modules_answer": len(ans), "modules_pred": len(pred), "count_ok": len(ans) == len(pred), "matched": len(pairs),
             "correct": good, "score": round(good / n, 3),
-            "dims_pct": {k: round(100 * v / max(len(ans), 1)) for k, v in dims_ok.items()}, "detail": detail}
+            "dims_pct": {k: round(100 * v / max(len(ans), 1)) for k, v in dims_ok.items()},
+            "inner_answers": sum(1 for a in ans if "inner" in a), "inner_ok": inner_ok, "detail": detail}
 
 
 def _suggest_supp(d, sc, supp: dict, backend=None) -> dict:
@@ -154,6 +159,9 @@ def run(root: Path, read_model, *, backend=None, pipelines=("code", "code+sugges
             summary[pl] = {"items": len(ss), "score_pct": round(100 * sum(s["score"] for s in ss) / len(ss)),
                            "count_ok_pct": round(100 * sum(s["count_ok"] for s in ss) / len(ss)),
                            "dims_pct": {k: round(sum(s["dims_pct"][k] for s in ss) / len(ss)) for k in DIMS}}
+            ni = sum(s.get("inner_answers", 0) for s in ss)
+            if ni:  # % khối có đáp án nội thất đọc đúng số đếm
+                summary[pl]["inner_pct"] = round(100 * sum(s.get("inner_ok", 0) for s in ss) / ni)
     return {"schema": "cg.bench3d/1", "answers": len(rows), "summary": summary, "rows": rows}
 
 

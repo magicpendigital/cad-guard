@@ -14,7 +14,10 @@ Ràng buộc (mỗi mục: mã, mức, khối/khoang, vì sao, gợi ý, `refs`)
   - K07 hộc trong cao bất thường (> 600: thường là cả khoang bị đọc nhầm thành hộc).
 - Đối chiếu hình (H):
   - H01 đường ráp hai hàng cánh (hình có cánh) không có tấm ngang phía sau (hình bỏ cánh);
-  - H02 số đo khối chưa có nguồn bản vẽ (mặc định).
+  - H02 số đo khối chưa có nguồn bản vẽ (mặc định);
+  - H03 chiều sâu ở mặt cắt khác chiều sâu đang dùng (thường từ mặt bằng) > 30 mm;
+  - H04 tấm ngang ở mặt cắt (tại vị trí ký hiệu cắt) không có ở mặt đứng / hình bỏ cánh;
+  - H05 vách đứng (hình bỏ cánh) nằm giữa một cánh (hình có cánh): cánh không thể mở qua vách.
 - Thông tin (I): I01 khoang để hở (không có mặt trước), I02 khối đọc nội thất ở hình bỏ cánh.
 
 Mức: `conflict` (mâu thuẫn — cách hiểu này khó đúng), `warn` (cần xem), `info` (ghi nhận). Điểm khối = 1 − 0,3 × số mâu
@@ -28,6 +31,8 @@ W = {"conflict": 0.3, "warn": 0.1, "info": 0.0}
 SEAM_TOL = 60.0  # đường ráp hai hàng cánh cách tấm ngang tối đa
 HANG_MIN = 800.0
 DOOR_MIN = 400.0
+DEPTH_TOL = 30.0  # sâu mặt bằng ↔ mặt cắt lệch quá mức này: báo
+LEVEL_TOL = 40.0  # cao độ tấm mặt cắt ↔ mặt đứng
 DRAWER_MAX = 600.0  # hộc trong cao hơn mức này: khoang bị đọc nhầm thành hộc
 
 
@@ -107,6 +112,31 @@ def _unit_issues(u: Unit) -> list[dict]:
                                   "Hình có cánh chia hai hàng cánh, hình bỏ cánh không có tấm ngang tương ứng.",
                                   "Kiểm hình bỏ cánh (thiếu đợt cố định?) hoặc chọn lại hình bỏ cánh.",
                                   [r for f in doors for r in f.refs]))
+    # H03, H04 — đối chiếu mặt cắt (P5)
+    secs = getattr(u, "sections", None) or []
+    off = [g for g in secs if not g.get("used") and abs(g["depth"] - u.d) > DEPTH_TOL]
+    if off:  # một mục cho mỗi khối, liệt kê các mặt cắt lệch
+        names = ", ".join(f"{g['label'] or g['view']} {g['depth']:.0f}" for g in off)
+        out.append(_issue("H03", "warn", u, f"Sâu khối {u.id} là {u.d:.0f}, mặt cắt cho {names}",
+                          "Mặt bằng và mặt cắt cho hai chiều sâu khác nhau.",
+                          "Kiểm nét mặt bằng (đường bao chung nhiều khối?) hoặc nhập sâu đúng.", [r for g in off for r in g.get("refs", [])]))
+    for g in secs:
+        if g.get("via") == "mark" and g.get("levels") and g.get("x") is not None:
+            own = [L for L in levels if not L.get("from") and L["x0"] - 5 <= g["x"] <= L["x1"] + 5]
+            if own:
+                miss = [L for L in g["levels"] if not any(abs(L["z0"] - o["z0"]) <= LEVEL_TOL for o in own)]
+                for L in miss:
+                    out.append(_issue("H04", "warn", u, f"Tấm cao {L['z0']:.0f} ở mặt cắt {g['label'] or g['view']} không có ở hình đứng",
+                                      "Mặt cắt vẽ tấm ngang mà mặt đứng / hình bỏ cánh không có tấm ở cao độ này.",
+                                      "Kiểm lại cao độ tấm (một trong hai hình vẽ sai, hoặc mặt cắt cắt qua khoang khác).", L.get("refs", [])))
+    # H05 — vách đứng nằm giữa một cánh
+    for p in parts:
+        for f in fronts:
+            if f.kind == "door" and f.x0 + 50 < (p["x0"] + p["x1"]) / 2 < f.x1 - 50 and _ov(f.z0, f.z1, p["z0"], p["z1"]) > 0.5 * (f.z1 - f.z0):
+                out.append(_issue("H05", "warn", u, f"Vách đứng ở {p['x0'] - u.x:.0f} mm nằm giữa cánh {f.id}",
+                                  "Hình bỏ cánh có vách ở vị trí mà hình có cánh là một cánh liền: cánh không mở qua vách được.",
+                                  "Kiểm chia cánh ở hình có cánh hoặc vách ở hình bỏ cánh.", p.get("refs", []) + f.refs))
+                break
     # H02 — số đo chưa có nguồn bản vẽ
     for k in ("w", "d", "h"):
         s = u.src.get(k)
