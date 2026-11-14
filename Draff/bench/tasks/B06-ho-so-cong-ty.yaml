@@ -1,0 +1,43 @@
+id: B06-ho-so-cong-ty
+mo_ta: Áp hồ sơ công ty (nới VS-02, tắt VS-05) làm đổi tập luật có phát hiện trên bản vẽ thiết kế bẩn.
+dang: ho_so_cong_ty
+fixture: hygiene_bad.dxf
+moi_truong:
+  ho_so: bench/ho-so/cong-ty-bench.yaml
+tham_so:
+  chuan: design-hygiene-v0
+cau_hoi: >-
+  Máy chủ cad-guard của phiên chạy với hồ sơ công ty (--profile ho-so.yaml): VS-02 nới thành tối đa 30 kiểu chữ
+  và 12 kiểu kích thước, VS-05 bị tắt. So với chuẩn design-hygiene-v0 theo ngưỡng mặc định (không hồ sơ),
+  tập mã luật có phát hiện trên bản vẽ đổi thế nào? Cho biết hồ sơ nào đã được áp, đọc từ trường profile của audit.
+  Trả lời JSON với các trường truoc, sau, mat_di, them_moi (đều là danh sách mã luật),
+  ho_so (trường profile của audit có hồ sơ: {name, version}), ho_so_truoc (trường profile khi không có hồ sơ).
+tra_loi:
+  truoc: danh_sach
+  sau: danh_sach
+  mat_di: danh_sach
+  them_moi: danh_sach
+  ho_so: doi_tuong
+  ho_so_truoc: doi_tuong
+kiem_tra:
+- loai: bang
+  truong: ho_so.name
+  gia_tri: cong-ty-bench
+- loai: bang
+  truong: ho_so.version
+  gia_tri: 0.1.0
+- loai: bang
+  truong: ho_so_truoc
+  gia_tri: null
+- loai: tap
+  truong: truoc
+  gia_tri: [VS-01, VS-02, VS-03, VS-04, VS-05, VS-06, VS-07]
+- loai: tap
+  truong: sau
+  gia_tri: [VS-01, VS-03, VS-04, VS-06, VS-07]
+- loai: tap
+  truong: mat_di
+  gia_tri: [VS-02, VS-05]
+- loai: tap
+  truong: them_moi
+  gia_tri: []

@@ -1,0 +1,8 @@
+{
+  "name": "cad-guard",
+  "description": "Kiểm tra và chuẩn hoá bản vẽ nội thất cho doanh nghiệp sản xuất nội thất theo chuẩn furniture-v0 và design-hygiene-v0.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

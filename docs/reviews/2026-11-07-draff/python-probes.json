@@ -1,0 +1,22 @@
+{
+  "contracts_first": {
+    "exit": 1,
+    "stdout": "",
+    "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    import cadguard.contracts; print(\"import ok\")\n    ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"D:\\Projects\\cad-guard\\Draff\\packages\\core\\cadguard\\contracts.py\", line 7, in <module>\n    from .model import DrawingModel\n  File \"D:\\Projects\\cad-guard\\Draff\\packages\\core\\cadguard\\model.py\", line 145, in <module>\n    from .contracts import (  # noqa: E402, F401\n    ...<6 lines>...\n    )\nImportError: cannot import name 'AuditFindingSpec' from partially initialized module 'cadguard.contracts' (most likely due to a circular import) (D:\\Projects\\cad-guard\\Draff\\packages\\core\\cadguard\\contracts.py)\n"
+  },
+  "model_first": {
+    "exit": 0,
+    "stdout": "import ok\n",
+    "stderr": ""
+  },
+  "toolbox": {
+    "exit": 0,
+    "stdout": "[{'name': 'list_drawings', 'description': 'Liệt kê các tệp DXF trong thư mục làm việc (đã ẩn danh ở Bậc 1).', 'schema': {'type': 'object', 'properties': {'dir': {'type': 'string', 'default': '.'}}, 'additionalProperties': False}}, {'name': 'audit', 'description': 'Chạy bộ luật tất định trên một bản vẽ. Luôn dùng kết quả này làm nguồn sự thật về lỗi.', 'schema': {'type': 'object', 'properties': {'file': {'type': 'string', 'description': 'Mã tệp (F_xxxx) hoặc đường dẫn tương đối từ list_drawings.'}, 'standard': {'type': 'string', 'default': 'furniture-v0', 'description': 'Tên chuẩn: furniture-v0 hoặc design-hygiene-v0.'}}, 'required': ['file'], 'additionalProperties': False}}, {'name': 'explain_rule', 'description': 'Đọc định nghĩa, mức độ, tham số và mục chuẩn của một mã luật.', 'schema': {'type': 'object', 'properties': {'rule_id': {'type': 'string', 'description': 'Mã luật, ví dụ VS-01, LY-01, TX-01.'}, 'standard': {'type': 'string', 'default': 'furniture-v0'}}, 'required': ['rule_id'], 'additionalProperties': False}}, {'name': 'get_model_summary', 'description': 'Tóm tắt bản vẽ: phiên bản DXF, đơn vị, số layer/khối/đối tượng theo loại và không gian, kiểu chữ, layout.', 'schema': {'type': 'object', 'properties': {'file': {'type': 'string'}}, 'required': ['file'], 'additionalProperties': False}}, {'name': 'query_model', 'description': 'Truy vấn danh sách đối tượng trong bản vẽ theo bộ lọc (layer, type, space) có phân trang.', 'schema': {'type': 'object', 'properties': {'file': {'type': 'string'}, 'filter': {'type': 'object', 'description': 'Bộ lọc tuỳ chọn: layer, type (LINE/TEXT/MTEXT/INSERT/DIMENSION/…), space.', 'properties': {'layer': {'type': 'string'}, 'type': {'type': 'string'}, 'space': {'type': 'string'}}, 'additionalProperties': False}, 'limit': {'type': 'integer', 'default': 100}, 'cursor': {'type': ['string', 'null'], 'default': None}}, 'required': ['file'], 'additionalProperties': False}}, {'name': 'diff', 'description': 'So sánh hai bản vẽ trong thư mục làm việc theo handle (đối tượng thêm/xoá/đổi).', 'schema': {'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': 'string'}, 'max_items': {'type': 'integer', 'default': 100}}, 'required': ['a', 'b'], 'additionalProperties': False}}]\n",
+    "stderr": ""
+  },
+  "app_smoke": {
+    "exit": 0,
+    "stdout": "preview 19 3\nscene cg.scene/1 0\nworkspace cg.workspace/1\n",
+    "stderr": ""
+  }
+}

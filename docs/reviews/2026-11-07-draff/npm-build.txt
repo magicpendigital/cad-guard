@@ -1,0 +1,7 @@
+
+> cad-guard@0.1.0 build
+> tsc --noEmit
+
+
+'tsc' is not recognized as an internal or external command,
+operable program or batch file.

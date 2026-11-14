@@ -1,0 +1,25 @@
+{
+  "answerer": "bench.engine_answerer:answer",
+  "engine": "claude-cli",
+  "model": null,
+  "score_pct": 100.0,
+  "threshold_pct": 0.0,
+  "totals": {
+    "tasks": 1,
+    "ok": 1,
+    "seconds": 138.369,
+    "tokens": 69478,
+    "usd": 0.103592
+  },
+  "results": [
+    {
+      "id": "B01-dem-loi-e-furniture",
+      "ok": true,
+      "seconds": 138.36916249996284,
+      "tokens": 69478,
+      "usd": 0.10359189999999999,
+      "reasons": []
+    }
+  ],
+  "date": "2026-11-05"
+}

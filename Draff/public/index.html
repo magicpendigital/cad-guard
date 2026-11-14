@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CAD Guard — Kiểm toán Bản vẽ DXF, Dựng 3D &amp; Chuẩn hoá Nội thất</title>
+<meta name="description" content="Kiểm toán bản vẽ kỹ thuật nội thất DXF tất định, tô sáng trực tiếp nét vẽ lỗi theo Layer/Handle, dựng 3D và xuất ChangeSet an toàn."/>
+<meta property="og:title" content="CAD Guard — Kiểm toán Bản vẽ DXF, Dựng 3D &amp; Chuẩn hoá Nội thất"/>
+<meta property="og:description" content="Kiểm toán bản vẽ kỹ thuật nội thất DXF tất định, tô sáng trực tiếp nét vẽ lỗi theo Layer/Handle, dựng 3D và xuất ChangeSet an toàn."/>
+<link rel="stylesheet" href="/app.css"/>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<a class="skip" href="#s-work">Bỏ qua điều hướng</a>
+<div class="app">
+
+<!-- ================= 1 THANH HEADER DUY NHẤT (CAO 48PX) ================= -->
+<header class="topbar">
+  <!-- Cụm Trái: Logo + Chọn File DXF thật + Chọn Bộ tiêu chuẩn + Quét bản vẽ -->
+  <div class="tb-left">
+    <div class="brand" id="brandHomeBtn" title="CAD Guard">
+      <span class="logo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      <span class="brand-txt">CAD Guard</span>
+    </div>
+
+    <div class="file-picker-group">
+      <select id="fileSelectDropdown" class="hdr-select file-select" aria-label="Chọn tệp DXF đang mở" title="Bản vẽ DXF đang mở trong phiên làm việc"></select>
+      <button class="hdr-btn" type="button" id="sideUploadDxfBtn" title="Tải tệp DXF thực tế từ máy tính lên">+ Tải DXF</button>
+    </div>
+
+    <select id="stdSelect" class="hdr-select std-select" aria-label="Chọn bộ tiêu chuẩn kiểm tra" title="Bộ tiêu chuẩn áp dụng">
+      <option value="furniture-v0.1.0">furniture-v0.1.0</option>
+      <option value="design-hygiene-v0">design-hygiene-v0</option>
+      <option value="furniture-v0.1.0 + Company Profile">furniture-v0.1.0 + Company Profile</option>
+    </select>
+
+    <button class="hdr-btn primary" type="button" id="scanBtn" title="Quét và kiểm tra toàn bộ đối tượng của bản vẽ đang mở">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <span>Quét bản vẽ</span>
+    </button>
+  </div>
+
+  <!-- Cụm Giữa: Chỉ 2 nút chuyển chế độ xem chính trên Canvas -->
+  <div class="tb-center" role="tablist" aria-label="Chế độ hiển thị Canvas">
+    <button class="canvas-mode-btn on" type="button" role="tab" id="mode2dBtn" aria-selected="true">📐 Bản vẽ 2D</button>
+    <button class="canvas-mode-btn" type="button" role="tab" id="mode3dBtn" aria-selected="false">🧊 Mô hình 3D <span class="cnt-inline" id="cnt3dGaps" hidden>0</span></button>
+  </div>
+
+  <!-- Cụm Phải: Nút Xuất .GLB / Báo cáo + Trạng thái AutoCAD -->
+  <div class="tb-right">
+    <div class="pop">
+      <button class="hdr-btn" type="button" id="exportMenuBtn" aria-haspopup="menu" aria-expanded="false">📥 Xuất .GLB / Báo cáo ▾</button>
+      <div class="menu right" id="exportMenu" role="menu" hidden>
+        <button type="button" id="exportGlbTopBtn">📦 Xuất mô hình 3D (.GLB)</button>
+        <button type="button" id="reportHtmlBtn">📄 Xuất báo cáo thẩm định (HTML)</button>
+        <button type="button" id="sideNewProjBtn">📁 Mở thư mục dự án / Tải nhiều tệp DXF</button>
+        <button type="button" id="scanAll">🔍 Quét toàn bộ thư mục dự án</button>
+      </div>
+    </div>
+
+    <button class="hdr-chip" type="button" id="topAcadChip" title="Đồng bộ vị trí lỗi sang AutoCAD qua MCP Companion">
+      <span class="dot ok" id="acadStatusDot"></span>
+      <span id="acadTopLabel">AutoCAD</span>
+    </button>
+
+    <div class="pop">
+      <button class="iconbtn" type="button" id="settingsMenuBtn" aria-haspopup="menu" aria-expanded="false" title="Luật áp dụng, Mô hình AI &amp; Cài đặt">⚙️</button>
+      <div class="menu right" id="settingsMenu" role="menu" hidden>
+        <div class="menu-sec-lbl">Màn hình quản trị</div>
+        <button type="button" role="tab" id="tab-work" aria-selected="true" data-go="work">📐 Không gian Bản vẽ &amp; 3D</button>
+        <button type="button" role="tab" id="tab-rules" aria-selected="false" data-go="rules">📏 Danh mục Luật áp dụng (58 luật)</button>
+        <button type="button" role="tab" id="tab-overview" aria-selected="false" data-go="overview">📊 Tổng quan chất lượng bản vẽ</button>
+        <button type="button" role="tab" id="tab-connect" aria-selected="false" data-go="connect">🔌 Kết nối AI &amp; AutoCAD Plugin</button>
+      </div>
+    </div>
+
+    <button class="iconbtn" type="button" id="themeBtn" aria-label="Đổi giao diện sáng hoặc tối" title="Đổi giao diện Sáng / Tối">
+      <svg id="themeSvg" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z"/></svg>
+    </button>
+  </div>
+</header>
+
+<!-- Các phần tử ẩn giữ tương thích cho các màn phụ -->
+<div hidden>
+  <span id="projName"></span>
+  <span id="stdName">furniture-v0.1.0</span>
+  <span id="stdRules"></span>
+  <span id="deptName">Kỹ thuật</span>
+  <span id="engineName">Gemini 2.5 Flash</span>
+  <span id="cvTitle"></span>
+  <div id="projMenu"></div>
+  <div id="deptMenu"></div>
+  <div id="engineMenu"></div>
+  <div id="files"></div>
+  <div id="wsFiles"></div>
+</div>
+
+<input type="file" id="folderInput" webkitdirectory directory multiple hidden/>
+<input type="file" id="dxfFilesInput" accept=".dxf,.DXF" multiple hidden/>
+<input type="file" id="singleDxfInput" accept=".dxf,.DXF" hidden/>
+
+<!-- ================= MÀN HÌNH LÀM VIỆC CHÍNH (TỐI GIẢN 3 CỘT: 260px - 1fr - 340px) ================= -->
+<main class="screen on" id="s-work" aria-label="Không gian làm việc CAD Guard">
+
+  <!-- CỘT TRÁI (260px): 4 Con số thống kê thật + Danh sách Lỗi (80%) + Layer thật dưới đáy -->
+  <aside class="col left-col" aria-label="Danh sách Lỗi và Layer thực tế">
+    <!-- 1. 4 Con số thống kê thật của bản vẽ đang mở -->
+    <div class="telemetry-bar" aria-label="Thống kê bản vẽ thực tế">
+      <div class="t-item">
+        <span class="t-val" id="statEnts">0</span>
+        <span class="t-lbl">Đối tượng</span>
+      </div>
+      <div class="t-item">
+        <span class="t-val" id="statLayers">0</span>
+        <span class="t-lbl">Layers</span>
+      </div>
+      <div class="t-item err">
+        <span class="t-val" id="statErrs">0</span>
+        <span class="t-lbl">Số lỗi</span>
+      </div>
+      <div class="t-item info">
+        <span class="t-val" id="statClusters">0</span>
+        <span class="t-lbl">Khối 3D</span>
+      </div>
+    </div>
+
+    <!-- 2. Danh sách các thẻ lỗi phát hiện được (chiếm 80% chiều cao cột trái) -->
+    <div class="left-finds-wrap">
+      <div class="sec-head">
+        <span>DANH SÁCH LỖI PHÁT HIỆN</span>
+        <button class="link-xs" type="button" id="clearHighlightBtn" hidden>Bỏ lọc nét</button>
+      </div>
+      <div class="finds-scroll" id="finds" aria-live="polite"></div>
+    </div>
+
+    <!-- 3. Danh sách Layer thật có trong bản vẽ đang mở để bật/tắt nhanh -->
+    <div class="left-layers-wrap">
+      <div class="sec-head">
+        <span>LAYER TRONG BẢN VẼ</span>
+        <button class="link-xs" type="button" id="resetLayersBtn">Hiện tất cả</button>
+      </div>
+      <div class="layer-chips-scroll" id="layerChipsBar" role="group" aria-label="Bật tắt Layer thực tế"></div>
+    </div>
+  </aside>
+
+  <!-- KHUNG GIỮA (1fr): DÀNH TỐI ĐA DIỆN TÍCH CHO BẢN VẼ CAD 2D & MÔ HÌNH 3D -->
+  <section class="center-col" aria-label="Khung nhìn Bản vẽ CAD trung tâm">
+    <!-- Khung vẽ 2D (Chiếm trọn diện tích, không có thanh công cụ con trùng lặp) -->
+    <div class="sheet" id="sheet">
+      <svg id="svg" viewBox="0 0 820 540" role="img" aria-label="Bản vẽ kỹ thuật 2D"></svg>
+
+      <!-- Trạng thái đang tô sáng nét vẽ lỗi trên bản vẽ -->
+      <div class="hl-floating-pill" id="hlStatusPill" hidden>
+        <span id="hlStatusText">Đang tô sáng đối tượng lỗi</span>
+        <button type="button" id="hlResetBtn" title="Trở về hiển thị toàn bộ bản vẽ">✕ Bỏ lọc</button>
+      </div>
+
+      <!-- Cụm nút điều khiển Zoom nổi gọn ở góc dưới phải -->
+      <div class="canvas-hud" aria-label="Điều khiển phóng to và thu nhỏ bản vẽ">
+        <button class="hud-btn" type="button" id="hudZoomInBtn" title="Phóng to (+)">+</button>
+        <button class="hud-btn" type="button" id="hudZoomOutBtn" title="Thu nhỏ (-)">−</button>
+        <button class="hud-btn pct" type="button" id="hudZoomResetBtn" title="Đặt lại 100%">100%</button>
+        <button class="hud-btn" type="button" id="hudFitBtn" title="Tự động phóng to vừa khít khung nhìn (Percentile 2%–98%)">Vừa khung</button>
+        <button class="hud-btn accent" type="button" id="hudFocusErrBtn" title="Tô sáng và phóng tới đối tượng lỗi đang chọn">🎯 Xem nét lỗi</button>
+      </div>
+    </div>
+
+    <!-- Khung nhìn 3D (Hiển thị khi chọn chế độ 🧊 Mô hình 3D trên Header) -->
+    <div class="studio3d-wrap" id="studio3dWrap" hidden>
+      <div class="studio3d-bar">
+        <div class="seg" role="group" aria-label="Chế độ mổ xẻ kết cấu 3D">
+          <button type="button" class="st3d-inspect on" data-inspect="solid">📦 Khối đặc</button>
+          <button type="button" class="st3d-inspect" data-inspect="xray">👁️ Nhìn xuyên kết cấu</button>
+          <button type="button" class="st3d-inspect" data-inspect="doors">🚪 Mở cánh 90°</button>
+          <button type="button" class="st3d-inspect" data-inspect="exploded">💥 Bóc tách tấm</button>
+        </div>
+        <div class="seg" role="group" aria-label="Góc nhìn chuẩn">
+          <button type="button" class="st3d-preset" data-cam="iso">Iso</button>
+          <button type="button" class="st3d-preset" data-cam="front">Mặt đứng</button>
+          <button type="button" class="st3d-preset" data-cam="top">Mặt bằng</button>
+          <button type="button" class="st3d-preset" data-cam="side">Mặt cắt</button>
+        </div>
+        <button class="hdr-btn" type="button" id="st3dWireBtn" aria-pressed="true">Khung dây: Bật</button>
+        <button class="hdr-btn" type="button" id="st3dResetCamBtn">Đặt lại góc nhìn</button>
+        <span class="spacer"></span>
+        <span class="pill neu sm" id="st3dStatsPill">0 khối 3D</span>
+      </div>
+      <div class="studio3d-split">
+        <div class="studio3d-stage" id="studio3dStage">
+          <canvas id="studio3dCanvas" width="920" height="540" aria-label="Không gian 3D tương tác"></canvas>
+          <div class="canvas-hud">
+            <button class="hud-btn" type="button" id="hud3dZoomInBtn" title="Phóng to 3D">+</button>
+            <button class="hud-btn" type="button" id="hud3dZoomOutBtn" title="Thu nhỏ 3D">−</button>
+            <button class="hud-btn pct" type="button" id="hud3dZoomResetBtn">100%</button>
+            <button class="hud-btn" type="button" id="hud3dFitBtn">Vừa khung</button>
+            <button class="hud-btn accent" type="button" id="hud3dFocusGapBtn">🎯 Focus phần thiếu</button>
+          </div>
+        </div>
+        <div class="studio3d-side" id="st3dSideInspector">
+          <div class="sec-head"><span>BỔ SUNG THÔNG SỐ 3D &amp; CÔNG THÁI HỌC</span></div>
+          <div class="st3d-side-body" id="studioPaneBody"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Thanh trạng thái mảnh dưới đáy khung giữa -->
+    <div class="cv-foot">
+      <span class="ro-badge">🔒 Tệp gốc chỉ đọc</span>
+      <span id="cvInfo">Đang tải thông tin bản vẽ…</span>
+      <span class="spacer"></span>
+      <button class="link-xs" type="button" id="stdLink">Xem bộ luật đang áp dụng</button>
+    </div>
+  </section>
+
+  <!-- CỘT PHẢI (340px): 2 TAB CHUYỂN ĐỔI TOÀN CHIỀU CAO (KHÔNG CHIA ĐÔI CHỒNG LÊN NHAU) -->
+  <aside class="col right-col" aria-label="Trợ lý AI và Duyệt Sửa Đổi ChangeSet">
+    <div class="right-tabs" role="tablist" aria-label="Chuyển đổi Trợ lý AI và Duyệt Sửa Đổi">
+      <button class="r-tab on" type="button" role="tab" id="rtBtnChat" data-rt="chat" aria-selected="true">
+        💬 Trợ lý AI &amp; Phân tích
+      </button>
+      <button class="r-tab" type="button" role="tab" id="rtBtnChg" data-rt="chg" aria-selected="false">
+        🛠️ Duyệt Sửa Đổi <span class="cnt" id="cntC">0</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: TRỢ LÝ AI & PHÂN TÍCH (CHIẾM 100% CHIỀU CAO CỘT PHẢI) -->
+    <div class="right-pane on" id="rtPaneChat" role="tabpanel">
+      <div class="chat-log" id="log" aria-live="polite"></div>
+
+      <!-- Gợi ý câu hỏi nhanh gọn gàng -->
+      <div class="sug-bar" id="sug"></div>
+      <div class="skill-chips-bar" id="skillChipsBar" aria-label="Kỹ năng phân tích nhanh">
+        <button type="button" class="sk-chip" data-skill-act="survey">🔍 Khảo sát bản vẽ</button>
+        <button type="button" class="sk-chip" data-skill-act="propose">⚡ Đề xuất tự động sửa</button>
+        <button type="button" class="sk-chip" data-skill-act="aideep">📐 Phân tích sản xuất</button>
+        <button type="button" class="sk-chip" data-skill-act="handover">📋 Ghi chú bàn giao</button>
+      </div>
+
+      <form class="composer" id="form">
+        <input id="inp" type="text" placeholder="Hỏi trợ lý về lỗi trên bản vẽ này…" autocomplete="off" aria-label="Nhập câu hỏi cho trợ lý"/>
+        <button class="btn-p send" type="submit" aria-label="Gửi">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg>
+        </button>
+      </form>
+    </div>
+
+    <!-- TAB 2: DUYỆT SỬA ĐỔI (CHANGESET) (CHIẾM 100% CHIỀU CAO CỘT PHẢI) -->
+    <div class="right-pane" id="rtPaneChg" role="tabpanel">
+      <div class="chg-header-note">
+        Mọi bước sửa bên dưới chỉ áp dụng khi bạn xác nhận và luôn <b>xuất ra tệp DXF mới</b>, tuyệt đối không ghi đè bản gốc.
+      </div>
+      <div class="chg-list-full" id="chgList"></div>
+      <div class="chg-foot-full" id="chgFoot"></div>
+    </div>
+  </aside>
+</main>
+
+<!-- ================= CÁC MÀN HÌNH QUẢN TRỊ PHỤ (MỞ TỪ MENU ⚙️) ================= -->
+<main class="screen" id="s-home"><div class="page">
+  <div class="home-head"><h1 id="homeH">Tiến độ bản vẽ</h1><p id="homeP"></p></div>
+  <div class="pipe" id="pipe"></div>
+  <div id="homeList"></div>
+  <form id="askForm" hidden><input id="askIn" type="text"/></form>
+</div></main>
+
+<main class="screen" id="s-overview"><div class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <h1 style="margin:0">Tổng quan chất lượng bản vẽ</h1>
+    <button class="hdr-btn" type="button" data-go="work">← Quay lại Bản vẽ</button>
+  </div>
+  <div class="kpis">
+    <div class="card"><div class="k-l">Tỉ lệ đạt chuẩn ngay lần đầu</div><div class="k-v">64%</div></div>
+    <div class="card"><div class="k-l">Lỗi chặn bàn giao được giữ lại</div><div class="k-v">19</div></div>
+    <div class="card"><div class="k-l">Tự động sửa bằng ChangeSet</div><div class="k-v">47</div></div>
+    <div class="card"><div class="k-l">Thời gian quét trung bình</div><div class="k-v">1,4 giây</div></div>
+  </div>
+  <div class="card" style="margin-top:14px"><h2 style="margin-top:0">Các luật phát hiện nhiều nhất</h2><div id="bars"></div></div>
+</div></main>
+
+<main class="screen" id="s-rules"><div class="page wide">
+  <div class="rh">
+    <div>
+      <h1>Danh mục Luật áp dụng (58 luật)</h1>
+      <p class="lead">Tất cả kiểm tra đúng/sai đều chạy bằng hàm kiểm tất định trong <code>packages/core/cadguard/rules/</code>.</p>
+    </div>
+    <div class="rh-r">
+      <button class="hdr-btn" type="button" data-go="work">← Quay lại Bản vẽ</button>
+      <div class="seg" id="scopeSeg" role="group">
+        <button type="button" data-v="k1" aria-pressed="true">Đang áp dụng</button>
+        <button type="button" data-v="co" aria-pressed="false">Chuẩn gốc công ty</button>
+      </div>
+      <select id="viewRole" class="hdr-select">
+        <option value="lead">Trưởng phòng</option>
+        <option value="ad">Quản trị tiêu chuẩn (QA)</option>
+        <option value="pd">Kỹ thuật viên (chỉ xem)</option>
+      </select>
+    </div>
+  </div>
+  <div class="srcline" id="srcline"></div>
+  <div class="covs" id="covs"></div>
+  <div class="gap-note" id="gapNote" hidden></div>
+  <div class="draftbar" id="draftbar" role="region" aria-label="Bản nháp thay đổi luật"></div>
+  <div class="tb">
+    <div class="f-search"><input type="search" id="rq" placeholder="Tìm mã luật (LY-03, VS-01, DH-03)…"/></div>
+    <label class="tbp"><span class="lbl">Vị trí</span><select id="fRole"></select></label>
+    <label class="tbp"><span class="lbl">Task</span><select id="fTask"></select></label>
+    <label class="tbp"><span class="lbl">Tình trạng</span><select id="fKind">
+      <option value="">Tất cả</option><option value="r">Đang chạy</option><option value="n">Chưa cài code</option><option value="m">Kiểm tay</option><option value="off">Đang tắt</option>
+    </select></label>
+    <label class="tbp"><span class="lbl">Nhóm theo</span><select id="fGroup">
+      <option value="">Không nhóm</option><option value="stage">Phòng</option><option value="role">Vị trí</option><option value="task">Task</option>
+    </select></label>
+    <div class="tb-act">
+      <button class="hdr-btn" type="button" id="csvBtn">Xuất CSV</button>
+      <button class="hdr-btn primary" type="button" id="addRuleBtn">+ Thêm luật</button>
+    </div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden">
+    <table class="rt"><thead><tr>
+      <th style="width:94px">Mã</th><th>Luật</th><th style="width:88px">Mức</th><th style="width:128px">Tình trạng</th><th style="width:155px">Phòng</th><th style="width:165px">Vị trí</th><th style="width:205px">Task</th><th style="width:68px;text-align:right">30 ngày</th>
+    </tr></thead><tbody id="rbody"></tbody></table>
+    <div class="tfoot" id="rfoot"></div>
+  </div>
+  <details class="vhist" id="vhist"></details>
+</div></main>
+
+<main class="screen" id="s-connect"><div class="page">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <h1 style="margin:0">Kết nối Trợ lý AI &amp; AutoCAD Plugin</h1>
+    <button class="hdr-btn" type="button" data-go="work">← Quay lại Bản vẽ</button>
+  </div>
+  <div class="grid2" id="cliCards"></div>
+  <div class="grid2" id="apiCards" style="margin-top:12px"></div>
+</div></main>
+
+</div>
+
+<!-- Drawer & Modals -->
+<aside class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drTitle"></aside>
+
+<div class="modal-bg" id="mRule" role="dialog" aria-modal="true" aria-labelledby="mrT">
+  <div class="modal wide" id="mRuleBody"></div>
+</div>
+<div class="modal-bg" id="mDraft" role="dialog" aria-modal="true" aria-labelledby="mdT">
+  <div class="modal wide" id="mDraftBody"></div>
+</div>
+<div class="modal-bg" id="mProj" role="dialog" aria-modal="true" aria-labelledby="mpT">
+  <div class="modal wide" id="mProjBody"></div>
+</div>
+<div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal">
+    <h3 id="mTitle">Hoàn tác bản sửa đổi?</h3>
+    <p id="mText">Tệp mới sẽ được xoá. Bản vẽ gốc không bị ảnh hưởng.</p>
+    <div class="ft">
+      <button class="hdr-btn" id="mNo">Không</button>
+      <button class="hdr-btn primary" id="mYes">Xác nhận</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script src="/app.js"></script>
+</body>
+</html>

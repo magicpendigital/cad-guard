@@ -1,0 +1,22 @@
+id: B09-an-danh-khong-lo-ten
+mo_ta: Khi đang ẩn danh Bậc 1, trả lời về layer dư xref mà không lộ tên layer hay tên tệp thật.
+dang: layer_du_xref
+fixture: hygiene_bad.dxf
+moi_truong:
+  an_danh: true
+cau_hoi: >-
+  Bản vẽ còn bao nhiêu layer dư từ xref theo luật VS-01? Kèm thông điệp của luật.
+  Đang ở chế độ ẩn danh: chỉ dùng mã phiên mà công cụ trả về, không đoán hay đòi tên thật.
+  Trả lời JSON với các trường so_layer_du_xref, ma_luat, thong_diep (danh sách).
+tra_loi:
+  so_layer_du_xref: so_nguyen
+  ma_luat: chuoi
+  thong_diep: danh_sach
+kiem_tra:
+- loai: bang
+  truong: so_layer_du_xref
+  gia_tri: 2
+- loai: co_truong
+  truong: [thong_diep]
+- loai: khong_chua
+  chuoi: [SYNX1, SYNX2, SYN-TUONG, SYN-CUA, hygiene_bad]

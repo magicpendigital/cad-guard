@@ -1,0 +1,50 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "autoupdate": false,
+  "share": "disabled",
+  "default_agent": "cad-guard",
+  "mcp": {
+    "cad-guard": {
+      "type": "local",
+      "command": ["<PYTHON>", "-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>"],
+      "enabled": true,
+      "timeout": 120000
+    },
+    "cad-guard-ho-so": {
+      "type": "local",
+      "command": ["<PYTHON>", "-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>", "--profile", "<HO_SO_CONG_TY>"],
+      "enabled": false,
+      "timeout": 120000
+    }
+  },
+  "permission": {
+    "*": "deny",
+    "cad-guard_*": "allow",
+    "cad-guard-ho-so_*": "allow",
+    "skill": {
+      "*": "deny",
+      "khao-sat-ban-ve": "allow",
+      "kiem-va-giai-thich-loi": "allow",
+      "don-ban-ve": "allow",
+      "ghi-chu-ban-giao": "allow"
+    }
+  },
+  "agent": {
+    "cad-guard": {
+      "description": "Trợ lý kiểm bản vẽ nội thất DXF, chỉ dùng công cụ MCP cad-guard (chỉ đọc).",
+      "mode": "primary",
+      "permission": {
+        "*": "deny",
+        "cad-guard_*": "allow",
+        "cad-guard-ho-so_*": "allow",
+        "skill": {
+          "*": "deny",
+          "khao-sat-ban-ve": "allow",
+          "kiem-va-giai-thich-loi": "allow",
+          "don-ban-ve": "allow",
+          "ghi-chu-ban-giao": "allow"
+        }
+      }
+    }
+  }
+}

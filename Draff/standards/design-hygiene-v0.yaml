@@ -1,0 +1,108 @@
+# standards/design-hygiene-v0.yaml — chuẩn vệ sinh bản vẽ cho khâu Thiết kế/Kỹ thuật, bản v0.
+# Sửa luật/ngưỡng = tạo PHIÊN BẢN CHUẨN MỚI (design-hygiene-v0.1...), không sửa đè.
+# Ngưỡng của TỪNG CÔNG TY đặt trong hồ sơ công ty (xem standards/company-profile.example.yaml), không sửa tệp này.
+# `implemented: true` chỉ khi có hàm luật trong packages/core/cadguard/rules/hygiene.py và có test (tests/test_hygiene.py).
+# Nguồn ngưỡng: docs/real-sample-profile.md (5 bản vẽ thật M1–M5, ẩn danh, n = 5, một công ty) — CHƯA đo độ chính xác.
+name: design-hygiene-v0
+version: 0.1.0
+description: 'Chuẩn vệ sinh bản vẽ v0 cho khâu Thiết kế → Kỹ thuật (đề xuất, chưa được công ty nào duyệt). Nội dung: standards/design-hygiene-v0.md.'
+globals:
+  # Layer có tên khớp một mẫu ở đây được coi là hợp lệ dù tên trông như xref (VS-01). Biểu thức chính quy, không phân biệt hoa/thường.
+  allowed_layer_patterns: []
+  # Đối tượng trên layer khớp mẫu ở đây được miễn kiểm ghi đè màu/độ dày nét (VS-04).
+  exempt_layer_patterns: []
+rules:
+- id: VS-01
+  title: Không còn layer dư từ xref đã gộp hoặc đính kèm (tên có '|' hoặc '$0$')
+  reads: bảng layer (cờ xref, tên)
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'docs/real-sample-profile.md mục 3, 4.6: 6–41 layer dư mỗi tệp ở cả 5 mẫu; thông lệ PURGE/đổi tên sau khi bind xref'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+  params:
+    max_xref_layers: 0
+- id: VS-02
+  title: Số kiểu chữ và số kiểu kích thước không vượt ngưỡng
+  reads: bảng STYLE (trừ kiểu hình SHX), bảng DIMSTYLE
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'docs/real-sample-profile.md mục 3, 4.6: 23–52 kiểu chữ và 8–26 kiểu kích thước mỗi tệp; furniture-v0 mục 2.7–2.8 chỉ cần vài kiểu. Ngưỡng là đề xuất'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+  params:
+    max_text_styles: 15
+    max_dim_styles: 10
+- id: VS-03
+  title: Tỉ lệ đối tượng nằm trực tiếp trên layer 0 không vượt ngưỡng (không tính nội dung định nghĩa khối)
+  reads: số liệu đối tượng theo layer ở không gian mô hình và giấy
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'docs/real-sample-profile.md mục 3: 2,9–22,8% đối tượng trên layer 0; layer 0 để dành cho nội dung khối (furniture-v0 mục 2.10). Ngưỡng 5% là đề xuất'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+  params:
+    max_layer0_ratio: 0.05
+    min_entities: 10
+- id: VS-04
+  title: Tỉ lệ đối tượng ghi đè màu hoặc độ dày nét thay vì ByLayer không vượt ngưỡng
+  reads: màu, true color, độ dày nét của từng đối tượng ở không gian mô hình và giấy; globals.exempt_layer_patterns
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: 'docs/real-sample-profile.md mục 3, 4.6: màu ghi đè 3–77%, độ dày nét ghi đè 0–40%; furniture-v0 mục 2.6 (một cơ chế gán độ dày). Ngưỡng là đề xuất'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+  params:
+    max_color_override_ratio: 0.1
+    max_lineweight_override_ratio: 0.05
+    min_entities: 10
+- id: VS-05
+  title: Số WIPEOUT, IMAGE và OLE không vượt ngưỡng (kể cả trong khối)
+  reads: số liệu WIPEOUT/IMAGE/OLE2FRAME/OLEFRAME ở không gian mô hình, giấy và định nghĩa khối
+  kind: deterministic
+  severity: W
+  false_positive_risk: low
+  source: 'docs/real-sample-profile.md mục 3, 4.6: WIPEOUT tới 4.039 trong khối, IMAGE + OLE 2–38 mỗi tệp. Ngưỡng là đề xuất'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+  params:
+    max_wipeouts: 100
+    max_images: 10
+    max_ole: 0
+- id: VS-06
+  title: Không có kích thước bị ghi đè chữ (chữ khác rỗng và khác '<>')
+  reads: chữ ghi đè của DIMENSION ở mọi không gian, kể cả trong khối
+  kind: deterministic
+  severity: E
+  false_positive_risk: low
+  source: 'docs/real-sample-profile.md mục 3, 4.7: 0,5–6,0% kích thước bị ghi đè chữ; ISO 129-1 thông lệ không sửa số đo bằng tay (furniture-v0 TX-08)'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+  params:
+    max_dim_text_overrides: 0
+- id: VS-07
+  title: Chữ có dấu tiếng Việt không dùng kiểu chữ có phông không Unicode (SHX, phông VN cũ kiểu TCVN3/VNI)
+  reads: số TEXT/MTEXT có ký tự ngoài ASCII theo kiểu chữ (stats.text_non_ascii_by_style), phông của kiểu chữ
+  kind: deterministic
+  severity: W
+  false_positive_risk: medium
+  source: 'docs/real-sample-profile.md mục 3, 4.5: 54–74% chữ có ký tự ngoài ASCII, phông VN cũ (vn*, VNI/TCVN) ở cả 5 tệp'
+  implemented: true
+  enabled: true
+  realtime_ok: false
+  params:
+    max_texts: 0
+    legacy_font_patterns:
+    - ^\.?vn
+    - ^tcvn
+    unicode_shx_fonts: []

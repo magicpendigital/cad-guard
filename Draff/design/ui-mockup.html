@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cad-guard — bản mẫu giao diện</title>
+<!--
+  BẢN MẪU GIAO DIỆN (không phải sản phẩm). Toàn bộ dữ liệu là TỔNG HỢP/minh hoạ: không có bản vẽ hay số liệu của khách.
+  Trợ lý trong bản mẫu là kịch bản có sẵn, chưa nối mô hình nào.
+  Bối cảnh: công ty sản xuất có ba phòng nối tiếp (Thiết kế, Kỹ thuật, Lập trình sản xuất). Chọn phòng ở góc trên để xem từng góc nhìn.
+  Mã luật VS-/CN- là mã minh hoạ, chưa có trong chuẩn.
+  Gắn với plans/cad-guard-agent.md (mục 3–5).
+-->
+<style>
+:root{
+  --font: "Segoe UI", system-ui, -apple-system, "Inter", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, "SF Mono", monospace;
+  --r: 10px;
+  --bg:#F6F5F2; --surface:#FFFFFF; --surface2:#EFEDE8; --border:#DEDAD2; --border-strong:#C9C4B9;
+  --text:#1F2421; --text2:#555C57; --text3:#6B726D;
+  --primary:#0F6B62; --primary-hover:#0B554E; --primary-soft:#DDF0EC; --on-primary:#FFFFFF; --primary-text:#0B4F48;
+  --ok-bg:#DFF3E4; --ok-fg:#14532D; --err-bg:#FBE3E1; --err-fg:#8E1B13; --warn-bg:#FCEFCB; --warn-fg:#7A4B00;
+  --neu-bg:#E9E7E2; --neu-fg:#4A504B; --info-bg:#DEEBFA; --info-fg:#1E4C84;
+  --err:#C0392B; --warn:#B7791F; --ok:#2E7D4F;
+  --cv-bg:#FFFFFF; --cv-line:#2B3330; --cv-fill:#F3F1EC; --cv-dim:#0E7490; --cv-l0:#8A918C; --cv-grid:#EEECE6;
+  --shadow:0 1px 2px rgba(20,25,22,.06),0 4px 14px rgba(20,25,22,.06);
+}
+html[data-theme="dark"]{
+  --bg:#121513; --surface:#1A1E1C; --surface2:#232826; --border:#323935; --border-strong:#46504A;
+  --text:#E9ECEA; --text2:#A8B0AA; --text3:#8E968F;
+  --primary:#3FBFAE; --primary-hover:#63D0C1; --primary-soft:#173A35; --on-primary:#06201C; --primary-text:#9FE3D9;
+  --ok-bg:#163A24; --ok-fg:#8EDCA6; --err-bg:#46201D; --err-fg:#FFB4AC; --warn-bg:#44330A; --warn-fg:#F3CF7A;
+  --neu-bg:#2C312E; --neu-fg:#B8BFBA; --info-bg:#1C3350; --info-fg:#A9CBF4;
+  --err:#F0766A; --warn:#E0B04A; --ok:#5CC98A;
+  --cv-bg:#0F1211; --cv-line:#C8D0CB; --cv-fill:#171B19; --cv-dim:#5CC8DD; --cv-l0:#7E8781; --cv-grid:#1B201E;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 14px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--font);font-size:15px;line-height:1.5;color:var(--text);background:var(--bg);-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--primary);outline-offset:2px;border-radius:6px}
+.app{display:grid;grid-template-rows:56px 1fr;height:100vh;min-width:980px}
+
+/* ===== top bar ===== */
+.topbar{display:flex;align-items:center;gap:14px;padding:0 16px;background:var(--surface);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:.2px}
+.brand .logo{width:28px;height:28px;border-radius:8px;background:var(--primary);color:var(--on-primary);display:grid;place-items:center}
+.sample-tag{font-size:12px;font-weight:600;padding:2px 8px;border-radius:99px;background:var(--warn-bg);color:var(--warn-fg);white-space:nowrap}
+.nav{display:flex;gap:4px;margin-left:10px}
+.nav button{border:0;background:transparent;padding:8px 13px;border-radius:8px;color:var(--text2);font-weight:600;display:flex;gap:7px;align-items:center}
+.nav button:hover{background:var(--surface2);color:var(--text)}
+.nav button[aria-selected="true"]{background:var(--primary-soft);color:var(--primary-text)}
+.nav small{font-weight:500;color:var(--text3);font-size:12px}
+.spacer{flex:1}
+.chip{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border:1px solid var(--border);border-radius:99px;background:var(--surface);font-size:13.5px;color:var(--text2);white-space:nowrap}
+.chip b{color:var(--text);font-weight:600}
+.chip.btn{cursor:pointer}
+.chip.btn:hover{border-color:var(--border-strong);background:var(--surface2)}
+.iconbtn{width:36px;height:36px;display:grid;place-items:center;border:1px solid var(--border);background:var(--surface);border-radius:8px;color:var(--text2)}
+.iconbtn:hover{background:var(--surface2);color:var(--text)}
+svg.i{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.menu{position:absolute;z-index:30;top:50px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:6px;min-width:330px}
+.menu button{display:flex;width:100%;gap:10px;align-items:flex-start;text-align:left;border:0;background:transparent;padding:9px 10px;border-radius:8px}
+.menu button:hover{background:var(--surface2)}
+.menu button[aria-checked="true"]{background:var(--primary-soft)}
+.menu .t{font-weight:600}.menu .d{font-size:13px;color:var(--text2)}
+
+/* ===== pills ===== */
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 9px;border-radius:99px;font-size:13px;font-weight:600;line-height:1.5;white-space:nowrap}
+.pill svg.i{width:14px;height:14px}
+.pill.ok{background:var(--ok-bg);color:var(--ok-fg)}
+.pill.err{background:var(--err-bg);color:var(--err-fg)}
+.pill.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.pill.neu{background:var(--neu-bg);color:var(--neu-fg)}
+.pill.info{background:var(--info-bg);color:var(--info-fg)}
+
+/* ===== buttons ===== */
+.btn-p,.btn-s,.btn-d{border-radius:8px;padding:8px 14px;font-weight:600;border:1px solid transparent;display:inline-flex;gap:7px;align-items:center;justify-content:center}
+.btn-p{background:var(--primary);color:var(--on-primary)}
+.btn-p:hover{background:var(--primary-hover)}
+.btn-s{background:var(--surface);border-color:var(--border-strong);color:var(--text)}
+.btn-s:hover{background:var(--surface2)}
+.btn-d{background:var(--err);color:#fff}
+html[data-theme="dark"] .btn-d{color:#2A0906}
+.btn-p[disabled],.btn-s[disabled]{opacity:.45;cursor:not-allowed}
+.btn-sm{padding:5px 10px;font-size:14px}
+
+/* ===== screens ===== */
+.screen{display:none;min-height:0}
+.screen.on{display:grid}
+#s-work{grid-template-columns:272px minmax(0,1fr) 420px}
+.col{min-height:0;display:flex;flex-direction:column;background:var(--surface)}
+.col.left{border-right:1px solid var(--border)}
+.col.right{border-left:1px solid var(--border)}
+.col-h{padding:14px 16px 8px;font-size:12.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+
+/* file list */
+.files{padding:0 8px;overflow:auto;flex:1}
+.file{display:block;width:100%;text-align:left;border:1px solid transparent;background:transparent;padding:10px;border-radius:9px;margin-bottom:2px}
+.file:hover{background:var(--surface2)}
+.file[aria-current="true"]{background:var(--primary-soft);border-color:color-mix(in srgb,var(--primary) 35%,transparent)}
+.file .n{display:flex;align-items:center;gap:8px;font-weight:600;word-break:break-all}
+.file .n svg{color:var(--text3)}
+.file .m{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;padding-left:26px}
+.file.child{margin-left:18px;width:calc(100% - 18px)}
+.std-box{margin:8px 12px 12px;padding:12px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface2);font-size:14px}
+.std-box .k{color:var(--text3);font-size:12.5px}
+.std-box .v{font-weight:600}
+
+/* canvas */
+.center{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg)}
+.cv-tools{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surface);border-bottom:1px solid var(--border)}
+.seg{display:inline-flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--surface);padding:6px 13px;font-weight:600;color:var(--text2)}
+.seg button+button{border-left:1px solid var(--border-strong)}
+.seg button[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-text)}
+.seg button[disabled]{opacity:.45;cursor:not-allowed}
+.cv-wrap{flex:1;min-height:0;padding:14px;overflow:auto;display:flex}
+.sheet{flex:1;background:var(--cv-bg);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);display:grid;place-items:center;padding:6px;min-height:340px}
+.sheet svg{width:100%;height:auto;max-height:100%}
+.cv-status{display:flex;gap:16px;align-items:center;padding:8px 14px;background:var(--surface);border-top:1px solid var(--border);font-size:13.5px;color:var(--text2);flex-wrap:wrap}
+.cv-status .lock{display:inline-flex;gap:6px;align-items:center;color:var(--ok-fg);background:var(--ok-bg);padding:2px 9px;border-radius:99px;font-weight:600}
+/* svg drawing */
+.ln{stroke:var(--cv-line);stroke-width:1.4;fill:none}
+.ln.thin{stroke-width:.9}
+.fillc{fill:var(--cv-fill)}
+.txt{fill:var(--cv-line);font-family:var(--font)}
+.fa-s{stroke:var(--cv-l0);fill:none;stroke-width:1.4}
+.fa-t{fill:var(--cv-l0)}
+svg[data-fixed-a="1"] .fa-s{stroke:var(--cv-dim)}
+svg[data-fixed-a="1"] .fa-t{fill:var(--cv-dim)}
+.fb-t{font-family:var(--font);fill:var(--cv-line);font-size:var(--s,16px)}
+svg[data-fixed-b="1"] .fb-t{font-size:13px}
+.fb-s{stroke:var(--cv-l0);fill:none;stroke-width:2.2}
+svg[data-fixed-b="1"] .fb-s{stroke:var(--cv-dim)}
+.fa-show{display:none}
+svg[data-fixed-a="1"] .fa-show{display:block}
+svg[data-fixed-a="1"] .fa-hide{display:none}
+.chg-box{fill:none;stroke:var(--ok);stroke-width:1.6;stroke-dasharray:5 4;display:none}
+svg[data-show-chg="1"][data-fixed-a="1"] #chg-a{display:block}
+svg[data-show-chg="1"][data-fixed-b="1"] #chg-b{display:block}
+.mk{display:none;cursor:pointer}
+svg[data-scanned="1"] .mk{display:block}
+.mk .ring{fill:none;stroke-width:2.2}
+.mk .dot{stroke:none}
+.mk .num{fill:#fff;font:700 13px var(--font);text-anchor:middle}
+.mk.sev-error .ring{stroke:var(--err)} .mk.sev-error .dot{fill:var(--err)}
+.mk.sev-warn .ring{stroke:var(--warn)} .mk.sev-warn .dot{fill:var(--warn)}
+.mk.sev-warn .num{fill:#1d1300}
+html[data-theme="dark"] .mk.sev-error .num{fill:#2A0906}
+.mk.fixed .ring{stroke:var(--ok)} .mk.fixed .dot{fill:var(--ok)} .mk.fixed .num{fill:#06210F}
+.mk.sel .ring{stroke-width:4}
+.mk .pulse{fill:none;stroke-width:2;opacity:0}
+.mk.sel .pulse{animation:pl 1.4s ease-out infinite;stroke:currentColor}
+.mk.sev-error{color:var(--err)} .mk.sev-warn{color:var(--warn)} .mk.fixed{color:var(--ok)}
+@keyframes pl{0%{opacity:.7;r:14}100%{opacity:0;r:34}}
+.missing{stroke:var(--err);stroke-dasharray:4 3;fill:none;stroke-width:1.5}
+
+/* right panel */
+.tabs{display:flex;gap:2px;padding:8px 10px 0;border-bottom:1px solid var(--border)}
+.tabs button{border:0;background:transparent;padding:9px 12px;font-weight:600;color:var(--text2);border-bottom:3px solid transparent;display:flex;gap:7px;align-items:center}
+.tabs button[aria-selected="true"]{color:var(--primary-text);border-bottom-color:var(--primary)}
+.tabs .cnt{font-size:12px;background:var(--neu-bg);color:var(--neu-fg);padding:0 7px;border-radius:99px;font-weight:700}
+.tabs .cnt.hot{background:var(--err-bg);color:var(--err-fg)}
+.pane{display:none;min-height:0;flex:1;flex-direction:column}
+.pane.on{display:flex}
+.chat-head{display:flex;align-items:center;gap:8px;padding:10px 14px;font-size:13.5px;color:var(--text2);border-bottom:1px dashed var(--border)}
+.chat-log{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:94%}
+.msg.me{align-self:flex-end;background:var(--primary);color:var(--on-primary);padding:9px 13px;border-radius:14px 14px 4px 14px}
+.msg.ai{align-self:flex-start;background:var(--surface2);padding:11px 14px;border-radius:14px 14px 14px 4px}
+.msg.ai p{margin:0 0 8px}.msg.ai p:last-child{margin:0}
+.msg .src{margin-top:8px;font-size:12.5px;color:var(--text3)}
+.tool{align-self:flex-start;width:94%;border:1px solid var(--border);border-radius:9px;background:var(--surface);font-size:13.5px}
+.tool summary{cursor:pointer;padding:7px 11px;display:flex;gap:8px;align-items:center;color:var(--text2);list-style:none}
+.tool summary::-webkit-details-marker{display:none}
+.tool summary .ok{color:var(--ok);display:inline-flex}
+.tool pre{margin:0;padding:8px 11px 10px;border-top:1px solid var(--border);font:12.5px/1.5 var(--mono);color:var(--text2);white-space:pre-wrap}
+.typing{align-self:flex-start;color:var(--text3);font-size:14px;display:flex;gap:6px;align-items:center}
+.typing i{width:6px;height:6px;border-radius:50%;background:var(--text3);animation:bl 1s infinite}
+.typing i:nth-child(2){animation-delay:.15s}.typing i:nth-child(3){animation-delay:.3s}
+@keyframes bl{0%,80%,100%{opacity:.25}40%{opacity:1}}
+.suggest{display:flex;flex-wrap:wrap;gap:7px;padding:8px 14px 0}
+.suggest button{border:1px solid var(--border-strong);background:var(--surface);border-radius:99px;padding:6px 12px;font-size:14px;font-weight:500}
+.suggest button:hover{background:var(--primary-soft);border-color:var(--primary);color:var(--primary-text)}
+.suggest button.primary{background:var(--primary);color:var(--on-primary);border-color:var(--primary);font-weight:600}
+.composer{display:flex;gap:8px;padding:10px 14px 12px}
+.composer input{flex:1;padding:10px 12px;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface)}
+.composer input::placeholder{color:var(--text3)}
+.hint{padding:0 14px 10px;font-size:12.5px;color:var(--text3)}
+.note-card{margin-top:8px;border:1px solid var(--border-strong);border-radius:9px;background:var(--surface);padding:10px 12px;font-size:14px}
+.note-card .lbl{font-size:12.5px;color:var(--text3);margin-bottom:6px;display:flex;gap:6px;align-items:center}
+.note-card ul{margin:0 0 8px 18px;padding:0}
+
+/* findings */
+.list{overflow:auto;flex:1;padding:12px 12px 16px;display:flex;flex-direction:column;gap:9px}
+.empty{padding:34px 20px;text-align:center;color:var(--text2)}
+.empty b{display:block;color:var(--text);font-size:16px;margin-bottom:4px}
+.f-card{border:1px solid var(--border);border-radius:var(--r);padding:12px;background:var(--surface);cursor:pointer;text-align:left;width:100%}
+.f-card:hover{border-color:var(--border-strong)}
+.f-card.sel{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 22%,transparent)}
+.f-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.f-no{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;background:var(--neu-bg);color:var(--neu-fg)}
+.f-rule{font:600 13px var(--mono);color:var(--text2)}
+.f-title{font-weight:600;margin:7px 0 3px}
+.f-d{color:var(--text2);font-size:14px}
+.f-act{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.f-meta{margin-top:8px;font-size:13px;color:var(--text3);display:flex;gap:6px;align-items:center}
+
+/* changeset */
+.op{border:1px solid var(--border);border-radius:var(--r);padding:12px;background:var(--surface)}
+.op label{display:flex;gap:10px;align-items:flex-start;cursor:pointer}
+.op input{margin-top:4px;width:17px;height:17px;accent-color:var(--primary)}
+.diff{margin-top:9px;font:13px/1.55 var(--mono);border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.diff div{padding:3px 10px}
+.diff .m{background:var(--err-bg);color:var(--err-fg)}
+.diff .p{background:var(--ok-bg);color:var(--ok-fg)}
+.cs-foot{border-top:1px solid var(--border);padding:12px 14px;background:var(--surface)}
+.checks{margin:0 0 10px;padding:0;list-style:none;font-size:14px}
+.checks li{display:flex;gap:8px;align-items:flex-start;padding:2px 0;color:var(--text2)}
+.checks li svg{color:var(--ok);margin-top:3px}
+.safe{display:flex;gap:8px;font-size:13.5px;color:var(--text2);margin-bottom:10px;align-items:flex-start}
+.safe svg{color:var(--ok);margin-top:2px}
+
+/* ===== settings screen ===== */
+.page{overflow:auto;padding:26px 32px 48px;background:var(--bg)}
+.page-in{max-width:1040px;margin:0 auto}
+h1{font-size:24px;margin:0 0 4px;line-height:1.25}
+h2{font-size:18px;margin:30px 0 4px}
+.lead{color:var(--text2);margin:0 0 18px;font-size:16px;max-width:760px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px}
+.prov{display:flex;flex-direction:column;gap:10px}
+.prov .hd{display:flex;gap:10px;align-items:center;justify-content:space-between}
+.prov .nm{font-weight:700;font-size:16px}
+.prov .ds{color:var(--text2);font-size:14px;margin:0}
+.prov .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.prov input[type=password],.prov input[type=text],.num-in{padding:8px 11px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);min-width:0;flex:1}
+.callout{display:flex;gap:11px;padding:13px 15px;border-radius:var(--r);background:var(--info-bg);color:var(--info-fg);font-size:14.5px;margin:0 0 18px;max-width:900px}
+.callout svg{margin-top:2px}
+.tier{display:grid;gap:8px}
+.tier label{display:flex;gap:11px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);cursor:pointer;align-items:flex-start}
+.tier label:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
+.tier input{margin-top:4px;accent-color:var(--primary);width:17px;height:17px}
+.tier .t{font-weight:700}.tier .d{font-size:14px;color:var(--text2)}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);font-size:14.5px}
+th{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);font-weight:700}
+.perm td:first-child{width:62%}
+.lockrow{display:inline-flex;gap:6px;align-items:center}
+
+/* manager */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.kpi .v{font-size:30px;font-weight:700;line-height:1.1}
+.kpi .l{color:var(--text2);font-size:14px;margin-top:4px}
+.kpi .dlt{font-size:13px;margin-top:8px;color:var(--text3)}
+.bars{display:grid;gap:9px}
+.bar{display:grid;grid-template-columns:230px 1fr 40px;gap:12px;align-items:center;font-size:14.5px}
+.bar .tr{height:12px;border-radius:6px;background:var(--surface2);overflow:hidden}
+.bar .tr i{display:block;height:100%;background:var(--primary);border-radius:6px}
+.bar .nn{text-align:right;font-weight:600}
+.privacy{display:flex;gap:9px;align-items:center;color:var(--text2);font-size:14px;margin-top:12px}
+
+/* home (thợ vẽ) */
+.hero{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px 24px;margin-bottom:18px}
+.hero h1{font-size:26px}
+.hero p{margin:4px 0 14px;color:var(--text2);font-size:16px}
+.ask{display:flex;gap:8px;max-width:720px}
+.ask input{flex:1;padding:11px 14px;border:1px solid var(--border-strong);border-radius:10px;background:var(--surface);font-size:15px}
+.ask input::placeholder{color:var(--text3)}
+.home-grid{display:grid;grid-template-columns:minmax(0,1fr) 350px;gap:18px;align-items:start}
+.home-grid h2{margin-top:0;font-size:17px}
+.dwg{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.dwg-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dwg-h .nm{font-weight:700;font-size:16px;display:flex;gap:8px;align-items:center}
+.dwg-h .nm svg{color:var(--text3)}
+.dwg .stage{margin-left:auto}
+.ready{list-style:none;margin:12px 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;font-size:14.5px}
+.ready li{display:flex;gap:8px;align-items:flex-start;color:var(--text2)}
+.ready li svg{margin-top:3px}
+.ready li.done{color:var(--text)}
+.ready li.done svg{color:var(--ok)}
+.ready li.todo svg{color:var(--text3)}
+.dwg-f{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dwg-f .why{color:var(--text3);font-size:13.5px}
+.decide{background:var(--warn-bg);color:var(--warn-fg);border-radius:9px;padding:10px 12px;font-size:14.5px;margin:0 0 12px;display:flex;gap:9px;align-items:flex-start}
+.decide svg{margin-top:2px}
+.pack{margin-top:10px;border:1px dashed var(--border-strong);border-radius:9px;padding:10px 12px;font-size:14.5px;display:none}
+.pack.on{display:block}
+.pack ul{margin:4px 0 8px 18px;padding:0;color:var(--text2)}
+.mine{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px}
+.mine .lockline{display:flex;gap:7px;align-items:center;font-size:13.5px;color:var(--ok-fg);background:var(--ok-bg);padding:3px 10px;border-radius:99px;width:fit-content;font-weight:600;margin-bottom:10px}
+.mine h3{margin:0 0 8px;font-size:15px}
+.mine .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:14.5px}
+.mine .row:last-child{border-bottom:0}
+.mine .tip{font-size:14px;color:var(--text2);margin-top:8px;display:flex;gap:8px}
+.tl{list-style:none;margin:0;padding:0;font-size:14px}
+.tl li{display:flex;gap:10px;padding:5px 0;color:var(--text2)}
+.tl time{color:var(--text3);min-width:40px;font-variant-numeric:tabular-nums}
+
+/* chuỗi phòng */
+.pipe{display:flex;align-items:stretch;gap:6px;margin:0 0 18px;flex-wrap:wrap}
+.pipe .node{flex:1;min-width:150px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px}
+.pipe .node.me{border-color:var(--primary);background:var(--primary-soft)}
+.pipe .node .nm{font-weight:700}
+.pipe .node .ct{font-size:14px;color:var(--text2);margin:2px 0 6px}
+.pipe .arr{display:grid;place-items:center;color:var(--text3)}
+.flow{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.flow .card .big{font-size:26px;font-weight:700;line-height:1.1}
+/* ===== luật áp dụng ===== */
+.page-in.wide{max-width:1280px}
+.rh{display:flex;gap:16px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;margin-bottom:6px}
+.rh-act{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.rh-act label{font-size:13.5px;color:var(--text2)}
+.sel{padding:7px 10px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);min-width:0}
+.srcline{display:flex;gap:8px 16px;flex-wrap:wrap;align-items:center;font-size:13.5px;color:var(--text2);margin:0 0 16px}
+.srcline code{font:12.5px var(--mono);background:var(--surface2);padding:1px 6px;border-radius:5px}
+.covs{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:14px}
+.cov{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:14px 16px;text-align:left;width:100%;display:block}
+.cov:hover{border-color:var(--border-strong)}
+.cov[aria-pressed="true"]{border-color:var(--primary);box-shadow:0 0 0 2px color-mix(in srgb,var(--primary) 22%,transparent);background:var(--primary-soft)}
+.cov .nm{font-weight:700}
+.cov .big{font-size:28px;font-weight:700;line-height:1.15;margin:2px 0 4px}
+.cov .sub{font-size:13.5px;color:var(--text2)}
+.cov.gap .big{color:var(--warn-fg)}
+.cov .bar2{display:flex;height:6px;border-radius:4px;overflow:hidden;background:var(--neu-bg);margin:8px 0 6px}
+.cov .bar2 i{display:block;height:100%}
+.tb{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+.tb .grow{flex:1;min-width:180px}
+.tb input[type=search]{width:100%;padding:8px 11px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface)}
+.tb .lbl{font-size:13.5px;color:var(--text2)}
+.tbp{display:inline-flex;gap:6px;align-items:center;white-space:nowrap}
+.tbp .sel{max-width:210px}
+.callout.warn{background:var(--warn-bg);color:var(--warn-fg)}
+.rt{width:100%;border-collapse:collapse}
+.rt th{position:sticky;top:0;background:var(--surface);z-index:1}
+.rt td{vertical-align:top;font-size:14px}
+.rt tr.row{cursor:pointer}
+.rt tr.row:hover td{background:var(--surface2)}
+.rt tr.row.sel td{background:var(--primary-soft)}
+.rt tr.grp td{background:var(--surface2);font-weight:700;padding:8px 12px;font-size:14px;border-bottom:1px solid var(--border-strong)}
+.rt .code{font:600 13px var(--mono);color:var(--text);background:none;border:0;padding:0;text-align:left;text-decoration:underline;text-decoration-color:var(--border-strong);text-underline-offset:3px}
+.rt .code:hover{text-decoration-color:var(--primary)}
+.rt .ttl{font-weight:600;margin-bottom:2px}
+.rt .meta{font-size:12.5px;color:var(--text3)}
+.rt .stack{display:flex;gap:4px;flex-wrap:wrap}
+.rt .own{font-size:12.5px;color:var(--text3);margin-top:4px}
+.rt .none{color:var(--warn-fg);background:var(--warn-bg);border-radius:6px;padding:1px 7px;font-size:13px;font-weight:600;display:inline-block}
+.pill.sm{font-size:12px;padding:0 7px}
+.pill.proj{background:var(--info-bg);color:var(--info-fg)}
+.pill.edit{background:var(--warn-bg);color:var(--warn-fg)}
+.tfoot{padding:10px 14px;font-size:13.5px;color:var(--text3);border-top:1px solid var(--border)}
+.f-rule.link{background:none;border:0;padding:0;text-decoration:underline;text-decoration-color:var(--border-strong);text-underline-offset:3px;cursor:pointer}
+.f-rule.link:hover{color:var(--primary-text);text-decoration-color:var(--primary)}
+.f-link{background:none;border:0;padding:0;color:var(--primary-text);font-weight:600;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+/* drawer */
+.drawer{position:fixed;top:56px;right:0;bottom:0;width:min(480px,100vw);background:var(--surface);border-left:1px solid var(--border-strong);box-shadow:var(--shadow);z-index:40;display:none;flex-direction:column}
+.drawer.on{display:flex}
+.dr-h{padding:14px 16px 10px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
+.dr-h h2{margin:0;font-size:17px;line-height:1.35}
+.dr-b{flex:1;overflow:auto;padding:4px 16px 16px}
+.dr-b h3{margin:18px 0 8px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--text3)}
+.dr-b p{margin:0 0 8px;color:var(--text2);font-size:14.5px}
+.kv{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;font-size:14.5px}
+.kv dt{color:var(--text3)}.kv dd{margin:0}
+.chipset{display:flex;gap:6px;flex-wrap:wrap}
+.tchip{border:1px solid var(--border-strong);background:var(--surface);border-radius:99px;padding:5px 11px;font-size:14px;font-weight:600;color:var(--text2);display:inline-flex;gap:6px;align-items:center}
+.tchip:hover:not([disabled]){background:var(--surface2)}
+.tchip[aria-pressed="true"]{background:var(--primary-soft);color:var(--primary-text);border-color:var(--primary)}
+.tchip[disabled]{cursor:default;opacity:.75}
+.fld{display:grid;gap:4px;margin:0 0 12px}
+.fld>label,.fld>.lb{font-size:13.5px;font-weight:600;color:var(--text2)}
+.fld input[type=text],.fld select,.fld textarea{padding:8px 10px;border:1px solid var(--border-strong);border-radius:8px;background:var(--surface);width:100%}
+.fld input[disabled],.fld select[disabled]{background:var(--surface2);color:var(--text2)}
+.sw{display:flex;gap:10px;align-items:center}
+.sw input{width:18px;height:18px;accent-color:var(--primary)}
+.hist{list-style:none;margin:0;padding:0;font-size:14px;color:var(--text2)}
+.hist li{padding:4px 0;display:flex;gap:10px}.hist time{min-width:78px;color:var(--text3);font-variant-numeric:tabular-nums}
+.dr-f{border-top:1px solid var(--border);padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap}
+.exc{border:1px dashed var(--border-strong);border-radius:9px;padding:10px 12px;font-size:14px;background:var(--surface2)}
+/* thanh bản nháp */
+.draftbar{position:sticky;bottom:12px;margin-top:16px;background:var(--surface);border:1px solid var(--warn);border-radius:12px;box-shadow:var(--shadow);padding:10px 14px;display:none;gap:12px;align-items:center;flex-wrap:wrap}
+.draftbar.on{display:flex}
+.draftbar .tx{flex:1;min-width:240px;font-size:14.5px}
+.modal.wide{width:min(660px,94vw);max-height:90vh;overflow:auto}
+.modal.wide .lead{font-size:14.5px;margin-bottom:12px}
+.opt{display:flex;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--r);cursor:pointer;margin-bottom:6px;align-items:flex-start}
+.opt:has(input:checked){border-color:var(--primary);background:var(--primary-soft)}
+.opt input{margin-top:4px;accent-color:var(--primary)}
+.opt .d{font-size:13.5px;color:var(--text2)}
+.impact{border-radius:9px;padding:10px 12px;font-size:14.5px;margin:10px 0;background:var(--info-bg);color:var(--info-fg)}
+@media (max-width:1180px){.covs{grid-template-columns:repeat(2,1fr)}}
+/* modal */
+.modal-bg{position:fixed;inset:0;background:rgba(10,14,12,.5);display:none;place-items:center;z-index:50}
+.modal-bg.on{display:grid}
+.modal{background:var(--surface);border-radius:14px;padding:22px;width:min(460px,92vw);box-shadow:var(--shadow);border-top:5px solid var(--warn)}
+.modal h3{margin:0 0 6px;font-size:18px}
+.modal p{margin:0 0 16px;color:var(--text2)}
+.modal .ft{display:flex;justify-content:flex-end;gap:8px}
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;z-index:60;display:none;font-weight:600;box-shadow:var(--shadow)}
+.toast.on{display:block}
+.nav button{white-space:nowrap}
+@media (max-width:1600px){.nav small{display:none}}
+@media (max-width:1180px){#s-work{grid-template-columns:minmax(0,1fr) 400px}.col.left{display:none}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand"><span class="logo"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/></svg></span>cad-guard</div>
+    <span class="sample-tag" title="Dữ liệu minh hoạ, không phải của khách">Bản mẫu</span>
+    <nav class="nav" role="tablist" aria-label="Màn hình">
+      <button role="tab" aria-selected="true" data-go="home"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></svg>Việc của tôi <small>phòng của bạn</small></button>
+      <button role="tab" aria-selected="false" data-go="work"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>Bản vẽ <small>làm việc</small></button>
+      <button role="tab" aria-selected="false" data-go="overview"><svg class="i" viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Tổng quan <small>trưởng phòng</small></button>
+      <button role="tab" aria-selected="false" data-go="rules"><svg class="i" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2"/></svg>Luật áp dụng <small>phòng · vị trí · task</small></button>
+      <button role="tab" aria-selected="false" data-go="connect"><svg class="i" viewBox="0 0 24 24"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 01-10 0zM12 16v5"/></svg>Kết nối AI <small>quản trị</small></button>
+    </nav>
+    <div class="spacer"></div>
+    <span class="chip" title="Mức dữ liệu gửi cho AI"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Dữ liệu: <b>Bậc 1</b></span>
+    <div style="position:relative">
+      <button class="chip btn" id="deptBtn" aria-haspopup="true" aria-expanded="false"><svg class="i" viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/></svg>Phòng: <b id="deptName">Thiết kế</b><svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="menu" id="deptMenu" hidden style="right:0"></div>
+    </div>
+    <div style="position:relative">
+      <button class="chip btn" id="engineBtn" aria-haspopup="true" aria-expanded="false"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4M9 13h.01M15 13h.01"/></svg>Trợ lý: <b id="engineName">Claude Code</b><svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button>
+      <div class="menu" id="engineMenu" hidden style="right:0"></div>
+    </div>
+    <button class="iconbtn" id="themeBtn" aria-label="Đổi giao diện sáng/tối" title="Sáng / tối"><svg class="i" id="themeIc" viewBox="0 0 24 24"></svg></button>
+  </header>
+
+  <!-- ============ VIỆC CỦA TÔI (thợ vẽ) ============ -->
+  <main class="screen on" id="s-home"><div class="page"><div class="page-in">
+    <section class="hero">
+      <h1 id="homeH">Chào buổi sáng</h1>
+      <p id="homeP"></p>
+      <form class="ask" id="askForm"><input id="askIn" placeholder="Hỏi nhanh trợ lý, ví dụ: bản nào sẵn sàng bàn giao xưởng?" aria-label="Hỏi nhanh trợ lý"><button class="btn-p" aria-label="Gửi câu hỏi">Hỏi</button></form>
+    </section>
+    <div class="pipe" id="pipe" aria-label="Chuỗi bàn giao giữa các phòng"></div>
+    <div class="home-grid">
+      <section aria-label="Bản vẽ của tôi">
+        <div id="homeList"></div>
+      </section>
+      <aside aria-label="Riêng tôi">
+        <div class="mine">
+          <div class="lockline"><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Chỉ mình bạn thấy · lưu trên máy này</div>
+          <h3>Lỗi tôi hay gặp (30 ngày)</h3>
+          <div class="row"><span><span class="f-rule">LY-04</span> Layer chưa định nghĩa</span><b>5 lần</b></div>
+          <div class="row"><span><span class="f-rule">TX-02</span> Chiều cao chữ</span><b>3 lần</b></div>
+          <div class="tip"><span>Gợi ý: đặt layer hiện hành sang <b>FN-DIM-N</b> trước khi ghi kích thước, sẽ không còn lỗi LY-04.</span></div>
+        </div>
+        <div class="mine">
+          <h3>Đề xuất của trợ lý</h3>
+          <div class="row"><span>Bạn đã chấp nhận</span><b>9 / 11</b></div>
+          <div class="row"><span>Cảnh báo bạn đã báo sai</span><b>1</b></div>
+          <p style="margin:8px 0 0;font-size:13.5px;color:var(--text3)">Báo sai giúp công ty chỉnh luật. Chỉ số lượng được gộp vào số tổng hợp, không kèm tên bạn.</p>
+        </div>
+        <div class="mine">
+          <h3>Gần đây</h3>
+          <ul class="tl">
+            <li><time>09:12</time><span>Quét <b>tu-bep-A.dxf</b>: 4 phát hiện</span></li>
+            <li><time>08:40</time><span>Tạo ghi chú bàn giao <b>ke-tivi-D.dxf</b></span></li>
+            <li><time>Hôm qua</time><span>Duyệt 3 thay đổi trên <b>tu-ao-B.dxf</b></span></li>
+          </ul>
+        </div>
+      </aside>
+    </div>
+  </div></div></main>
+
+  <!-- ============ LÀM VIỆC ============ -->
+  <main class="screen" id="s-work">
+    <aside class="col left" aria-label="Bản vẽ">
+      <div class="col-h" id="projName">Dự án K1</div>
+      <div class="files" id="files"></div>
+      <div class="std-box">
+        <div class="k">Chuẩn đang áp dụng</div><div class="v" id="stdName">furniture-v0.1.0</div>
+        <div class="k" style="margin-top:6px">Luật bật</div><div class="v" id="stdRules">16 / 58</div>
+        <div style="margin-top:8px"><button class="f-link" id="stdLink">Xem luật áp dụng cho phòng này</button></div>
+      </div>
+      <div style="padding:0 12px 14px"><button class="btn-s" style="width:100%" id="scanAll"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Quét cả thư mục</button></div>
+    </aside>
+
+    <section class="center" aria-label="Bản vẽ đang mở">
+      <div class="cv-tools">
+        <strong id="cvTitle">tu-bep-A.dxf</strong>
+        <span class="pill neu" id="viewTag">Mặt đứng · 1:20</span>
+        <div class="spacer"></div>
+        <span id="cmpLabel" style="color:var(--text2);font-size:14px;display:none">Xem trước thay đổi:</span>
+        <div class="seg" id="cmp" style="display:none" role="group" aria-label="So sánh trước sau">
+          <button data-v="before" aria-pressed="false">Trước</button>
+          <button data-v="after" aria-pressed="true">Sau</button>
+        </div>
+      </div>
+      <div class="cv-wrap"><div class="sheet" id="sheet"></div></div>
+      <div class="cv-status">
+        <span class="lock"><svg class="i" viewBox="0 0 24 24" style="width:14px;height:14px"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Tệp gốc chỉ đọc</span>
+        <span>Mọi thay đổi được ghi ra <b>tệp mới</b>, có xem trước và hoàn tác.</span>
+        <span class="spacer"></span>
+        <span id="cvInfo">214 đối tượng · DXF R2018 · mm</span>
+      </div>
+    </section>
+
+    <aside class="col right" aria-label="Trợ lý">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-p="chat" aria-selected="true"><svg class="i" viewBox="0 0 24 24"><path d="M21 12a8 8 0 01-11.5 7.2L4 20l1-4.6A8 8 0 1121 12z"/></svg>Trợ lý</button>
+        <button role="tab" data-p="finds" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg>Lỗi <span class="cnt" id="cntF">–</span></button>
+        <button role="tab" data-p="chg" aria-selected="false"><svg class="i" viewBox="0 0 24 24"><path d="M7 4v12a3 3 0 003 3h7M17 4v8M14 7l3-3 3 3"/></svg>Thay đổi <span class="cnt" id="cntC">0</span></button>
+      </div>
+
+      <div class="pane on" id="p-chat">
+        <div class="chat-head"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="12" rx="3"/><path d="M12 3v4"/></svg><span>Đang dùng <b id="chatEng">Claude Code</b> · chỉ thấy kết quả công cụ đã ẩn danh</span></div>
+        <div class="chat-log" id="log" aria-live="polite"></div>
+        <div class="suggest" id="sug"></div>
+        <form class="composer" id="form"><input id="inp" placeholder="Hỏi hoặc ra lệnh, ví dụ: đổi hết chữ 3.0 sang 2.5" aria-label="Nhập câu hỏi hoặc lệnh"><button class="btn-p" aria-label="Gửi"><svg class="i" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7z"/></svg></button></form>
+        <div class="hint">Trợ lý giải thích và đề xuất. Việc đúng/sai do bộ luật kiểm tất định quyết định.</div>
+      </div>
+
+      <div class="pane" id="p-finds"><div class="list" id="finds"></div></div>
+
+      <div class="pane" id="p-chg">
+        <div class="list" id="chgList"></div>
+        <div class="cs-foot" id="chgFoot" style="display:none"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ============ TỔNG QUAN ============ -->
+  <main class="screen" id="s-overview"><div class="page"><div class="page-in">
+    <h1>Tổng quan tuần này</h1>
+    <p class="lead">Dành cho trưởng phòng và quản lý. Chỉ có số tổng hợp: không tên người vẽ, không tên khách, không đường dẫn tệp. Số liệu là minh hoạ.</p>
+    <div class="kpis">
+      <div class="card kpi"><div class="v">41</div><div class="l">Bản vẽ đã quét</div><div class="dlt">7 ngày gần nhất</div></div>
+      <div class="card kpi"><div class="v">18</div><div class="l">Lỗi đã được xác nhận</div><div class="dlt">trước khi xuống xưởng</div></div>
+      <div class="card kpi"><div class="v">78%</div><div class="l">Đề xuất sửa được chấp nhận</div><div class="dlt">trên 23 đề xuất</div></div>
+      <div class="card kpi"><div class="v">6%</div><div class="l">Cảnh báo bị báo sai</div><div class="dlt">mục tiêu dưới 10%</div></div>
+    </div>
+    <h2>Bàn giao giữa các phòng tuần này</h2>
+    <p class="lead" style="margin-bottom:12px">Lỗi bắt ở phòng trước rẻ hơn nhiều so với lỗi lọt sang phòng sau. Đây là chỗ cho thấy cad-guard có đáng không.</p>
+    <div class="flow">
+      <div class="card"><div class="big">14</div><div>Thiết kế → Kỹ thuật</div><div class="kpi"><div class="dlt">3 gói bị trả lại vì bản vẽ chưa sạch</div></div></div>
+      <div class="card"><div class="big">11</div><div>Kỹ thuật → Lập trình sản xuất</div><div class="kpi"><div class="dlt">2 gói bị trả lại vì thiếu bảng kê/người kiểm</div></div></div>
+      <div class="card"><div class="big">9</div><div>Lập trình sản xuất → Xưởng</div><div class="kpi"><div class="dlt">1 lỗi hình học phát hiện ở máy</div></div></div>
+    </div>
+    <h2>Luật bị vi phạm nhiều nhất</h2>
+    <p class="lead" style="margin-bottom:12px">Danh sách này quyết định luật nào nên ưu tiên đo độ chính xác và nên đưa vào mẫu bản vẽ chuẩn.</p>
+    <div class="card"><div class="bars" id="bars"></div>
+      <div class="privacy"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>Số tổng hợp. Nhật ký chi tiết nằm trên máy từng người và không gửi lên đây.</div></div>
+    <h2>Độ tin cậy của luật</h2>
+    <div class="card" style="padding:0"><table>
+      <thead><tr><th>Luật</th><th>Nội dung</th><th>Số lần</th><th>Độ chính xác</th><th>Cảnh báo khi đang vẽ</th></tr></thead>
+      <tbody>
+      <tr><td class="f-rule">LY-04</td><td>Không có đối tượng trên layer chưa định nghĩa</td><td>7</td><td><span class="pill ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>96%</span></td><td><span class="pill ok">Được bật</span></td></tr>
+      <tr><td class="f-rule">TX-02</td><td>Chiều cao chữ đúng chuẩn</td><td>6</td><td><span class="pill ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>92%</span></td><td><span class="pill ok">Được bật</span></td></tr>
+      <tr><td class="f-rule">PR-01</td><td>Thẻ vị trí khớp bảng kê</td><td>4</td><td><span class="pill warn"><svg class="i" viewBox="0 0 24 24"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>81%</span></td><td><span class="pill neu">Chưa đạt ngưỡng</span></td></tr>
+      <tr><td class="f-rule">SH-05</td><td>Khung tên đủ thuộc tính</td><td>3</td><td><span class="pill neu">Đang đo</span></td><td><span class="pill neu">Chưa đo</span></td></tr>
+      </tbody></table></div>
+  </div></div></main>
+
+  <!-- ============ LUẬT ÁP DỤNG ============ -->
+  <main class="screen" id="s-rules"><div class="page"><div class="page-in wide">
+    <div class="rh">
+      <div><h1>Luật áp dụng</h1>
+        <p class="lead" style="margin-bottom:10px">Mỗi luật gắn với <b>phòng</b>, <b>vị trí</b> và <b>task</b> để biết ai phải tuân theo, ai chịu trách nhiệm và luật chặn bước nào. Mỗi nhóm luật do một <b>tài khoản admin</b> phụ trách và duyệt. Sửa luật không ghi đè: mọi thay đổi vào <b>bản nháp</b>, qua duyệt, rồi thành phiên bản mới. Nới lỏng luật cần giải trình rõ ràng.</p></div>
+      <div class="rh-act">
+        <label for="viewRole">Xem với vai trò</label>
+        <select class="sel" id="viewRole" aria-label="Vai trò đang xem"></select>
+        <select class="sel" id="admGrp" aria-label="Tài khoản admin đang xem" hidden></select>
+        <button class="btn-s" id="csvBtn">Tải bản kê (CSV)</button>
+        <button class="btn-p" id="addRuleBtn"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Thêm luật cho dự án</button>
+      </div>
+    </div>
+    <div class="srcline" id="srcline"></div>
+    <div class="covs" id="covs"></div>
+    <div id="gapNote"></div>
+    <div class="tb">
+      <div class="seg" id="scopeSeg" role="group" aria-label="Phạm vi">
+        <button data-v="k1" aria-pressed="true">Hiệu lực cho Dự án K1</button>
+        <button data-v="co" aria-pressed="false">Chỉ chuẩn công ty</button>
+      </div>
+      <div class="grow"><input type="search" id="rq" placeholder="Tìm mã hoặc nội dung luật…" aria-label="Tìm luật"></div>
+      <label class="tbp"><span class="lbl">Vị trí</span><select class="sel" id="fRole" aria-label="Lọc theo vị trí"></select></label>
+      <label class="tbp"><span class="lbl">Task</span><select class="sel" id="fTask" aria-label="Lọc theo task"></select></label>
+      <label class="tbp"><span class="lbl">Tình trạng</span><select class="sel" id="fKind" aria-label="Lọc theo tình trạng">
+        <option value="">Tất cả</option><option value="r">Đang chạy</option><option value="n">Chưa cài code</option><option value="m">Kiểm tay</option></select></label>
+      <label class="tbp"><span class="lbl">Nhóm theo</span><select class="sel" id="fGroup" aria-label="Nhóm theo">
+        <option value="">Không nhóm</option><option value="stage">Phòng</option><option value="role">Vị trí</option><option value="task">Task</option><option value="grp">Nhóm luật (admin)</option></select></label>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table class="rt" id="rt"><thead><tr><th style="width:118px">Mã</th><th>Luật</th><th style="width:150px">Phòng áp dụng</th><th style="width:210px">Vị trí</th><th style="width:230px">Task liên quan</th><th style="width:140px">Tình trạng</th></tr></thead><tbody id="rbody"></tbody></table>
+      <div class="tfoot" id="rfoot"></div>
+    </div>
+    <h2>Lịch sử phiên bản</h2>
+    <div class="card"><ul class="hist" id="vhist"></ul></div>
+    <div class="draftbar" id="draftbar" role="region" aria-label="Bản nháp thay đổi luật"></div>
+  </div></div></main>
+
+  <!-- ============ KẾT NỐI AI ============ -->
+  <main class="screen" id="s-connect"><div class="page"><div class="page-in">
+    <h1>Kết nối AI</h1>
+    <p class="lead">Chọn cách trợ lý "nghĩ". cad-guard luôn dùng cùng một bộ công cụ kiểm bản vẽ, dù bạn dùng trợ lý nào.</p>
+    <div class="callout"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><div><b>cad-guard không bao giờ đọc hay lưu mật khẩu/token đăng nhập của bạn.</b> Với CLI, cửa sổ đăng nhập là của chính CLI đó. Mỗi người dùng tài khoản của riêng mình hoặc khoá API của công ty.</div></div>
+
+    <h2 style="margin-top:6px">Dùng CLI có sẵn (đăng nhập của bạn)</h2>
+    <div class="grid2" style="margin-top:10px" id="cliCards"></div>
+
+    <h2>Dùng khoá API của công ty <span class="pill info" style="vertical-align:middle;margin-left:6px">Khuyến nghị</span></h2>
+    <p class="lead" style="margin-bottom:10px">Khuyến nghị cho cả phòng. Khoá lưu trong kho khoá của Windows, không ghi ra tệp.</p>
+    <div class="grid2" id="apiCards"></div>
+
+    <h2>Mức dữ liệu gửi cho AI</h2>
+    <div class="tier" style="margin-top:10px">
+      <label><input type="radio" name="tier"><span><span class="t">Bậc 0 · Không dùng AI</span><br><span class="d">Chỉ chạy bộ luật. Không có trợ lý hội thoại.</span></span></label>
+      <label><input type="radio" name="tier" checked><span><span class="t">Bậc 1 · Chỉ gửi kết quả đã ẩn danh <span class="pill info" style="margin-left:6px">Mặc định</span></span><br><span class="d">AI chỉ thấy tóm tắt do công cụ trả về: mã băm thay tên, bỏ chữ trong khung tên. Không thấy tệp bản vẽ.</span></span></label>
+      <label><input type="radio" name="tier"><span><span class="t">Bậc 2 · Cho phép gửi ảnh/đoạn thô</span><br><span class="d">Cần quản trị bật và có văn bản đồng ý của khách.</span></span></label>
+      <label><input type="radio" name="tier"><span><span class="t">Bậc L · Chỉ mô hình chạy trên máy</span><br><span class="d">Dữ liệu không rời máy. Chất lượng thấp hơn mô hình lớn.</span></span></label>
+    </div>
+
+    <h2>Trợ lý được và không được làm gì</h2>
+    <div class="card perm" style="padding:0;margin-top:10px"><table>
+      <tbody>
+      <tr><td>Đọc tệp ngoài thư mục của phiên làm việc</td><td><span class="pill err"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Tắt, khoá</span></td></tr>
+      <tr><td>Chạy lệnh shell / cài phần mềm</td><td><span class="pill err"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Tắt, khoá</span></td></tr>
+      <tr><td>Ghi đè hoặc xoá bản vẽ gốc</td><td><span class="pill err"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Tắt, khoá</span></td></tr>
+      <tr><td>Quét và đọc kết quả luật</td><td><span class="pill ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Bật</span></td></tr>
+      <tr><td>Ghi <b>tệp mới</b> sau khi người dùng duyệt thay đổi</td><td><span class="pill warn"><svg class="i" viewBox="0 0 24 24"><path d="M12 8v5M12 17h.01"/><circle cx="12" cy="12" r="9"/></svg>Bật, luôn hỏi</span></td></tr>
+      </tbody></table></div>
+
+    <h2>Giới hạn chi phí</h2>
+    <div class="row" style="display:flex;gap:10px;align-items:center;margin-top:10px;flex-wrap:wrap">
+      <label for="cap" style="color:var(--text2)">Tối đa mỗi người mỗi ngày</label>
+      <input id="cap" class="num-in" style="flex:none;width:130px" type="text" value="50.000 đ" aria-label="Giới hạn chi phí mỗi ngày">
+      <span class="pill neu">Hôm nay đã dùng 12.400 đ</span>
+    </div>
+  </div></div></main>
+</div>
+
+<div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal">
+    <h3 id="mTitle">Bỏ bản tu-bep-A_v2.dxf?</h3>
+    <p id="mText">Tệp mới này sẽ bị xoá. Bản gốc không bị ảnh hưởng.</p>
+    <div class="ft"><button class="btn-s" id="mNo">Giữ lại</button><button class="btn-d" id="mYes">Bỏ bản v2</button></div>
+  </div>
+</div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drTitle"></aside>
+
+<div class="modal-bg" id="mDraft" role="dialog" aria-modal="true" aria-labelledby="mdT">
+  <div class="modal wide" id="mDraftBody"></div>
+</div>
+<div class="modal-bg" id="mRule" role="dialog" aria-modal="true" aria-labelledby="mrT">
+  <div class="modal wide" id="mRuleBody"></div>
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const IC={
+  check:'<path d="M5 12l5 5 9-10"/>', x:'<path d="M6 6l12 12M18 6L6 18"/>',
+  alert:'<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/>', info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/>',
+  file:'<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>', sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>',
+  moon:'<path d="M20 14A8 8 0 0110 4a8 8 0 1010 10z"/>', gear:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/>',
+  copy:'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 012-2h10"/>', undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 010 12h-3"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>', hand:'<path d="M8 13V6a1.5 1.5 0 013 0v5M11 11V4.5a1.5 1.5 0 013 0V11M14 11V6a1.5 1.5 0 013 0v8a6 6 0 01-6 6h-1a5 5 0 01-4-2l-3-4a1.5 1.5 0 012.3-1.9L8 14"/>',
+  inbox:'<path d="M4 13l2-8h12l2 8v6H4z"/><path d="M4 13h5l1 2h4l1-2h5"/>', arrow:'<path d="M5 12h14M13 6l6 6-6 6"/>', build:'<path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/>',
+  users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0113 0M16 4.5a3.5 3.5 0 010 7M18 14a6 6 0 013.5 6"/>'
+};
+const ic=(n,s)=>`<svg class="i" viewBox="0 0 24 24"${s?` style="${s}"`:''}>${IC[n]}</svg>`;
+
+/* ---------- theme ---------- */
+function setTheme(t){document.documentElement.dataset.theme=t;$('#themeIc').innerHTML=t==='dark'?IC.sun:IC.moon}
+setTheme(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+const q=new URLSearchParams(location.search); if(q.get('theme'))setTheme(q.get('theme'));
+$('#themeBtn').onclick=()=>setTheme(document.documentElement.dataset.theme==='dark'?'light':'dark');
+
+/* ---------- screens ---------- */
+$$('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+function go(n){
+  $$('.screen').forEach(s=>s.classList.toggle('on',s.id==='s-'+n));
+  $$('[data-go]').forEach(b=>b.setAttribute('aria-selected',b.dataset.go===n));
+  if(n==='rules')renderRules();
+  else if(typeof RS!=='undefined'&&RS.open){RS.open=null;renderDrawer()}
+}
+
+/* ---------- menus ---------- */
+const ENGINES=[
+ {id:'claude',n:'Claude Code',d:'CLI có sẵn · bạn tự đăng nhập hoặc dùng khoá API'},
+ {id:'codex',n:'Codex CLI',d:'CLI có sẵn · bạn tự đăng nhập'},
+ {id:'agy',n:'Antigravity CLI',d:'CLI có sẵn · bạn tự đăng nhập'},
+ {id:'opencode',n:'OpenCode + khoá API',d:'Anthropic · OpenAI · Gemini · OpenRouter · khoá của công ty'},
+ {id:'local',n:'Mô hình trên máy',d:'Dữ liệu không rời máy (Bậc L)'}
+];
+let engine=ENGINES[0];
+function closeMenus(){$('#engineMenu').hidden=true;$('#deptMenu').hidden=true;$('#engineBtn').setAttribute('aria-expanded',false);$('#deptBtn').setAttribute('aria-expanded',false)}
+function renderEngineMenu(){
+  $('#engineMenu').innerHTML=ENGINES.map(e=>`<button role="menuitemradio" aria-checked="${e.id===engine.id}" data-e="${e.id}"><span style="width:18px;margin-top:2px">${e.id===engine.id?ic('check'):''}</span><span><span class="t">${e.n}</span><br><span class="d">${e.d}</span></span></button>`).join('');
+  $$('#engineMenu button').forEach(b=>b.onclick=()=>{engine=ENGINES.find(x=>x.id===b.dataset.e);$('#engineName').textContent=engine.n;$('#chatEng').textContent=engine.n;closeMenus();renderEngineMenu()});
+}
+$('#engineBtn').onclick=e=>{e.stopPropagation();const open=$('#engineMenu').hidden;closeMenus();$('#engineMenu').hidden=!open;$('#engineBtn').setAttribute('aria-expanded',open)};
+$('#deptBtn').onclick=e=>{e.stopPropagation();const open=$('#deptMenu').hidden;closeMenus();$('#deptMenu').hidden=!open;$('#deptBtn').setAttribute('aria-expanded',open)};
+document.addEventListener('click',closeMenus);
+renderEngineMenu();
+
+/* ---------- chuỗi 3 phòng ---------- */
+const DEPT={
+ design:{name:'Thiết kế',prev:null,next:'Kỹ thuật',role:'Nhận yêu cầu từ khách, ra bản triển khai không gian',mess:'Giao cho Kỹ thuật'},
+ tech:{name:'Kỹ thuật',prev:'Thiết kế',next:'Lập trình sản xuất',role:'Triển khai chi tiết, bóc tách, kiểm kích thước và bảng kê',mess:'Giao cho Lập trình sản xuất'},
+ cnc:{name:'Lập trình sản xuất',prev:'Kỹ thuật',next:'Xưởng',role:'Chuẩn bị dữ liệu cho máy CNC và cắt',mess:'Giao cho Xưởng'}
+};
+const ORDER=['design','tech','cnc'];
+let stage='design';
+
+/* ---------- bản vẽ (SVG minh hoạ) ---------- */
+function bodyDesign(){
+  return `
+  <rect x="8" y="8" width="804" height="524" class="ln thin"/>
+  <text class="txt" x="100" y="48" font-size="14" font-weight="700">MẶT BẰNG SẢNH · 1:100</text>
+  <path class="ln" style="stroke-width:3" d="M300,400 H100 V70 H620 V400 H380"/>
+  <path class="ln thin" d="M300,400 A80,80 0 0 1 380,400"/>
+  ${[[196,156],[396,156],[540,156],[196,330]].map(([x,y])=>`<rect class="ln fillc" x="${x}" y="${y}" width="24" height="24"/>`).join('')}
+  <rect class="ln fillc" x="440" y="90" width="150" height="40" rx="6"/>
+  <text class="fb-t" style="--s:20px" x="472" y="117">LỄ TÂN</text>
+  <rect class="ln fillc" x="130" y="244" width="90" height="34" rx="8"/><rect class="ln fillc" x="130" y="292" width="90" height="34" rx="8"/><circle class="ln fillc" cx="262" cy="285" r="22"/>
+  <text class="fb-t" style="--s:11px" x="128" y="236">KHU CHỜ</text>
+  <text class="fb-t" style="--s:16px" x="246" y="352">SẢNH ĐÓN</text>
+  <!-- nền xref dư: màu xám trước khi gộp -->
+  <g>
+    <text class="fa-t" font-size="11" x="652" y="60" font-family="var(--font)">NỀN XREF (DƯ)</text>
+    ${[[650,80,790,80],[650,110,790,110],[650,140,790,140],[650,170,790,170],[650,200,790,200],[650,230,790,230],[670,80,670,240],[720,80,720,240],[770,80,770,240]].map(([a,b,c,d])=>`<line class="fa-s" x1="${a}" y1="${b}" x2="${c}" y2="${d}"/>`).join('')}
+  </g>
+  <rect class="chg-box" id="chg-a" x="642" y="52" width="160" height="196" rx="6"/>
+  <rect class="chg-box" id="chg-b" x="238" y="334" width="116" height="26" rx="5"/>
+  <text class="txt" x="70" y="472" font-size="13">GHI CHÚ: Sҧnh ÿón khách, ván ӕp gӛ</text>`;
+}
+function bodyTech(){
+  const doors=[70,230,390].map(x=>`
+   <rect class="ln fillc" x="${x}" y="50" width="160" height="130"/><line class="ln thin" x1="${x+138}" y1="150" x2="${x+138}" y2="172"/>
+   <rect class="ln fillc" x="${x}" y="262" width="160" height="150"/><line class="ln thin" x1="${x+138}" y1="274" x2="${x+138}" y2="298"/>`).join('');
+  return `
+  <rect x="8" y="8" width="804" height="524" class="ln thin"/>
+  ${doors}
+  <rect class="ln fillc" x="60" y="250" width="500" height="12"/><rect class="ln fillc" x="70" y="412" width="480" height="20"/>
+  <text class="txt" x="150" y="34" font-size="13" text-anchor="middle">TỦ TRÊN</text>
+  ${[['P1',150,340],['P2',310,340],['P3',470,340],['P4',310,422]].map(([t,x,y])=>`<circle class="ln thin" cx="${x}" cy="${y}" r="${t==='P4'?9:15}" fill="var(--cv-bg)"/><text class="txt" x="${x}" y="${y+(t==='P4'?4:5)}" font-size="${t==='P4'?10:13}" text-anchor="middle">${t}</text>`).join('')}
+  <g><line class="fa-s" style="stroke-width:1.2" x1="596" y1="262" x2="596" y2="412"/><line class="fa-s" style="stroke-width:1.2" x1="590" y1="262" x2="604" y2="262"/><line class="fa-s" style="stroke-width:1.2" x1="590" y1="412" x2="604" y2="412"/><text class="fa-t" font-family="var(--font)" x="612" y="342" font-size="14">720</text></g>
+  <rect class="chg-box" id="chg-a" x="582" y="252" width="56" height="170" rx="6"/>
+  <g><line class="ln thin" x1="70" y1="458" x2="550" y2="458" style="stroke:var(--cv-dim)"/><line class="ln thin" x1="70" y1="452" x2="70" y2="464" style="stroke:var(--cv-dim)"/><line class="ln thin" x1="550" y1="452" x2="550" y2="464" style="stroke:var(--cv-dim)"/><text x="310" y="452" text-anchor="middle" font-size="14" style="fill:var(--cv-dim);font-family:var(--font)">2400</text></g>
+  <text class="fb-t" style="--s:16px" x="70" y="502">GHI CHÚ: DÁN CẠNH ABS 1mm CẠNH LỘ, VÂN DỌC</text>
+  <rect class="chg-box" id="chg-b" x="62" y="484" width="470" height="26" rx="5"/>
+  <g><rect class="ln thin" x="630" y="50" width="170" height="104"/>
+    <line class="ln thin" x1="630" y1="74" x2="800" y2="74"/><line class="ln thin" x1="630" y1="98" x2="800" y2="98"/><line class="ln thin" x1="630" y1="122" x2="800" y2="122"/><line class="ln thin" x1="670" y1="74" x2="670" y2="154"/>
+    <text class="txt" x="715" y="67" font-size="12" text-anchor="middle" font-weight="700">BẢNG KÊ</text>
+    <text class="txt" x="650" y="91" font-size="12" text-anchor="middle">P1</text><text class="txt" x="680" y="91" font-size="12">Cánh trái · 2</text>
+    <text class="txt" x="650" y="115" font-size="12" text-anchor="middle">P2</text><text class="txt" x="680" y="115" font-size="12">Cánh giữa · 2</text>
+    <text class="txt" x="650" y="139" font-size="12" text-anchor="middle">P3</text><text class="txt" x="680" y="139" font-size="12">Cánh phải · 2</text></g>
+  <g><rect class="ln thin" x="630" y="410" width="170" height="112"/>
+    ${[['DWG_NO','TB-A-01'],['TITLE','Tủ bếp A'],['SCALE','1:20'],['DRAWN_BY','Thợ vẽ 01'],['CHECKED_BY','']].map(([k,v],i)=>`<line class="ln thin" x1="630" y1="${410+i*22.4}" x2="800" y2="${410+i*22.4}"/><text class="txt" x="636" y="${426+i*22.4}" font-size="10.5" opacity=".7">${k}</text><text class="txt" x="716" y="${426+i*22.4}" font-size="12">${v}</text>`).join('')}
+    <rect class="missing" x="712" y="495" width="84" height="20" rx="3"/></g>`;
+}
+function bodyCnc(){
+  return `
+  <rect x="8" y="8" width="804" height="524" class="ln thin"/>
+  <text class="txt" x="160" y="64" font-size="14" font-weight="700">TẤM P2 · MDF 18 mm · 1:5</text>
+  <line class="ln thin" x1="60" y1="490" x2="160" y2="410" style="stroke-dasharray:4 4;opacity:.5"/>
+  <path class="fb-s" d="M363,90 H560 V410 H160 V90 H355"/>
+  <line class="missing fa-hide" x1="355" y1="90" x2="363" y2="90"/>
+  <line class="fb-s fa-show" x1="355" y1="90" x2="363" y2="90"/>
+  <rect class="chg-box" id="chg-a" x="343" y="80" width="30" height="20" rx="4"/>
+  <rect class="chg-box" id="chg-b" x="152" y="82" width="416" height="336" rx="6"/>
+  ${[[200,130],[520,130],[200,370],[520,370]].map(([x,y])=>`<circle class="ln" cx="${x}" cy="${y}" r="9"/>`).join('')}
+  <rect class="ln" x="330" y="240" width="60" height="20" rx="10"/>
+  <g><line class="ln thin" x1="160" y1="450" x2="560" y2="450" style="stroke:var(--cv-dim)"/><line class="ln thin" x1="160" y1="444" x2="160" y2="456" style="stroke:var(--cv-dim)"/><line class="ln thin" x1="560" y1="444" x2="560" y2="456" style="stroke:var(--cv-dim)"/><text x="360" y="442" text-anchor="middle" font-size="14" style="fill:var(--cv-dim);font-family:var(--font)">800</text>
+     <line class="ln thin" x1="600" y1="90" x2="600" y2="410" style="stroke:var(--cv-dim)"/><line class="ln thin" x1="594" y1="90" x2="606" y2="90" style="stroke:var(--cv-dim)"/><line class="ln thin" x1="594" y1="410" x2="606" y2="410" style="stroke:var(--cv-dim)"/><text x="616" y="254" font-size="14" style="fill:var(--cv-dim);font-family:var(--font)">640</text></g>
+  <g><line class="ln" x1="48" y1="490" x2="72" y2="490"/><line class="ln" x1="60" y1="478" x2="60" y2="502"/><text class="txt" x="76" y="506" font-size="12">gốc (0,0)</text></g>
+  <g><rect class="ln thin" x="640" y="90" width="160" height="100"/>
+    <line class="ln thin" x1="640" y1="114" x2="800" y2="114"/><line class="ln thin" x1="640" y1="138" x2="800" y2="138"/><line class="ln thin" x1="640" y1="162" x2="800" y2="162"/>
+    <text class="txt" x="648" y="107" font-size="12" font-weight="700">THÔNG SỐ TẤM</text>
+    <text class="txt" x="648" y="131" font-size="12">Kích thước: 800 × 640</text><text class="txt" x="648" y="155" font-size="12">Dày: 18 mm</text><text class="txt" x="648" y="179" font-size="12">Số lỗ khoan: 4 + 1 rãnh</text></g>`;
+}
+const BODIES={design:bodyDesign,tech:bodyTech,cnc:bodyCnc};
+
+function markerSvg(f){
+  const [x,y,w,h]=f.m.box,[dx,dy]=f.m.dot,cx=x+w/2,cy=y+h/2;
+  const x1=dx<x?x:dx>x+w?x+w:dx, y1=dy<y?y:dy>y+h?y+h:dy;
+  return `<g class="mk sev-${f.sev}" data-f="${f.id}" tabindex="0" role="button" aria-label=""><circle class="pulse" cx="${cx}" cy="${cy}" r="14"/><rect class="ring" x="${x}" y="${y}" width="${w}" height="${h}" rx="6"/><line x1="${x1}" y1="${y1}" x2="${dx}" y2="${dy}" stroke="currentColor" stroke-width="1.5"/><circle class="dot" cx="${dx}" cy="${dy}" r="11"/><text class="num" x="${dx}" y="${dy+5}">${f.id}</text></g>`;
+}
+
+/* ---------- 3 bộ dữ liệu minh hoạ ---------- */
+const CASES={
+ design:{
+  project:'Dự án K1 · Sảnh',file:'sanh-A.dxf',view:'Mặt bằng · 1:100',info:'18.722 đối tượng · 7.722 khối · DXF R2018 · mm',
+  standard:'design-hygiene-v0',rulesOn:'6 luật vệ sinh',secs:'1,4 giây',
+  aria:'Mặt bằng sảnh với bàn lễ tân, khu chờ và nền xref dư',
+  files:[['khu-tien-ich-B.dxf','neu','Chưa quét'],['tong-hop-C.dxf','neu','Chưa quét']],
+  tool:'6 luật vệ sinh chạy · 4 phát hiện · đọc theo dòng (18.722 đối tượng + 401.009 trong khối)',
+  about:'<p>Đây là <b>mặt bằng sảnh</b>: bàn lễ tân, khu chờ, 4 cột. Bản vẽ làm hoàn toàn trong không gian mô hình, 97 layer, 352 khối đặt tên và hơn 7.000 khối ẩn danh.</p><p>Mình chưa quét lỗi. Bạn muốn mình kiểm vệ sinh trước khi giao cho Kỹ thuật không?</p>',
+  findings:[
+   {id:1,rule:'VS-01',sev:'warn',title:'Có 31 layer dư từ xref đã gộp',d:'Tên layer có dấu $ (phần dư khi gộp bản vẽ nền vào). Bảng layer phình to, Kỹ thuật dễ nhầm khi nhận bản vẽ.',fix:'a',fixTxt:'Gộp 31 layer dư vào layer cùng nhóm',where:'Bảng layer · vùng nền bên phải',m:{box:[644,54,158,196],dot:[790,44]}},
+   {id:2,rule:'VS-02',sev:'warn',title:'43 kiểu chữ, chuẩn công ty chỉ cần 6',d:'Nhiều kiểu chữ trùng chức năng làm chữ ghi chú to nhỏ không đồng đều.',fix:'b',fixTxt:'Gộp về 6 kiểu chữ chuẩn, cỡ 2.5',where:'Chữ ghi chú khu vực',m:{box:[240,336,112,24],dot:[372,330]}},
+   {id:3,rule:'VS-03',sev:'error',title:'22,8% đối tượng nằm trên layer “0”',d:'Đối tượng trên layer 0 không phân loại được, Kỹ thuật không lọc theo nhóm được.',fix:null,need:'Cần bạn quyết: đưa nhóm nào về layer nào. Trợ lý không đoán thay.',where:'Cụm ghế khu chờ',m:{box:[124,238,152,94],dot:[286,232]}},
+   {id:4,rule:'VS-04',sev:'error',title:'Phông tiếng Việt cũ (không Unicode)',d:'Chữ dùng phông VNI/TCVN, có thể hiện sai trên máy khác hoặc khi nạp vào công cụ khác.',fix:null,need:'Cần người xác nhận chữ sau khi đổi phông. Trợ lý không tự sửa nội dung chữ.',where:'Ghi chú góc dưới',m:{box:[62,456,260,24],dot:[340,452]}}
+  ],
+  ops:{a:{what:'Gộp 31 layer dư',from:'31 layer có tiền tố $',to:'layer cùng nhóm theo bảng ánh xạ'},b:{what:'Gộp 43 kiểu chữ về 6',from:'43 kiểu chữ',to:'6 kiểu chữ chuẩn · cao 2.5'}},
+  validate:'mở lại OK · số đối tượng không đổi · layer bảo vệ không đổi · luật chạy lại',
+  explain:{rule:'VS-02',html:`<p><b>VS-02 · Số kiểu chữ không vượt ngưỡng của công ty.</b></p><p>Bản vẽ có 43 kiểu chữ, ngưỡng là 6. Nhiều kiểu trùng chức năng nên chữ ghi chú to nhỏ không đồng đều, và Kỹ thuật phải tự dọn khi nhận.</p><p>Mức <b>cảnh báo</b>; sửa tự động an toàn vì chỉ gộp kiểu trùng, không đổi nội dung chữ.</p><div class="src">Căn cứ: chuẩn design-hygiene-v0 · VS-02 (mã minh hoạ)</div>`},
+  needExplain:{rule:'VS-03',html:`<p><b>VS-03 · Tỉ lệ đối tượng trên layer “0”.</b></p><p>22,8% đối tượng nằm ở layer 0. Có những nhóm hợp lý ở layer 0 (khối), nhưng ghế, cột, tường thì không. Mình không biết bạn muốn nhóm nào về layer nào, nên không đoán thay.</p>`},
+  handover:{title:'Gói bàn giao cho Kỹ thuật',items:['Bảng ánh xạ layer đã gộp: 31 layer dư → 0','Danh sách vị trí chữ dùng phông cũ cần kiểm','Số đối tượng trên layer “0”: 22,8% (cần xử lý)','Báo cáo vệ sinh theo design-hygiene-v0'],warn:'Còn 2 việc cần người quyết; chưa nên chuyển sang Kỹ thuật'},
+  pack:{name:'khu-tien-ich-B',list:['khu-tien-ich-B_ky-thuat.dxf (bản đã dọn, tệp mới)','khu-tien-ich-B_anh-xa-layer.csv','khu-tien-ich-B_bao-cao.html']},
+  idleName:'tong-hop-C',
+  inbox:null
+ },
+ tech:{
+  project:'Dự án K1 · Tủ bếp',file:'tu-bep-A.dxf',view:'Mặt đứng · 1:20',info:'214 đối tượng · DXF R2018 · mm',
+  standard:'furniture-v0.1.0',rulesOn:'16 / 58 luật',secs:'1,2 giây',
+  aria:'Bản vẽ mặt đứng tủ bếp trên và dưới',
+  files:[['tu-ao-B.dxf','ok','Sạch'],['ban-lam-viec-C.dxf','neu','Chưa quét']],
+  tool:'16 luật chạy · 4 phát hiện · 0 luật bị bỏ qua',
+  about:'<p>Đây là mặt đứng <b>tủ bếp trên và dưới</b>, 3 khoang mỗi tầng, tỉ lệ 1:20. Có bảng kê 3 dòng (P1–P3) và 1 khung tên.</p><p>Mình chưa quét lỗi. Bạn muốn mình quét theo chuẩn furniture-v0 không?</p>',
+  findings:[
+   {id:1,rule:'LY-04',sev:'error',title:'Kích thước nằm trên layer “0”',d:'Kích thước 720 nằm trên layer 0, không thuộc nhóm FN-*. In và xuất cho Lập trình sản xuất có thể bỏ sót hoặc sai nét.',fix:'a',fixTxt:'Chuyển sang layer FN-DIM-N',where:'Mặt đứng · kích thước dọc tủ dưới',m:{box:[582,252,56,170],dot:[660,262]}},
+   {id:2,rule:'TX-02',sev:'warn',title:'Chữ ghi chú cao 3.0, chuẩn là 2.5',d:'Chuẩn furniture-v0 quy định chiều cao chữ ghi chú 2.5 × tỉ lệ viewport. Dòng ghi chú dán cạnh đang cao 3.0.',fix:'b',fixTxt:'Đặt chiều cao chữ = 2.5',where:'Ghi chú dưới bản vẽ',m:{box:[58,480,482,30],dot:[552,468]}},
+   {id:3,rule:'PR-01',sev:'error',title:'Thẻ P4 không có trong bảng kê',d:'Hình có thẻ vị trí P4 (thanh chân tủ) nhưng bảng kê chỉ có P1–P3. Lập trình sản xuất sẽ không có dữ liệu cắt chi tiết này.',fix:null,need:'Cần bạn quyết: thêm dòng P4 vào bảng kê hay xoá thẻ P4?',where:'Chân tủ dưới',m:{box:[301,413,18,18],dot:[384,428]}},
+   {id:4,rule:'SH-05',sev:'warn',title:'Khung tên thiếu CHECKED_BY',d:'Ô người kiểm đang trống. Bản chuyển sang Lập trình sản xuất cần người kiểm ký theo mẫu công ty.',fix:null,need:'Cần người kiểm điền. Trợ lý không tự điền tên.',where:'Khung tên',m:{box:[708,492,92,26],dot:[790,480]}}
+  ],
+  ops:{a:{what:'Đổi layer của 1 kích thước',from:'DIMENSION “720” · layer: 0',to:'DIMENSION “720” · layer: FN-DIM-N'},b:{what:'Đổi chiều cao 1 dòng chữ',from:'TEXT “GHI CHÚ: DÁN CẠNH…” · cao 3.0',to:'TEXT “GHI CHÚ: DÁN CẠNH…” · cao 2.5'}},
+  validate:'mở lại OK · 214→214 đối tượng · layer bảo vệ không đổi · luật chạy lại',
+  explain:{rule:'TX-02',html:`<p><b>TX-02 · Chiều cao chữ = giá trị chuẩn × tỉ lệ viewport.</b></p><p>Chữ ghi chú đang cao 3.0 trong khi chuẩn là 2.5. Khi in ra khổ giấy, chữ to hơn các bản khác trong cùng bộ, nhìn không đồng bộ và có thể đè lên đường nét.</p><p>Mức <b>cảnh báo</b>, sửa tự động an toàn: chỉ đổi 1 thuộc tính.</p><div class="src">Căn cứ: standards/furniture-v0.yaml · TX-02</div>`},
+  needExplain:{rule:'PR-01',html:`<p><b>PR-01 · Mỗi thẻ vị trí có trong bảng kê và ngược lại.</b></p><p>Thẻ <b>P4</b> (thanh chân tủ) có trên hình nhưng không có trong bảng kê. Có hai khả năng: thiếu dòng bảng kê, hoặc thẻ P4 thừa. Mình không đoán thay bạn vì sai một trong hai đều làm xưởng cắt sai.</p>`},
+  handover:{title:'Ghi chú bàn giao cho Lập trình sản xuất',items:['Dán cạnh ABS <b>1 mm</b> ở cạnh lộ','Vân gỗ chạy <b>dọc</b> theo chiều cao tủ','6 cánh: 3 trên, 3 dưới (P1–P3, mỗi loại 2)'],warn:'Chi tiết P4 chưa có trong bảng kê, cần xác nhận trước khi chuyển'},
+  pack:{name:'ke-tivi-D',list:['ke-tivi-D_lap-trinh.dxf (bản chuẩn hoá, tệp mới)','ke-tivi-D_ghi-chu.pdf (ghi chú bàn giao)','ke-tivi-D_bao-cao.html (kết quả kiểm theo furniture-v0.1.0)']},
+  idleName:'ban-lam-viec-C',
+  inbox:{name:'sanh-A_v2.dxf',from:'Thiết kế',when:'sáng nay',note:'Gói đã dọn layer/chữ; còn 2 việc ghi chú cho Kỹ thuật'}
+ },
+ cnc:{
+  project:'Dự án K1 · Tấm cánh',file:'tam-canh-P2.dxf',view:'Đường bao tấm P2 · 1:5',info:'1.240 đối tượng · DXF R2018 · mm',
+  standard:'furniture-v0.1.0 (nhóm gia công)',rulesOn:'luật hình học + layer CNC',secs:'0,8 giây',
+  aria:'Đường bao tấm P2 với lỗ khoan, rãnh và đường bao bị hở',
+  files:[['tam-hong-P3.dxf','ok','Sạch'],['tam-day-P4.dxf','neu','Chưa quét']],
+  tool:'9 luật hình học và layer CNC chạy · 4 phát hiện · 0 luật bị bỏ qua',
+  about:'<p>Đây là <b>đường bao tấm P2</b> (800 × 640 mm, dày 18), 4 lỗ khoan và 1 rãnh. Bản vẽ nhận từ Kỹ thuật.</p><p>Mình chưa kiểm. Bạn muốn mình kiểm đường bao và layer gia công trước khi xuất dữ liệu cho máy không?</p>',
+  findings:[
+   {id:1,rule:'DH-03',sev:'error',title:'Đường bao tấm P2 không khép kín (hở 0,8 mm)',d:'Máy cắt cần đường bao liền. Chỗ hở 0,8 mm ở cạnh trên làm phần mềm nesting bỏ qua tấm này.',fix:'a',fixTxt:'Nối hai đầu hở bằng một đoạn thẳng 0,8 mm',where:'Cạnh trên tấm',m:{box:[343,80,30,20],dot:[400,66]}},
+   {id:2,rule:'PR-05',sev:'error',title:'Đường bao nằm layer “0”, cần layer gia công',d:'Chuẩn CNC của công ty yêu cầu đường bao ở layer FN-CNC-OUT để máy nhận đúng đường cắt.',fix:'b',fixTxt:'Chuyển đường bao sang layer FN-CNC-OUT',where:'Đường bao tấm',m:{box:[152,82,416,336],dot:[590,76]}},
+   {id:3,rule:'DH-10',sev:'warn',title:'2 đối tượng có Z khác 0',d:'Hai lỗ khoan ở cạnh phải nằm lệch mặt phẳng; một số phần mềm CNC đọc sai chiều sâu.',fix:null,need:'Cần bạn xác nhận có phẳng hoá về Z = 0 không (có thể là chiều sâu cố ý).',where:'Lỗ khoan cạnh phải',m:{box:[506,116,28,28],dot:[552,110]}},
+   {id:4,rule:'PJ-K1-03',sev:'warn',title:'Gốc toạ độ cách góc tấm 1.250 mm',d:'Chuẩn xuất cho máy đặt gốc (0,0) tại góc tấm. Gốc đang cách xa, dễ làm lệch vị trí gia công.',fix:null,need:'Cần bạn chọn góc làm gốc. Trợ lý không tự dời bản vẽ.',where:'Gốc toạ độ góc dưới trái',m:{box:[44,474,110,36],dot:[170,462]}}
+  ],
+  ops:{a:{what:'Nối đường bao bị hở',from:'LWPOLYLINE “đường bao” · hở 0,8 mm',to:'LWPOLYLINE “đường bao” · khép kín'},b:{what:'Đổi layer của đường bao',from:'LWPOLYLINE “đường bao” · layer: 0',to:'LWPOLYLINE “đường bao” · layer: FN-CNC-OUT'}},
+  validate:'mở lại OK · 1.240→1.240 đối tượng · đường bao khép kín · luật chạy lại',
+  explain:{rule:'PR-05',html:`<p><b>PR-05 · Layer CNC dùng đúng tên phần mềm đích.</b></p><p>Đường bao đang ở layer 0. Máy và phần mềm nesting nhận đường cắt theo layer FN-CNC-OUT, nên đường bao ở layer 0 có thể bị bỏ qua.</p><p>Mức <b>lỗi</b>; sửa tự động an toàn vì chỉ đổi layer, không đổi hình học.</p><div class="src">Căn cứ: standards/furniture-v0.yaml · PR-05</div>`},
+  needExplain:{rule:'DH-10',html:`<p><b>DH-10 · Đối tượng nằm trên mặt phẳng Z = 0.</b></p><p>Hai lỗ khoan có Z khác 0. Có thể là chiều sâu cố ý hoặc lỗi lúc vẽ. Mình không biết ý bạn nên không tự phẳng hoá.</p>`},
+  handover:{title:'Gói cho máy CNC',items:['tam-canh-P2_cnc.dxf (tệp mới, layer FN-CNC-*)','Đơn vị mm, gốc toạ độ tại góc tấm','Báo cáo kiểm hình học'],warn:'Còn 2 việc cần người quyết; chưa nên xuất cho máy'},
+  pack:{name:'tam-hong-P3',list:['tam-hong-P3_cnc.dxf (tệp mới, layer FN-CNC-*)','tam-hong-P3_bao-cao.html']},
+  idleName:'tam-day-P4',
+  inbox:{name:'tu-bep-A_v2.dxf',from:'Kỹ thuật',when:'hôm qua',note:'Gói đã kiểm kích thước; ghi chú dán cạnh 1 mm đính kèm'}
+ }
+};
+ORDER.forEach(k=>CASES[k].findings.forEach(f=>f.st='open'));
+const ST={};
+ORDER.forEach(k=>ST[k]={scanned:false,proposed:false,accepted:false,view:'after',ops:{a:true,b:true},sel:null,v2:false,handover:false,packD:false,received:false,logHTML:null});
+const K=()=>CASES[stage], C=()=>ST[stage], FIND=()=>CASES[stage].findings;
+
+/* ---------- khung bản vẽ ---------- */
+let svg=null;
+function mountSheet(){
+  $('#sheet').innerHTML=`<svg id="svg" viewBox="0 0 820 540" role="img" aria-label="${K().aria}" data-scanned="0" data-fixed-a="0" data-fixed-b="0" data-show-chg="0">${BODIES[stage]()}${FIND().map(markerSvg).join('')}</svg>`;
+  svg=$('#svg');
+  $$('.mk').forEach(m=>{const f=()=>select(+m.dataset.f,true);m.onclick=f;m.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();f()}}});
+}
+function syncCanvas(){
+  const c=C(),F=FIND();
+  const prev=c.proposed&&!c.accepted&&c.view==='after';
+  const applied=c.accepted||prev?{a:c.ops.a,b:c.ops.b}:{a:false,b:false};
+  svg.dataset.fixedA=(applied.a||F[0].st==='fixed')?1:0;
+  svg.dataset.fixedB=(applied.b||F[1].st==='fixed')?1:0;
+  svg.dataset.showChg=prev?1:0;
+  svg.dataset.scanned=c.scanned?1:0;
+  $$('.mk').forEach(m=>{const f=F.find(x=>x.id==m.dataset.f);m.classList.toggle('fixed',f.st==='fixed');m.classList.toggle('sel',c.sel===f.id);
+    m.setAttribute('aria-label',`${f.sev==='error'?'Lỗi':'Cảnh báo'} ${f.id}: ${f.title}`)});
+  const showCmp=c.proposed&&!c.accepted;
+  $('#cmp').style.display=showCmp?'inline-flex':'none';$('#cmpLabel').style.display=showCmp?'inline':'none';
+  $$('#cmp button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===c.view));
+}
+$$('#cmp button').forEach(b=>b.onclick=()=>{C().view=b.dataset.v;syncCanvas()});
+
+/* ---------- panels ---------- */
+function tab(p){
+  $$('.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.p===p));
+  $$('.pane').forEach(x=>x.classList.toggle('on',x.id==='p-'+p));
+}
+$$('.tabs button').forEach(b=>b.onclick=()=>tab(b.dataset.p));
+function select(id,openTab){C().sel=id;renderFinds();syncCanvas();if(openTab)tab('finds')}
+
+function renderFiles(){
+  const c=C(),F=FIND(),k=K();
+  const open=c.scanned?F.filter(f=>f.st==='open'):[];
+  const e=open.filter(f=>f.sev==='error').length,w=open.filter(f=>f.sev==='warn').length;
+  let pills;
+  if(!c.scanned)pills=`<span class="pill neu">Chưa quét</span>`;
+  else if(!e&&!w)pills=`<span class="pill ok">${ic('check')}Sạch</span>`;
+  else pills=(e?`<span class="pill err">${ic('x')}${e} lỗi</span>`:'')+(w?`<span class="pill warn">${ic('alert')}${w} cảnh báo</span>`:'');
+  const base=k.file.replace('.dxf','');
+  $('#files').innerHTML=`
+  <button class="file" aria-current="${!c.v2||c.cur!=='v2'}" data-f="A"><span class="n">${ic('file')}${k.file}</span><span class="m">${pills}</span></button>
+  ${c.v2?`<button class="file child" aria-current="${c.cur==='v2'}" data-f="v2"><span class="n">${ic('file')}${base}_v2.dxf</span><span class="m"><span class="pill info">Bản mới</span>${pills}</span></button>`:''}
+  ${k.files.map(([n,s,t],i)=>`<button class="file" data-f="x${i}"><span class="n">${ic('file')}${n}</span><span class="m"><span class="pill ${s}">${s==='ok'?ic('check'):''}${t}</span></span></button>`).join('')}`;
+  $$('#files .file').forEach(b=>b.onclick=()=>{
+    const v=b.dataset.f;
+    if(v.startsWith('x')){toast(`Bản mẫu: chỉ mở được ${k.file}`);return}
+    c.cur=v;$('#cvTitle').textContent=v==='v2'?base+'_v2.dxf':k.file;renderFiles();
+  });
+}
+
+function renderFinds(){
+  const c=C(),F=FIND(),el=$('#finds');
+  if(!c.scanned){el.innerHTML=`<div class="empty"><b>Chưa quét bản vẽ này</b>Bấm “Quét bản vẽ này” ở tab Trợ lý hoặc nút bên dưới.<br><br><button class="btn-p" id="scanBtn2">${ic('search')}Quét bản vẽ này</button></div>`;$('#scanBtn2').onclick=doScan;$('#cntF').textContent='–';$('#cntF').className='cnt';return}
+  const open=F.filter(f=>f.st==='open').length;
+  $('#cntF').textContent=open;$('#cntF').className='cnt'+(open?' hot':'');
+  el.innerHTML=F.map(f=>{
+    const fixed=f.st==='fixed';
+    const sevPill=fixed?`<span class="pill ok">${ic('check')}Đã sửa</span>`:f.sev==='error'?`<span class="pill err">${ic('x')}Lỗi</span>`:`<span class="pill warn">${ic('alert')}Cảnh báo</span>`;
+    const pendingNow=c.proposed&&!c.accepted&&f.fix&&c.ops[f.fix];
+    const base=K().file.replace('.dxf','');
+    return `<div class="f-card${c.sel===f.id?' sel':''}" data-id="${f.id}" tabindex="0" role="button" aria-label="Lỗi ${f.id}">
+      <div class="f-top"><span class="f-no">${f.id}</span>${sevPill}<button class="f-rule link" data-rule="${f.rule}" title="Xem luật này trong danh mục">${f.rule}</button></div>
+      <div class="f-title">${f.title}</div><div class="f-d">${f.d}</div>
+      ${fixed?`<div class="f-meta">${ic('check','color:var(--ok)')}${f.fixTxt}. Đã lưu trong ${base}_v2.dxf</div>`
+       :f.fix?`<div class="f-meta">${ic('gear')}Có thể tự sửa: ${f.fixTxt}${pendingNow?' · <b>đang chờ duyệt</b>':''}</div>`
+       :`<div class="f-meta">${ic('hand','color:var(--warn)')}${f.need}</div>`}
+      <div class="f-meta">${ic('search')}${f.where}</div>
+      ${ruleWho(f.rule)}
+    </div>`}).join('')+(stage==='design'||stage==='cnc'?`<p style="font-size:13px;color:var(--text3);margin:2px 4px 0">Mã luật ${stage==='design'?'VS-':'PJ-K1-'} là mã minh hoạ, chưa có trong chuẩn.</p>`:'');
+  $$('.f-card').forEach(cd=>{const go=()=>select(+cd.dataset.id,false);cd.onclick=go;cd.onkeydown=e=>{if(e.key==='Enter'&&e.target===cd)go()}});
+  $$('.f-card [data-rule]').forEach(b=>b.onclick=e=>{e.stopPropagation();openCatalog({rule:b.dataset.rule})});
+}
+function ruleWho(id){
+  const r=typeof RULES!=='undefined'&&RULES.find(x=>x.id===id);if(!r)return '';
+  const ts=r.tasks.map(t=>TASKS[t].n);
+  return `<div class="f-meta">${ic('users')}<span>Phụ trách: <b>${adm(r)}</b>${ts.length?' · Task: '+ts.slice(0,2).join('; ')+(ts.length>2?'…':''):''}</span></div>`}
+
+function renderChg(){
+  const c=C(),k=K(),list=$('#chgList'),foot=$('#chgFoot'),base=k.file.replace('.dxf','');
+  const n=c.proposed&&!c.accepted?2:0;
+  $('#cntC').textContent=c.accepted?'✓':n;
+  if(!c.proposed){list.innerHTML=`<div class="empty"><b>Chưa có thay đổi nào</b>Khi trợ lý đề xuất sửa, từng thay đổi hiện ở đây để bạn xem trước và duyệt.<br>Bản vẽ gốc không bị chạm tới.</div>`;foot.style.display='none';return}
+  if(c.accepted){
+    list.innerHTML=`<div class="op"><div style="display:flex;gap:8px;align-items:center"><span class="pill ok">${ic('check')}Đã lưu</span><b>${base}_v2.dxf</b></div>
+      <p style="color:var(--text2);margin:8px 0 0;font-size:14.5px">Bản gốc <b>${k.file}</b> giữ nguyên. Bạn có thể bỏ bản mới nếu thấy chưa ổn.</p></div>
+      <div class="op"><b style="font-size:14.5px">Đã tự kiểm sau khi lưu</b><ul class="checks" style="margin-top:8px">
+        ${k.validate.split(' · ').map(t=>`<li>${ic('check')}${t}</li>`).join('')}</ul></div>`;
+    foot.style.display='block';
+    foot.innerHTML=`<button class="btn-s" id="undoBtn" style="width:100%">${ic('undo')}Bỏ bản v2 (quay về chưa áp dụng)</button>`;
+    $('#undoBtn').onclick=()=>{$('#mTitle').textContent=`Bỏ bản ${base}_v2.dxf?`;$('#mText').textContent=`Tệp mới này sẽ bị xoá. Bản gốc ${k.file} không bị ảnh hưởng. Các thay đổi sẽ quay về trạng thái chưa áp dụng.`;$('#mYes').textContent='Bỏ bản v2';$('#modal').classList.add('on')};return}
+  const opCard=(key,f)=>`<div class="op"><label><input type="checkbox" data-op="${key}" ${c.ops[key]?'checked':''}><span><b>${k.ops[key].what}</b><br><span style="font-size:13px;color:var(--text3)" class="f-rule">${f.rule}</span>
+    <span class="diff" style="display:block"><div class="m">− ${k.ops[key].from}</div><div class="p">+ ${k.ops[key].to}</div></span></span></label></div>`;
+  list.innerHTML=opCard('a',FIND()[0])+opCard('b',FIND()[1]);
+  $$('[data-op]').forEach(ch=>ch.onchange=()=>{c.ops[ch.dataset.op]=ch.checked;syncCanvas();renderChg();renderFinds()});
+  const cnt=Object.values(c.ops).filter(Boolean).length;
+  foot.style.display='block';
+  foot.innerHTML=`<div class="safe">${ic('check')}<span>Chưa ghi gì. Khi duyệt, kết quả được lưu thành <b>tệp mới</b>; bản gốc không bị sửa.</span></div>
+    <div style="display:flex;gap:8px"><button class="btn-p" id="okBtn" style="flex:1" ${cnt?'':'disabled'}>${ic('check')}Duyệt ${cnt} thay đổi &amp; lưu v2</button><button class="btn-s" id="noBtn">Bỏ đề xuất</button></div>`;
+  $('#okBtn').onclick=accept;
+  $('#noBtn').onclick=()=>{c.proposed=false;c.view='after';renderAll();say('ai','<p>Đã bỏ đề xuất. Bản vẽ không thay đổi gì.</p>');suggestions()};
+}
+
+/* ---------- chat ---------- */
+const log=$('#log');
+function scroll(){log.scrollTop=log.scrollHeight}
+function say(who,html){const d=document.createElement('div');d.className='msg '+who;if(who==='me')d.textContent=html;else d.innerHTML=html;log.appendChild(d);scroll()}
+function tool(name,args,ms,out){const d=document.createElement('details');d.className='tool';d.innerHTML=`<summary><span class="ok">${ic('check')}</span><code style="font-family:var(--mono)">${name}</code><span style="margin-left:auto">${ms}</span></summary><pre>${args}\n→ ${out}</pre>`;log.appendChild(d);scroll()}
+function typing(){const d=document.createElement('div');d.className='typing';d.innerHTML='<i></i><i></i><i></i> Đang xử lý';log.appendChild(d);scroll();return d}
+function later(fn,ms){return new Promise(r=>setTimeout(()=>{fn();r()},ms))}
+let busy=false;
+async function step(ms,fn){const t=typing();await later(()=>{},ms);t.remove();fn()}
+function intro(){log.innerHTML='';say('ai',`<p>Xin chào, phòng <b>${DEPT[stage].name}</b>. Mình đang xem <b>${K().file}</b> (${K().info}). Mình quét theo chuẩn <b>${K().standard}</b>, giải thích và đề xuất sửa. Mọi sửa đổi đều ghi ra <b>tệp mới</b> sau khi bạn duyệt.</p>`)}
+
+function suggestions(){
+  const c=C(),k=K(),nx=DEPT[stage].next;
+  const s=[];
+  if(!c.scanned)s.push(['Quét bản vẽ này',doScan,true],['Bản vẽ này có gì?',doAbout]);
+  else if(!c.proposed&&!c.accepted)s.push(['Sửa các lỗi tự sửa được',doPropose,true],[`Giải thích lỗi ${k.explain.rule}`,doExplain],[`Soạn gói bàn giao cho ${nx}`,doHandover]);
+  else if(c.proposed&&!c.accepted)s.push(['Mở tab Thay đổi',()=>tab('chg'),true],[`Giải thích lỗi ${k.explain.rule}`,doExplain]);
+  else s.push([`Soạn gói bàn giao cho ${nx}`,doHandover,true],['Quét lại',doRescan],[`Giải thích lỗi ${k.needExplain.rule}`,doExplainNeed]);
+  $('#sug').innerHTML=s.map(([t,,p])=>`<button class="${p?'primary':''}">${t}</button>`).join('');
+  $$('#sug button').forEach((b,i)=>b.onclick=()=>{if(busy)return;say('me',s[i][0]);s[i][1]()});
+}
+async function run(fn){busy=true;await fn();busy=false;suggestions()}
+
+function doAbout(){return run(async()=>{await step(500,()=>{tool('cadguard.get_model_summary','{ "file": "#a91f" }','0,3 giây','đã lấy tóm tắt (có trần kích thước)');say('ai',K().about)})})}
+function doScan(){ if(busy)return; if(!$('#log .msg.me:last-child'))say('me','Quét bản vẽ này'); tab('chat'); return run(async()=>{
+  await step(700,()=>{
+    const c=C(),F=FIND();c.scanned=true;
+    tool('cadguard.audit',`{ "file": "#a91f", "standard": "${K().standard}" }`,K().secs,K().tool);
+    renderAll();
+    const e=F.filter(f=>f.sev==='error').length,w=F.length-e,fx=F.filter(f=>f.fix).map(f=>f.id).join(' và '),ne=F.filter(f=>!f.fix).map(f=>f.id).join(' và ');
+    say('ai',`<p>Mình quét xong trong ${K().secs}. Có <b>${F.length} phát hiện</b>: ${e} lỗi và ${w} cảnh báo. Đã đánh dấu số 1–${F.length} trên bản vẽ.</p>
+      <p>Trong đó <b>2 việc mình sửa được</b> (${fx}). 2 việc còn lại cần người quyết hoặc điền (${ne}).</p>
+      <div class="src">Căn cứ: kết quả bộ luật ${F.map(f=>f.rule).join(', ')}. Việc đúng/sai do luật quyết, không phải do mô hình.</div>`);
+    tab('chat')})})}
+function doPropose(){return run(async()=>{
+  await step(800,()=>{
+    const c=C();c.proposed=true;c.view='after';c.ops={a:true,b:true};
+    tool('cadguard.propose_changeset','{ "findings": [1, 2], "dry_run": true }','0,6 giây','2 thao tác · chưa ghi tệp nào');
+    renderAll();tab('chg');
+    const need=FIND().filter(f=>!f.fix);
+    say('ai',`<p>Mình đề xuất <b>2 thay đổi</b> và <b>chưa ghi gì</b>. Bản vẽ đang hiện chế độ “Sau” để bạn xem; bấm “Trước” để so sánh.</p>
+      <p>Hãy xem tab <b>Thay đổi</b>, bỏ tick việc nào bạn chưa muốn, rồi duyệt.</p>
+      <p>Hai việc còn lại mình <b>không tự làm</b>: ${need.map(f=>f.title.toLowerCase()).join('; ')}.</p>`)})})}
+async function accept(){ if(busy)return; busy=true; $('#okBtn').disabled=true;
+  const c=C(),k=K(),F=FIND(),base=k.file.replace('.dxf','');
+  say('me','Duyệt và lưu');
+  await step(900,()=>{
+    c.accepted=true;c.v2=true;c.cur='v2';$('#cvTitle').textContent=base+'_v2.dxf';
+    if(c.ops.a)F[0].st='fixed'; if(c.ops.b)F[1].st='fixed';
+    tool('cadguard.apply_changeset','{ "ops": '+Object.values(c.ops).filter(Boolean).length+', "out": "'+base+'_v2.dxf" }','0,9 giây','đã ghi tệp mới');
+    tool('cadguard.validate_output','{ "file": "'+base+'_v2.dxf" }','1,1 giây',k.validate);
+    renderAll();tab('chg');
+    const left=F.filter(f=>f.st==='open').length;
+    say('ai',`<p>Đã lưu <b>${base}_v2.dxf</b>. Mình mở lại tệp mới và chạy lại luật: không hỏng gì. Còn <b>${left} việc cần người</b>.</p>`);
+    toast(`Đã lưu ${base}_v2.dxf · bản gốc không đổi`)});
+  busy=false;suggestions()}
+function doExplain(){return run(async()=>{await step(600,()=>{tool('cadguard.explain_rule',`{ "rule": "${K().explain.rule}" }`,'0,1 giây','đã lấy mô tả luật và tham số');say('ai',K().explain.html)})})}
+function doExplainNeed(){return run(async()=>{await step(600,()=>{tool('cadguard.explain_rule',`{ "rule": "${K().needExplain.rule}" }`,'0,1 giây','đã lấy mô tả luật');say('ai',K().needExplain.html)})})}
+function doHandover(){return run(async()=>{
+  await step(800,()=>{const h=K().handover;C().handover=true;renderHome();tool('cadguard.get_handover_data','{ "file": "#a91f" }','0,4 giây','dữ liệu bàn giao có cấu trúc');
+    const hasOpen=FIND().some(f=>f.st==='open'&&!f.fix);
+    say('ai',`<p>Đây là <b>${h.title.toLowerCase()}</b>, tạo từ dữ liệu có cấu trúc của bản vẽ:</p>
+      <div class="note-card"><div class="lbl">${ic('info')}Sinh tự động từ dữ liệu, không phải văn bản tự do của mô hình</div>
+        <ul>${h.items.map(i=>`<li>${i}</li>`).join('')}${hasOpen?`<li style="color:var(--warn-fg);background:var(--warn-bg);border-radius:4px;padding:0 6px;list-style:none;margin-left:-14px">${ic('alert','width:14px;height:14px;vertical-align:-2px;margin-right:4px')}${h.warn}</li>`:''}</ul>
+        <button class="btn-s btn-sm" onclick="toast('Đã sao chép (bản mẫu)')">${ic('copy')}Sao chép</button></div>`)})})}
+function doRescan(){return run(async()=>{
+  await step(700,()=>{const left=FIND().filter(f=>f.st==='open');tool('cadguard.audit',`{ "file": "${K().file.replace('.dxf','')}_v2.dxf" }`,'1,1 giây',`còn ${left.length} phát hiện`);
+    say('ai',`<p>Quét lại bản v2: còn <b>${left.length} phát hiện</b> (${left.map(f=>f.rule).join(' và ')}), đều cần người xử lý. Các lỗi đã sửa đã hết.</p>`)})})}
+
+$('#form').onsubmit=e=>{e.preventDefault();const v=$('#inp').value.trim();if(!v||busy)return;$('#inp').value='';say('me',v);
+  const t=v.toLowerCase(),c=C();
+  if(/quét|kiểm|audit/.test(t)&&!c.scanned)doScan();
+  else if(/sửa|đổi|chữ|gộp|nối/.test(t)&&c.scanned&&!c.accepted)doPropose();
+  else if(/bàn giao|giao|gói/.test(t))doHandover();
+  else if(/giải thích|vì sao/.test(t))doExplain();
+  else run(async()=>{await step(500,()=>say('ai','<p>Đây là bản mẫu giao diện nên trợ lý chỉ trả lời các gợi ý có sẵn bên dưới. Bản thật sẽ hiểu câu lệnh tự nhiên, rồi luôn đi qua bước xem trước và duyệt.</p>'))})};
+
+/* ---------- misc ---------- */
+function toast(m){const t=$('#toast');t.textContent=m;t.classList.add('on');clearTimeout(toast.t);toast.t=setTimeout(()=>t.classList.remove('on'),2600)}
+window.toast=toast;
+$('#mNo').onclick=()=>$('#modal').classList.remove('on');
+$('#mYes').onclick=()=>{$('#modal').classList.remove('on');
+  const c=C(),k=K();c.accepted=false;c.proposed=false;c.v2=false;c.cur='A';FIND().forEach(f=>f.st='open');c.sel=null;$('#cvTitle').textContent=k.file;
+  renderAll();say('ai',`<p>Đã bỏ bản v2. Mọi thứ quay về như lúc vừa quét; bản gốc <b>${k.file}</b> không bị đụng tới.</p>`);suggestions();toast('Đã bỏ bản v2')};
+$('#stdLink').onclick=()=>openCatalog({stage:STAGE_KEY[stage]});
+$('#scanAll').onclick=()=>toast('Bản mẫu: quét hàng loạt sẽ chạy nền và cho báo cáo tổng hợp');
+
+/* ---------- Việc của tôi (theo phòng) ---------- */
+const COUNTS={design:3,tech:4,cnc:2,shop:5};
+function ck(done,txt){return `<li class="${done?'done':'todo'}">${done?ic('check'):ic('x')}<span>${txt}</span></li>`}
+function gateLink(){
+  const t=GATE[stage],n=RULES.filter(r=>r.tasks.includes(t)).length;
+  return ` <button class="f-link" data-gate="${t}">xem ${n} luật của bước “${TASKS[t].n}”</button>`}
+function renderPipe(){
+  const nodes=[['design','Thiết kế'],['tech','Kỹ thuật'],['cnc','Lập trình sản xuất'],['shop','Xưởng']];
+  $('#pipe').innerHTML=nodes.map(([k,n],i)=>`<div class="node${k===stage?' me':''}${k==='shop'?' end':''}"><div class="nm">${n}</div><div class="ct">${COUNTS[k]} bản đang xử lý</div>${k===stage?'<span class="pill info">Bạn ở đây</span>':''}</div>${i<3?`<div class="arr">${ic('arrow')}</div>`:''}`).join('');
+}
+function renderHome(){
+  const c=C(),k=K(),d=DEPT[stage],F=FIND();
+  const open=F.filter(f=>f.st==='open'),need=c.scanned?open.filter(f=>!f.fix):[];
+  const autoFix=c.scanned?open.filter(f=>f.fix).length:0;
+  const clean=c.scanned&&open.length===0;
+  $('#homeH').textContent=`Phòng ${d.name}`;
+  $('#homeP').textContent=d.role+'. '+(need.length?`Bạn có ${need.length} việc cần quyết, `:'')+'1 bản sẵn sàng bàn giao'+(c.scanned?'':' và 2 bản chưa quét')+'.';
+  renderPipe();
+  const aState=!c.scanned?['neu','Chưa quét']:clean?['ok','Sạch lỗi']:['warn',`${open.length} việc còn lại`];
+  const decide=need.length?`<div class="decide">${ic('hand')}<div><b>Cần bạn quyết:</b><br>${need.map(f=>`${f.rule} · ${f.title}`).join('<br>')}</div></div>`:'';
+  let inbox='';
+  if(k.inbox){
+    const ib=k.inbox;
+    inbox=`<h2>Nhận từ phòng ${ib.from}</h2><article class="dwg"><div class="dwg-h"><span class="nm">${ic('inbox')}${ib.name}</span><span class="stage pill ${c.received?'ok':'info'}">${c.received?ic('check')+'Đã nhận':'Có gói bàn giao'}</span></div>
+      <p style="margin:8px 0 10px;color:var(--text2);font-size:14.5px">Từ <b>${ib.from}</b> · ${ib.when}. ${ib.note}.</p>
+      <div class="dwg-f"><button class="btn-s" id="recvBtn" ${c.received?'disabled':''}>${c.received?'Đã nhận':'Nhận và mở'}</button><span class="why">Nhận gói cùng ghi chú bàn giao và báo cáo kiểm của phòng ${ib.from}.</span></div></article>`;
+  }
+  const A=`<article class="dwg"><div class="dwg-h"><span class="nm">${ic('file')}${k.file}</span><span class="stage pill ${aState[0]}">${aState[0]==='ok'?ic('check'):aState[0]==='warn'?ic('alert'):''}${aState[1]}</span></div>
+    ${decide}
+    <ul class="ready">${ck(clean,(c.scanned?(clean?'Hết lỗi theo luật':`Còn ${open.length} lỗi/cảnh báo`+(autoFix?` (${autoFix} tự sửa được)`:'')):'Chưa quét lỗi')+gateLink())}${ck(c.handover,K().handover.title)}${ck(false,`Trưởng phòng ${d.name} đã duyệt`)}${ck(false,`Gói đã giao cho ${d.next}`)}</ul>
+    <div class="dwg-f"><button class="btn-p" data-open="work">${c.scanned?'Mở và xử lý':'Mở và quét'}</button><span class="why">Chưa thể ${d.mess.toLowerCase()}: ${c.scanned?'còn lỗi và thiếu người duyệt':'chưa quét'}.</span></div></article>`;
+  const P=k.pack;
+  const D=`<article class="dwg"><div class="dwg-h"><span class="nm">${ic('file')}${P.name}.dxf</span><span class="stage pill ok">${ic('check')}Sẵn sàng bàn giao</span></div>
+    <ul class="ready">${ck(true,'Hết lỗi theo luật'+gateLink())}${ck(true,K().handover.title)}${ck(true,`Trưởng phòng ${d.name} đã duyệt`)}${ck(c.packD,`Gói đã giao cho ${d.next}`)}</ul>
+    <div class="dwg-f"><button class="btn-p" id="packBtn" ${c.packD?'disabled':''}>${c.packD?'Đã tạo gói':d.mess}</button><span class="why">${c.packD?`Đã lưu thành tệp mới và báo ${d.next}.`:'Chưa ghi gì cho tới khi bạn bấm.'}</span></div>
+    <div class="pack${c.packD?' on':''}"><b>Gói bàn giao gồm</b><ul>${P.list.map(x=>`<li>${x}</li>`).join('')}</ul><span style="font-size:13.5px;color:var(--text3)">Bản gốc không bị sửa. Gói này là tệp mới có mã phiên bản.</span></div></article>`;
+  const I=`<article class="dwg"><div class="dwg-h"><span class="nm">${ic('file')}${k.idleName}.dxf</span><span class="stage pill neu">Chưa quét</span></div>
+    <div class="dwg-f" style="margin-top:10px"><button class="btn-s" data-open="work">Mở và quét</button><span class="why">Bản đang làm, chưa có kết quả kiểm.</span></div></article>`;
+  $('#homeList').innerHTML=inbox+`<h2${inbox?' style="margin-top:22px"':''}>Bản vẽ của phòng ${d.name}</h2>`+A+D+I;
+  $$('[data-open]').forEach(b=>b.onclick=()=>go(b.dataset.open));
+  $$('[data-gate]').forEach(b=>b.onclick=()=>openCatalog({task:b.dataset.gate}));
+  const p=$('#packBtn'); if(p)p.onclick=()=>{c.packD=true;COUNTS[stage]--;COUNTS[ORDER[ORDER.indexOf(stage)+1]||'shop']++;renderHome();toast(`Đã ${d.mess.toLowerCase()} (bản mẫu)`)};
+  const r=$('#recvBtn'); if(r)r.onclick=()=>{c.received=true;renderHome();toast(`Đã nhận gói từ ${K().inbox.from} (bản mẫu)`)};
+}
+$('#askForm').onsubmit=e=>{e.preventDefault();const v=$('#askIn').value.trim();if(!v)return;$('#askIn').value='';go('work');tab('chat');$('#inp').value=v;$('#form').requestSubmit()};
+
+/* ---------- chọn phòng ---------- */
+function renderDeptMenu(){
+  $('#deptMenu').innerHTML=ORDER.map(k=>`<button role="menuitemradio" aria-checked="${k===stage}" data-d="${k}"><span style="width:18px;margin-top:2px">${k===stage?ic('check'):''}</span><span><span class="t">${DEPT[k].name}</span><br><span class="d">${DEPT[k].role}</span></span></button>`).join('');
+  $$('#deptMenu button').forEach(b=>b.onclick=()=>{setStage(b.dataset.d);closeMenus()});
+  $('#deptName').textContent=DEPT[stage].name;
+}
+function setStage(k){
+  if(k===stage&&svg)return;
+  if(svg)ST[stage].logHTML=log.innerHTML;
+  stage=k;RS.stage=STAGE_KEY[k];if(RS.open){RS.open=null;renderDrawer()}syncControls();
+  const c=C(),kk=K();
+  $('#projName').textContent=kk.project;$('#stdName').textContent=kk.standard;$('#stdRules').textContent=kk.rulesOn;
+  $('#cvTitle').textContent=c.v2&&c.cur==='v2'?kk.file.replace('.dxf','')+'_v2.dxf':kk.file;$('#viewTag').textContent=kk.view;$('#cvInfo').textContent=kk.info+' · tệp gốc chỉ đọc';
+  mountSheet();
+  if(c.logHTML)log.innerHTML=c.logHTML;else intro();
+  renderDeptMenu();renderAll();suggestions();tab('chat');
+}
+function renderAll(){renderFiles();renderFinds();renderChg();syncCanvas();renderHome();renderRules()}
+
+/* ---------- connect / overview content ---------- */
+const CLI=[
+ {n:'Claude Code',s:['ok','Đã đăng nhập'],d:'Dùng tài khoản của chính bạn (gói hoặc khoá API). cad-guard chỉ mở CLI; cửa sổ đăng nhập là của CLI.',b:'Kiểm tra lại'},
+ {n:'Codex CLI',s:['warn','Cần đăng nhập'],d:'Bấm để mở cửa sổ đăng nhập của Codex. Trên máy không có trình duyệt dùng mã thiết bị.',b:'Mở đăng nhập'},
+ {n:'Antigravity CLI',s:['neu','Chưa cài'],d:'Chưa tìm thấy lệnh agy trên máy này.',b:'Xem hướng dẫn cài'},
+ {n:'OpenCode',s:['ok','Đã cài'],d:'Cầu nối tới nhiều nhà cung cấp bằng khoá API. Dùng cho chế độ khoá của công ty.',b:'Mở cấu hình'}
+];
+$('#cliCards').innerHTML=CLI.map(c=>`<div class="card prov"><div class="hd"><span class="nm">${c.n}</span><span class="pill ${c.s[0]}">${c.s[0]==='ok'?ic('check'):c.s[0]==='warn'?ic('alert'):ic('x')}${c.s[1]}</span></div><p class="ds">${c.d}</p><div class="row"><button class="btn-s btn-sm">${c.b}</button></div></div>`).join('');
+const API=[['Anthropic','sk-ant-••••••••••••3f2a','ok','Đã kiểm tra'],['OpenAI','','neu','Chưa nhập khoá'],['Google Gemini','','neu','Chưa nhập khoá'],['OpenRouter','','neu','Chưa nhập khoá · bên trung gian, mặc định tắt']];
+$('#apiCards').innerHTML=API.map(([n,k,s,t])=>`<div class="card prov"><div class="hd"><span class="nm">${n}</span><span class="pill ${s}">${s==='ok'?ic('check'):ic('x')}${t}</span></div>
+  <div class="row"><input type="password" value="${k}" placeholder="Dán khoá API" aria-label="Khoá API ${n}"><button class="btn-s btn-sm">${k?'Đổi':'Lưu'}</button></div></div>`).join('');
+const BARS=[['LY-04 · Layer chưa định nghĩa',7],['TX-02 · Chiều cao chữ',6],['PR-01 · Thẻ vị trí – bảng kê',4],['SH-05 · Thuộc tính khung tên',3],['DH-03 · Đường bao tấm khép kín',2]];
+$('#bars').innerHTML=BARS.map(([n,v])=>`<div class="bar"><span>${n}</span><span class="tr"><i style="width:${v/7*100}%"></i></span><span class="nn">${v}</span></div>`).join('');
+
+/* ---------- LUẬT ÁP DỤNG (danh mục luật gắn phòng · vị trí · task) ---------- */
+/* Dữ liệu minh hoạ: mã/tiêu đề luật furniture-v0 lấy từ standards/furniture-v0.yaml; VS-* và PJ-K1-* là mã minh hoạ.
+   Việc gắn phòng/vị trí/task, người phụ trách và ngoại lệ là ĐỀ XUẤT, chưa tồn tại trong repo. */
+const STG={d:'Thiết kế',t:'Kỹ thuật',c:'Lập trình SX'};
+const STAGE_KEY={design:'d',tech:'t',cnc:'c'};
+const ROLES={pd:'Thợ vẽ Thiết kế',ld:'Trưởng phòng Thiết kế',te:'Kỹ thuật viên',ck:'Người kiểm bản vẽ',lt:'Trưởng phòng Kỹ thuật',pc:'Lập trình CNC',lc:'Trưởng phòng Lập trình SX'};
+/* Mỗi NHÓM LUẬT (tiền tố mã) do một tài khoản admin phụ trách: sửa và duyệt luật trong nhóm. Tên tài khoản thật do công ty gán. */
+const GROUPS={SH:'Khung tên & khổ giấy',LY:'Layer',TX:'Chữ & kích thước',VW:'Viewport & tỉ lệ',FN:'Nội thất (tấm, dán cạnh)',DH:'Hình học & dữ liệu',PR:'Bảng kê & CNC',VS:'Vệ sinh bản vẽ',PJ:'Luật riêng dự án'};
+const grpOf=r=>r.id.split('-')[0];
+const admL=g=>'Admin · '+GROUPS[g];
+const adm=r=>admL(grpOf(r));
+const LEAD={d:'ld',t:'lt',c:'lc'};
+const TASKS={
+ t1:{n:'Dọn bản vẽ (layer, chữ, khối)',s:'d'},
+ t2:{n:'Bàn giao Thiết kế → Kỹ thuật',s:'d',gate:1},
+ t3:{n:'Triển khai chi tiết & kích thước',s:'t'},
+ t4:{n:'Lập bảng kê & thẻ vị trí',s:'t'},
+ t5:{n:'Kiểm & ký duyệt bản vẽ',s:'t'},
+ t6:{n:'Bàn giao Kỹ thuật → Lập trình SX',s:'t',gate:1},
+ t7:{n:'Chuẩn bị đường bao & lỗ khoan CNC',s:'c'},
+ t8:{n:'Xuất dữ liệu cho máy',s:'c',gate:1}
+};
+const GATE={design:'t2',tech:'t6',cnc:'t8'};
+const MAPS={stages:STG,roles:ROLES,tasks:TASKS};
+const ORD={stages:Object.keys(STG),roles:Object.keys(ROLES),tasks:Object.keys(TASKS),grp:Object.keys(GROUPS)};
+const STD_L={f:'furniture-v0.1.0',h:'design-hygiene-v0 (nháp)',p:'Dự án K1'};
+const SEV={E:['err','Lỗi'],W:['warn','Cảnh báo'],I:['neu','Gợi ý']};
+const KIND={r:['ok','Đang chạy'],n:['neu','Chưa cài code'],m:['info','Kiểm tay']};
+const PARAMS={
+ 'TX-02':[{n:'Chiều cao chữ ghi chú (mm)',v:'2.5'}],
+ 'VS-02':[{n:'Số kiểu chữ tối đa',v:'6'}],
+ 'VS-03':[{n:'Tỉ lệ tối đa trên layer “0”',v:'5%'}],
+ 'VW-01':[{n:'Tỉ lệ ưu tiên',v:'1:1, 1:2, 1:5, 1:10, 1:20, 1:50, 1:100, 2:1, 5:1, 10:1'}],
+ 'DH-09':[{n:'Đơn vị bản vẽ',v:'mm'}],
+ 'SH-05':[{n:'Thuộc tính bắt buộc',v:'DWG_NO, TITLE, PROJECT, SHEET, SCALE, DRAWN_BY, CHECKED_BY, DATE, REV, STATUS, STD_VER'}],
+ 'PJ-K1-03':[{n:'Sai lệch gốc toạ độ tối đa (mm)',v:'0'}]
+};
+/* [mã, nội dung, mức, nguồn, chuẩn, tình trạng, độ chính xác %, phòng, phụ trách, vị trí, task, vi phạm 7 ngày] */
+const RAW=[
+ ['VS-01','Không còn layer dư từ xref đã gộp (tên có $)','W','Khảo sát mẫu','h','r',null,'d','ld','pd','t1,t2',0],
+ ['VS-02','Số kiểu chữ không vượt ngưỡng của công ty','W','Khảo sát mẫu','h','r',null,'d','ld','pd','t1,t2',0],
+ ['VS-03','Tỉ lệ đối tượng trên layer “0” không vượt ngưỡng','E','Khảo sát mẫu','h','r',null,'d','ld','pd,ld','t1,t2',0],
+ ['VS-04','Chữ dùng phông Unicode (không dùng phông VNI/TCVN cũ)','E','Khảo sát mẫu','h','r',null,'d','ld','pd','t1,t2',0],
+ ['VS-05','Số khối ẩn danh không vượt ngưỡng','W','Khảo sát mẫu','h','r',null,'d','ld','pd','t1',0],
+ ['VS-06','Không có đối tượng nằm quá xa vùng làm việc','W','Khảo sát mẫu','h','r',null,'d','ld','pd','t1',0],
+ ['SH-04','Có đúng một khối khung tên chuẩn trên mỗi layout đã dùng','E','ISO 7200','f','r',null,'t','lt','te,ck','t5,t6',0],
+ ['SH-05','Mọi thuộc tính bắt buộc của khung tên đều có giá trị','E','ISO 7200','f','r',null,'t','lt','te,ck','t5,t6',3],
+ ['SH-06','Mã bản vẽ đúng mẫu công ty','E','CT','f','n',null,'t','lt','te','t3',null],
+ ['SH-09','Không để “WIP” trên tờ đã đánh dấu xuống xưởng','E','CT','f','n',null,'tc','lt','ck','t6,t8',null],
+ ['LY-01','Tên layer đúng sơ đồ đặt tên','E','CT','f','r',null,'tc','lt','te,pc','t3,t7',0],
+ ['LY-03','Không có đối tượng nằm trên layer 0 (trừ định nghĩa khối)','W','CT','f','r',null,'tc','lt','te,pc','t3,t7',0],
+ ['LY-04','Không có đối tượng trên layer chưa định nghĩa trong chuẩn','E','CT','f','r',96,'tc','lt','te,pc','t3,t7',7],
+ ['LY-08','Layer FN-VPRT đặt không in','E','CT','f','r',null,'t','lt','te','t3',0],
+ ['TX-01','Kiểu chữ thuộc tập cho phép','W','DWS','f','r',null,'t','lt','te','t3',0],
+ ['TX-02','Chiều cao chữ = giá trị chuẩn × tỉ lệ viewport','W','ISO 3098','f','r',92,'t','lt','te','t3',6],
+ ['TX-08','Kích thước không bị sửa chữ bằng tay','W','ISO 129-1','f','r',null,'t','lt','te,ck','t3,t5',0],
+ ['TX-09','Giá trị kích thước = số đo hình học','E','ISO 129-1','f','n',null,'t','lt','te,ck','t3,t5',null],
+ ['VW-01','Tỉ lệ viewport nằm trong danh sách ưu tiên','W','TCVN 7286','f','r',null,'t','lt','te','t3',0],
+ ['FN-01','Mọi tấm có vật liệu và độ dày','E','AWS','f','n',null,'t','lt','te','t3,t4',null],
+ ['FN-04','Có mã dán cạnh cho mọi cạnh (hoặc ghi chú chung)','W','CT','f','n',null,'t','lt','te','t3,t4',null],
+ ['PR-01','Mỗi thẻ vị trí có trong bảng kê và ngược lại','E','TCVN 3824','f','r',81,'t','lt','te,ck','t4,t6',4],
+ ['PR-02','Thẻ vị trí không trùng','E','CT','f','r',null,'t','lt','te','t4',0],
+ ['PR-04','Kích thước tấm trong bảng kê = hình học','E','CT','f','n',null,'tc','lt','te,pc','t4,t7',null],
+ ['PR-05','Layer CNC dùng đúng tên phần mềm đích, tham số hợp lệ','E','WoodWOP/Mozaik','f','n',null,'c','lc','pc','t7,t8',null],
+ ['PR-06','Bản vẽ đánh dấu xuống xưởng có revision, người kiểm, người duyệt','E','CT','f','n',null,'tc','lt','ck,lc','t6,t8',null],
+ ['DH-01','Không có đối tượng chồng trùng','W','CT','f','r',null,'tc','lt','te,pc','t3,t7',0],
+ ['DH-03','Đường bao tấm khép kín và nối liền','E','Mozaik','f','r',null,'c','lc','pc','t7,t8',2],
+ ['DH-09','Đơn vị vẽ là mm','E','CT','f','r',null,'tc','lt','te,pc','t3,t7',0],
+ ['DH-10','Đối tượng nằm trên mặt phẳng z = 0','W','Mozaik','f','r',null,'c','lc','pc','t7,t8',0],
+ ['PJ-K1-01','Ghi chú dán cạnh ABS 1 mm cho mọi cạnh lộ','E','Yêu cầu khách K1','p','m',null,'t','lt','te,ck','t3,t5',null],
+ ['PJ-K1-02','Vân gỗ chạy dọc theo chiều cao tủ','W','Yêu cầu khách K1','p','m',null,'t','lt','te,ck','t3,t5',null],
+ ['PJ-K1-03','Gốc toạ độ (0,0) đặt tại góc dưới trái của tấm','W','Máy CNC của K1','p','r',null,'c','lc','pc','t7,t8',0],
+ ['SH-01','Mỗi layout có khung khổ A-series nhận diện được','E','TCVN 7285','f','n',null,'','','','',null],
+ ['SH-02','Lề khung 20 mm trái, 10 mm các cạnh còn lại','W','TCVN 7285','f','n',null,'','','','',null],
+ ['SH-03','Nét khung 0,7 mm','W','TCVN 7285','f','n',null,'','','','',null],
+ ['TX-03','Không có chữ dưới 1,8 mm trên giấy','E','ISO 3098','f','n',null,'','','','',null],
+ ['VW-05','Mỗi ký hiệu cắt có hình cắt tương ứng','W','ISO 128-40','f','n',null,'','','','',null]
+];
+const UNLISTED=29; /* 34 luật chuẩn chưa gắn − 5 luật mẫu ở trên */
+const byOrd=(k,a)=>[...a].sort((x,y)=>ORD[k].indexOf(x)-ORD[k].indexOf(y));
+const snap=o=>JSON.stringify({on:o.on,stages:o.stages,roles:o.roles,tasks:o.tasks,params:o.params.map(p=>p.v)});
+function mk(a){
+ const [id,title,sev,src,std,kind,acc,stg,_own,roles,tasks,hits]=a;
+ const o={id,title,sev,src,std,kind,acc,hits,on:true,proj:std==='p',
+  stages:byOrd('stages',stg.split('').filter(Boolean)),roles:byOrd('roles',roles.split(',').filter(Boolean)),tasks:byOrd('tasks',tasks.split(',').filter(Boolean)),
+  params:(PARAMS[id]||[]).map(p=>({...p})),rt:(id==='LY-04'||id==='TX-02')};
+ o.base=snap(o);return o}
+const RULES=RAW.map(mk);
+RULES.find(r=>r.id==='VW-01').exc={txt:'Cho phép tỉ lệ 1:25 cho mặt đứng tủ bếp',why:'Khổ A3 không đủ chỗ ở 1:20 cho dãy tủ dài 3,2 m',until:'30/11/2026',by:'Admin · Viewport & tỉ lệ'};
+const HIST=[
+ ['04/11/2026','design-hygiene-v0 (nháp)','6 luật vệ sinh cho khâu Thiết kế, mã minh hoạ'],
+ ['03/11/2026','Overlay Dự án K1 v1','3 luật riêng và 1 ngoại lệ, admin duyệt (minh hoạ)'],
+ ['02/11/2026','furniture-v0.1.0','Bản đề xuất đầu tiên, 58 luật; chưa được CEO duyệt chính thức']
+];
+const RS={scope:'k1',stage:'d',role:'',task:'',kind:'',q:'',group:'',open:null,view:'lead',adm:'LY',appr:[],submitted:false,ver:{co:'0.1.0',k1:1}};
+const FORM={};
+
+const isUn=r=>!r.stages.length||!r.roles.length||!r.tasks.length;
+const leadOfDept=()=>LEAD[STAGE_KEY[stage]];
+function canEdit(r){
+ if(RS.view==='ad')return grpOf(r)===RS.adm;
+ if(RS.view==='lead')return !r.stages.length||r.stages.includes(STAGE_KEY[stage])||r.proj;
+ return false}
+const nm=(arr,map)=>arr.length?arr.map(k=>typeof map[k]==='string'?map[k]:map[k].n).join(', '):'(trống)';
+const bump=v=>{const p=v.split('.');p[2]=+p[2]+1;return p.join('.')};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const srcL=s=>s==='CT'?'Quy định công ty':s;
+const inScope=r=>RS.scope==='k1'||!r.proj;
+
+function filtered(){return RULES.filter(r=>{
+ if(!inScope(r))return false;
+ if(RS.stage==='none'){if(!isUn(r))return false}else if(RS.stage&&!r.stages.includes(RS.stage))return false;
+ if(RS.role&&!r.roles.includes(RS.role))return false;
+ if(RS.task&&!r.tasks.includes(RS.task))return false;
+ if(RS.kind&&r.kind!==RS.kind)return false;
+ if(RS.q&&!(r.id+' '+r.title).toLowerCase().includes(RS.q.toLowerCase()))return false;
+ return true})}
+
+/* ----- bản nháp ----- */
+function diffs(){
+ const out=[];
+ RULES.forEach(r=>{
+  if(r.isNew){out.push({r,k:'k1',what:'Thêm luật riêng cho Dự án K1',from:null,to:`${r.title} · ${nm(r.stages,STG)} · ${adm(r)} duyệt`,det:1});return}
+  const b=JSON.parse(r.base),add=(what,f,t,det,k,loose,why)=>out.push({r,k:k||(r.proj?'k1':'co'),what,from:f,to:t,det,loose,why:loose?(why!==undefined?why:r.why):undefined});
+  if(b.on!==r.on)add(r.on?'Bật lại luật':'Tắt luật (nới lỏng)',b.on?'Bật':'Tắt',r.on?'Bật':'Tắt',1,undefined,!r.on);
+  [['stages','Phòng áp dụng'],['roles','Vị trí áp dụng'],['tasks','Task liên quan']].forEach(([k,l])=>{if(b[k].join()!==r[k].join())add(l,nm(b[k],MAPS[k]),nm(r[k],MAPS[k]),0)});
+  r.params.forEach((p,i)=>{if(b.params[i]!==p.v)add(`Tham số “${p.n}”`,b.params[i],p.v,1,undefined,true)});
+  if(r.exc&&r.exc.isNew)add('Thêm ngoại lệ cho Dự án K1',null,`${r.exc.txt} (đến ${r.exc.until})`,1,'k1',true,r.exc.why);
+ });return out}
+function undoDraft(){
+ for(let i=RULES.length-1;i>=0;i--){const r=RULES[i];
+  if(r.isNew){RULES.splice(i,1);continue}
+  const b=JSON.parse(r.base);r.on=b.on;r.why='';r.stages=[...b.stages];r.roles=[...b.roles];r.tasks=[...b.tasks];r.params.forEach((p,j)=>p.v=b.params[j]);
+  if(r.exc&&r.exc.isNew)delete r.exc}
+ RS.submitted=false;RS.appr=[];if(RS.open&&!RULES.find(x=>x.id===RS.open))RS.open=null}
+function dirty(r){return r.isNew||snap(r)!==r.base||(r.exc&&r.exc.isNew)}
+function draftInfo(D){
+ const co=D.some(d=>d.k==='co'),pj=D.some(d=>d.k==='k1'),
+  grps=[...new Set(D.map(d=>grpOf(d.r)))],owners=grps.map(admL),
+  noWhy=D.filter(d=>d.loose&&(!d.why||d.why.trim().length<10));
+ const vers=[];if(co)vers.push(`chuẩn công ty thành <b>furniture-v${bump(RS.ver.co)}</b>`);if(pj)vers.push(`overlay Dự án K1 thành <b>v${RS.ver.k1+1}</b>`);
+ return {co,pj,grps,owners,noWhy,vers,det:D.some(d=>d.det)}}
+
+/* ----- hiển thị ----- */
+function pillsOf(arr,map,max){
+ const sh=arr.slice(0,max||99).map(k=>`<span class="pill neu sm">${typeof map[k]==='string'?map[k]:map[k].n}</span>`).join('');
+ return sh+(arr.length>(max||99)?`<span class="pill neu sm" title="${esc(nm(arr.slice(max),map))}">+${arr.length-max}</span>`:'')}
+function rowHtml(r){
+ const sv=SEV[r.sev],kd=KIND[r.kind];
+ const none='<span class="none">Chưa gắn</span>';
+ const stages=r.stages.length?(r.stages.length===3?'<span class="pill neu sm">Cả 3 phòng</span>':pillsOf(r.stages,STG)):none;
+ const roles=(r.roles.length?`<div class="stack">${pillsOf(r.roles,ROLES,3)}</div>`:none)+`<div class="own">Phụ trách: <b>${adm(r)}</b></div>`;
+ const tasks=r.tasks.length?r.tasks.slice(0,2).map(t=>`<div>${TASKS[t].n}${TASKS[t].gate?' <span class="pill warn sm" title="Luật này phải sạch trước khi bàn giao bước này">Chặn bàn giao</span>':''}</div>`).join('')+(r.tasks.length>2?`<div class="meta">+${r.tasks.length-2} task khác</div>`:''):none;
+ const st=[`<span class="pill ${kd[0]} sm">${r.kind==='r'?ic('check','width:12px;height:12px'):''}${kd[1]}</span>`];
+ if(!r.on)st.push('<span class="pill warn sm">Đã tắt</span>');
+ if(r.exc)st.push('<span class="pill proj sm">Có ngoại lệ</span>');
+ if(dirty(r))st.push('<span class="pill edit sm">'+(r.isNew?'Mới (nháp)':'Đã sửa (nháp)')+'</span>');
+ const sub=r.kind==='r'?(r.acc!=null?`Chính xác ${r.acc}%`:'Đang đo độ chính xác'):'';
+ return `<tr class="row${RS.open===r.id?' sel':''}" data-id="${r.id}">
+  <td><button class="code" data-open="${r.id}" aria-label="Mở chi tiết luật ${r.id}">${r.id}</button><div style="margin-top:4px"><span class="pill ${sv[0]} sm">${sv[1]}</span></div></td>
+  <td><div class="ttl">${esc(r.title)}</div><div class="meta">${esc(srcL(r.src))} · ${STD_L[r.std]}${r.proj?' <span class="pill proj sm">Riêng dự án K1</span>':''}</div></td>
+  <td><div class="stack">${stages}</div></td><td>${roles}</td><td>${tasks}</td>
+  <td><div class="stack">${st.join('')}</div>${sub?`<div class="meta" style="margin-top:4px">${sub}</div>`:''}</td></tr>`}
+function groupsOf(list){
+ if(!RS.group)return [[null,list]];
+ const m=new Map(),key=RS.group==='stage'?'stages':RS.group==='role'?'roles':RS.group==='grp'?'grp':'tasks';
+ list.forEach(r=>{let ks=key==='grp'?[grpOf(r)]:r[key];if(!ks.length)ks=['-'];ks.forEach(k=>{if(!m.has(k))m.set(k,[]);m.get(k).push(r)})});
+ const order=[...ORD[key],'-'];
+ return order.filter(k=>m.has(k)).map(k=>[k,m.get(k)])}
+function renderRules(){
+ if(!$('#rbody'))return;
+ const all=RULES.filter(inScope),F=filtered(),D=diffs();
+ $('#srcline').innerHTML=`<span class="pill info">Bản mẫu: liệt kê ${RULES.filter(r=>!r.proj).length} trong 64 luật chuẩn</span>
+  <span>Chuẩn công ty <b>furniture-v${RS.ver.co}</b> · Overlay Dự án K1 <b>v${RS.ver.k1}</b></span>
+  <span>Danh mục sinh từ tệp, không nhập tay: <code>standards/furniture-v0.yaml</code> + <code>standards/assignments.yaml</code> + <code>standards/projects/K1.yaml</code> (đề xuất)</span>`;
+ const stageCard=k=>{const L=all.filter(r=>r.stages.includes(k)),run=L.filter(r=>r.kind==='r').length,man=L.filter(r=>r.kind==='m').length,nc=L.filter(r=>r.kind==='n').length,pj=L.filter(r=>r.proj).length,n=L.length||1;
+  return `<button class="cov" data-stage="${k}" aria-pressed="${RS.stage===k}"><div class="nm">${STG[k]}</div><div class="big">${L.length} luật</div>
+   <div class="bar2" aria-hidden="true"><i style="width:${run/n*100}%;background:var(--ok)"></i><i style="width:${man/n*100}%;background:var(--info-fg)"></i><i style="width:${nc/n*100}%;background:var(--border-strong)"></i></div>
+   <div class="sub">${run} đang chạy · ${man} kiểm tay · ${nc} chưa cài code${pj&&RS.scope==='k1'?` · ${pj} riêng dự án`:''}</div></button>`};
+ const unTotal=UNLISTED+RULES.filter(r=>!r.proj&&r.std==='f'&&isUn(r)).length;
+ $('#covs').innerHTML=['d','t','c'].map(stageCard).join('')+
+  `<button class="cov gap" data-stage="none" aria-pressed="${RS.stage==='none'}"><div class="nm">Chưa gắn đủ phòng · vị trí · task</div><div class="big">${unTotal} luật</div><div class="sub">Không ai nhận khi vi phạm, không chặn bước nào. Bấm để xem.</div></button>`;
+ $('#gapNote').innerHTML=RS.stage==='none'?`<div class="callout warn"><svg class="i" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18h.01"/></svg><div>Luật chưa gắn vẫn chạy (nếu đã cài code) nhưng lỗi của nó không có người phụ trách và không nằm trong điều kiện bàn giao nào. Mở từng luật để gắn phòng, vị trí, task. Bản mẫu chỉ liệt kê 5 trong ${unTotal}.</div></div>`:'';
+ $$('#scopeSeg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===RS.scope));
+ const gs=groupsOf(F);let h='';
+ gs.forEach(([k,L])=>{
+  if(k!==null){const lb=k==='-'?'Chưa gắn':RS.group==='stage'?'Phòng '+STG[k]:RS.group==='role'?ROLES[k]:RS.group==='grp'?'Nhóm '+GROUPS[k]+' · '+admL(k):TASKS[k].n+' · '+STG[TASKS[k].s];
+   h+=`<tr class="grp"><td colspan="6">${lb} <span class="pill neu sm">${L.length} luật</span>${RS.group==='task'&&k!=='-'&&TASKS[k].gate?' <span class="pill warn sm">Bước chặn bàn giao: mọi lỗi phải sạch</span>':''}</td></tr>`}
+  h+=L.map(rowHtml).join('')});
+ $('#rbody').innerHTML=h||`<tr><td colspan="6"><div class="empty"><b>Không có luật nào khớp bộ lọc</b>Thử bỏ bớt bộ lọc hoặc đổi phạm vi.</div></td></tr>`;
+ $('#rfoot').innerHTML=`Hiển thị <b>${F.length}</b> / ${all.length} luật trong bản mẫu${RS.group?'. Một luật có thể xuất hiện ở nhiều nhóm.':'.'} Bấm mã luật để xem chi tiết${RS.view==='pd'?'.':' và sửa trong bản nháp.'}`;
+ $$('#rbody tr.row').forEach(tr=>tr.onclick=e=>{if(e.target.closest('button'))return;openRule(tr.dataset.id)});
+ $$('#rbody [data-open]').forEach(b=>b.onclick=()=>openRule(b.dataset.open));
+ $$('#covs .cov').forEach(b=>b.onclick=()=>{RS.stage=RS.stage===b.dataset.stage?'':b.dataset.stage;syncControls();renderRules()});
+ $('#vhist').innerHTML=HIST.map(([t,v,x])=>`<li><time>${t}</time><span><b>${v}</b> · ${x}</span></li>`).join('');
+ renderRoleSel();renderDraftBar(D);
+}
+function renderRoleSel(){
+ const s=$('#viewRole');
+ s.innerHTML=`<option value="pd">Thợ vẽ (chỉ xem)</option><option value="lead">Trưởng phòng ${DEPT[stage].name}</option><option value="ad">Admin nhóm luật</option>`;s.value=RS.view;
+ const g=$('#admGrp');g.hidden=RS.view!=='ad';g.innerHTML=Object.keys(GROUPS).map(k=>`<option value="${k}">${admL(k)}</option>`).join('');g.value=RS.adm}
+function syncControls(){
+ $('#rq').value=RS.q;$('#fRole').value=RS.role;$('#fTask').value=RS.task;$('#fKind').value=RS.kind;$('#fGroup').value=RS.group}
+function openCatalog(o){
+ const rule=o&&o.rule;if(o)delete o.rule;
+ Object.assign(RS,{stage:'',role:'',task:'',kind:'',q:'',group:'',scope:'k1'},o||{});
+ syncControls();go('rules');renderRules();
+ if(rule)openRule(rule)}
+
+/* ----- ngăn chi tiết ----- */
+function chips(kind,opts,sel,can){
+ return `<div class="chipset" role="group">`+opts.map(([k,l])=>`<button type="button" class="tchip" data-chip="${kind}" data-v="${k}" aria-pressed="${sel.includes(k)}"${can?'':' disabled'}>${sel.includes(k)?ic('check','width:14px;height:14px'):''}${l}</button>`).join('')+`</div>`}
+function openRule(id){
+ RS.open=id;renderRules();renderDrawer();const c=$('#drClose');if(c)c.focus()}
+function closeRule(){
+ const id=RS.open;RS.open=null;renderRules();renderDrawer();const b=id&&$(`#rbody [data-open="${id}"]`);if(b)b.focus()}
+const needWhy=r=>diffs().some(d=>d.r===r&&d.loose&&!r.isNew&&d.k!=='k1');
+function renderDrawer(){
+ const d=$('#drawer'),r=RULES.find(x=>x.id===RS.open);
+ if(!r){d.classList.remove('on');d.innerHTML='';return}
+ d.classList.add('on');
+ const can=canEdit(r),dis=can?'':' disabled',sv=SEV[r.sev],kd=KIND[r.kind];
+ const why={r:'Chạy bằng code tất định trên mô hình bản vẽ. Đúng/sai do luật quyết, không do AI.',n:'Đã có trong chuẩn nhưng chưa có code nên chưa chạy và chưa chặn gì. Cần lập trình viên viết hàm luật theo quy trình trong AGENTS.md.',m:'Máy không kiểm được. Người kiểm tick tay ở bước ký duyệt và mục này nằm trong gói bàn giao.'}[r.kind];
+ const note=can?'':`<div class="callout" style="margin:12px 0 0"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><div>${RS.view==='pd'?'Bạn chỉ xem. Nếu thấy luật sai hoặc khó hiểu, bấm “Báo luật này sai”.':RS.view==='ad'?`Luật này do <b>${adm(r)}</b> phụ trách. Bạn đang xem bằng tài khoản <b>${admL(RS.adm)}</b> nên chỉ sửa được luật trong nhóm của mình.`:`Luật này không áp dụng cho phòng ${DEPT[stage].name}. Chỉ <b>${adm(r)}</b> hoặc trưởng phòng liên quan mới đề xuất sửa được.`}</div></div>`;
+ const hist=[['02/11/2026','Có trong furniture-v0.1.0'],...(r.proj?[['03/11/2026','Thêm vào overlay Dự án K1 v1']]:[]),...(r.exc&&!r.exc.isNew?[['03/11/2026','Thêm ngoại lệ Dự án K1']]:[]),...(dirty(r)?[['Nháp','Có thay đổi chưa gửi duyệt']]:[])];
+ d.innerHTML=`<div class="dr-h"><div style="flex:1;min-width:0"><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px"><span class="f-rule">${r.id}</span><span class="pill ${sv[0]}">${sv[1]}</span><span class="pill ${kd[0]}">${kd[1]}</span>${r.proj?'<span class="pill proj">Riêng dự án K1</span>':''}</div><h2 id="drTitle">${esc(r.title)}</h2></div><button class="iconbtn" id="drClose" aria-label="Đóng chi tiết luật">${ic('x')}</button></div>
+  <div class="dr-b">${note}
+   <h3>Luật nói gì</h3><p>${why}</p>
+   <dl class="kv"><dt>Nguồn</dt><dd>${esc(srcL(r.src))}</dd><dt>Thuộc chuẩn</dt><dd>${STD_L[r.std]}</dd>
+    <dt>Cảnh báo lúc đang vẽ</dt><dd>${r.rt?'Bật (độ chính xác đã đạt ngưỡng)':'Tắt'+(r.kind==='r'?' · chưa đo đủ độ chính xác':'')}</dd>
+    <dt>Độ chính xác</dt><dd>${r.kind==='r'?(r.acc!=null?r.acc+'%':'Đang đo'):'—'}</dd>
+    <dt>Vi phạm 7 ngày</dt><dd>${r.hits==null?'—':r.hits}</dd></dl>
+   <h3>Áp dụng cho</h3>
+   <div class="fld"><span class="lb">Phòng</span>${chips('stages',Object.entries(STG),r.stages,can)}</div>
+   <div class="fld"><span class="lb">Vị trí (người phải tuân theo / xử lý lỗi)</span>${chips('roles',Object.entries(ROLES),r.roles,can)}</div>
+   <div class="fld"><span class="lb">Task liên quan (“Chặn” = bước chặn bàn giao)</span>${chips('tasks',Object.entries(TASKS).map(([k,t])=>[k,(t.gate?'Chặn: ':'')+t.n]),r.tasks,can)}</div>
+   <div class="fld"><span class="lb">Người phụ trách và duyệt</span><div><span class="pill info">${adm(r)}</span> <span style="font-size:13.5px;color:var(--text3)">gán theo nhóm luật, không gán từng luật</span></div></div>
+   ${r.params.length?`<h3>Tham số</h3>${r.params.map((p,i)=>`<div class="fld"><label for="drP${i}">${p.n}</label><input type="text" id="drP${i}" data-param="${i}" value="${esc(p.v)}"${dis}></div>`).join('')}`:''}
+   <h3>Trạng thái</h3><label class="sw"><input type="checkbox" id="drOn"${r.on?' checked':''}${dis}><span>Luật đang bật</span></label>
+   ${needWhy(r)?`<div class="fld" style="margin-top:12px"><label for="drWhy">Giải trình (bắt buộc khi nới lỏng: tắt luật hoặc đổi tham số)</label><input type="text" id="drWhy" value="${esc(r.why||'')}" placeholder="Vì sao nới lỏng, để ${adm(r)} quyết"${dis}></div>`:''}
+   ${r.exc?`<h3>Ngoại lệ Dự án K1</h3><div class="exc"><b>${esc(r.exc.txt)}</b><br>Lý do: ${esc(r.exc.why||'—')}<br>Hiệu lực đến <b>${r.exc.until}</b> · người duyệt: ${r.exc.by}${r.exc.isNew?' <span class="pill edit sm">chờ duyệt</span>':''}</div>`:''}
+   <h3>Lịch sử</h3><ul class="hist">${hist.map(([t,x])=>`<li><time>${t}</time><span>${x}</span></li>`).join('')}</ul>
+  </div>
+  <div class="dr-f">${can&&!r.proj&&!r.isNew?'<button class="btn-s" id="drExc">Thêm ngoại lệ cho Dự án K1</button>':''}<button class="btn-s" id="drReport">${ic('hand')}Báo luật này sai</button><span style="flex:1"></span><button class="btn-s" id="drDone">Đóng</button></div>`;
+ $('#drClose').onclick=$('#drDone').onclick=closeRule;
+ $('#drReport').onclick=()=>toast('Đã ghi nhận. Chỉ số lượng được gộp vào số tổng hợp, không kèm tên bạn (bản mẫu)');
+ const ex=$('#drExc');if(ex)ex.onclick=()=>openExcForm(r);
+ $$('#drawer [data-chip]').forEach(b=>b.onclick=()=>{
+  const k=b.dataset.chip,v=b.dataset.v,a=r[k],i=a.indexOf(v);if(i>=0)a.splice(i,1);else a.push(v);r[k]=byOrd(k,a);
+  renderRules();renderDrawer();const nb=$(`#drawer [data-chip="${k}"][data-v="${v}"]`);if(nb)nb.focus()});
+ const afterEdit=()=>{renderRules();renderDrawer();const w=$('#drWhy');if(w)w.focus()};
+ $('#drOn').onchange=e=>{r.on=e.target.checked;afterEdit()};
+ $$('#drawer [data-param]').forEach(i=>i.onchange=()=>{r.params[+i.dataset.param].v=i.value;afterEdit()});
+ const w=$('#drWhy');if(w)w.oninput=()=>{r.why=w.value;renderDraftBar()};
+}
+
+/* ----- thanh bản nháp + duyệt ----- */
+function renderDraftBar(D){
+ D=D||diffs();const bar=$('#draftbar');
+ if(RS.view==='pd'||(!D.length&&!RS.submitted)){bar.classList.remove('on');bar.innerHTML='';return}
+ const I=draftInfo(D);bar.classList.add('on');
+ if(!RS.submitted){
+  bar.innerHTML=`${ic('gear','color:var(--warn)')}<div class="tx"><b>Bản nháp · ${D.length} thay đổi</b>, chưa áp dụng cho ai. Duyệt xong sẽ tạo ${I.vers.join(' và ')}.</div><button class="btn-s" id="dfUndo">Bỏ nháp</button><button class="btn-p" id="dfView">Xem thay đổi &amp; gửi duyệt</button>`;
+  $('#dfUndo').onclick=()=>{undoDraft();renderRules();renderDrawer();toast('Đã bỏ bản nháp, luật quay về như cũ')};
+  $('#dfView').onclick=openDraftReview;
+ }else{
+  const pend=I.grps.filter(g=>!RS.appr.includes(g)),mine=RS.view==='ad'&&pend.includes(RS.adm);
+  bar.innerHTML=`${ic('check','color:var(--ok)')}<div class="tx"><b>Đã gửi duyệt</b> · ${RS.appr.length?'đã duyệt: '+RS.appr.map(admL).join(', ')+'. ':''}Chờ ${pend.map(admL).join(', ')}. Cho tới khi duyệt xong, mọi người vẫn dùng chuẩn cũ.</div><button class="btn-s" id="dfWithdraw">Rút lại</button>${mine?`<button class="btn-p" id="dfPub">Duyệt phần của ${admL(RS.adm)}</button>`:''}`;
+  $('#dfWithdraw').onclick=()=>{RS.submitted=false;RS.appr=[];renderRules()};
+  const p=$('#dfPub');if(p)p.onclick=approveMine;
+ }
+}
+function openDraftReview(){
+ const D=diffs(),I=draftInfo(D),m=$('#mDraftBody');
+ m.innerHTML=`<h3 id="mdT">Xem thay đổi trước khi gửi duyệt</h3>
+  <p class="lead">Chưa ghi gì vào chuẩn đang dùng. Sau khi duyệt, kết quả là <b>phiên bản mới</b>; phiên bản cũ vẫn còn để quay lại.</p>
+  ${D.map(d=>`<div class="op" style="margin-bottom:8px"><b>${d.r.id}</b> · ${d.what}${d.loose?' <span class="pill warn sm">Nới lỏng</span>':''}<div class="diff">${d.from!=null?`<div class="m">− ${esc(d.from)}</div>`:''}<div class="p">+ ${esc(d.to)}</div></div>${d.loose?`<div style="margin-top:6px;font-size:14px">Giải trình: ${d.why&&d.why.trim()?esc(d.why):'<b style="color:var(--err-fg)">chưa có</b>'}</div>`:''}</div>`).join('')}
+  <div class="impact"><b>Ảnh hưởng ước tính:</b> ${I.det?'Thay đổi này làm đổi kết quả kiểm. Chạy thử trên 12 bản vẽ tổng hợp gần đây: <b>+3 cảnh báo mới, 0 lỗi mới</b> (số minh hoạ).':'Chỉ đổi cách gắn phòng/vị trí/task, không đổi cách phát hiện lỗi: kết quả quét giữ nguyên, chỉ đổi người nhận và bước bị chặn.'}</div>
+  <p style="margin:0 0 4px"><b>Phiên bản sẽ tạo:</b> ${I.vers.join(' và ')}.</p>
+  <p style="margin:0 0 10px"><b>Người duyệt:</b> ${I.owners.join(', ')||'—'} (mỗi admin duyệt phần luật của nhóm mình).</p>
+  ${I.noWhy.length?`<div class="impact" style="background:var(--err-bg);color:var(--err-fg)" role="alert">Thiếu giải trình (tối thiểu 10 ký tự) cho: ${[...new Set(I.noWhy.map(d=>d.r.id))].join(', ')}. Nới lỏng luật phải có giải trình rõ ràng mới gửi được.</div>`:''}
+  <div class="ft"><button class="btn-s" id="mdNo">Quay lại</button><button class="btn-p" id="mdYes"${I.noWhy.length?' disabled':''}>Gửi duyệt</button></div>`;
+ $('#mDraft').classList.add('on');$('#mdNo').onclick=()=>$('#mDraft').classList.remove('on');
+ $('#mdYes').onclick=()=>{$('#mDraft').classList.remove('on');RS.submitted=true;RS.appr=[];
+  if(RS.view==='ad'&&I.grps.length===1&&I.grps[0]===RS.adm){approveMine();return}
+  renderRules();toast('Đã gửi duyệt cho '+I.owners.join(', ')+' (bản mẫu)')};
+ $('#mdNo').focus()}
+function approveMine(){
+ const I=draftInfo(diffs());if(!RS.appr.includes(RS.adm))RS.appr.push(RS.adm);
+ if(I.grps.every(g=>RS.appr.includes(g)))publish();else{renderRules();toast('Đã duyệt phần của '+admL(RS.adm)+'. Còn chờ nhóm khác (bản mẫu)')}}
+function publish(){
+ const D=diffs(),I=draftInfo(D);
+ if(I.co)RS.ver.co=bump(RS.ver.co);if(I.pj)RS.ver.k1++;
+ HIST.unshift(['04/11/2026',[I.co?'furniture-v'+RS.ver.co:'',I.pj?'Overlay Dự án K1 v'+RS.ver.k1:''].filter(Boolean).join(' · '),`${D.length} thay đổi: ${[...new Set(D.map(d=>d.r.id))].join(', ')}`]);
+ RULES.forEach(r=>{r.isNew=false;r.why='';if(r.exc)r.exc.isNew=false;r.base=snap(r)});
+ RS.submitted=false;RS.appr=[];renderRules();renderDrawer();toast('Đã công bố phiên bản mới (bản mẫu)')}
+
+/* ----- form thêm luật / ngoại lệ ----- */
+const fld=(l,id,inner)=>`<div class="fld"><label for="${id}">${l}</label>${inner}</div>`;
+function openRuleForm(){
+ Object.assign(FORM,{title:'',sev:'W',src:'Yêu cầu khách K1',kind:'m',stages:[STAGE_KEY[stage]],roles:[],tasks:[],err:''});
+ renderRuleForm();$('#mRule').classList.add('on');$('#fTitle').focus()}
+function renderRuleForm(){
+ const F=FORM;
+ $('#mRuleBody').innerHTML=`<h3 id="mrT">Thêm luật riêng cho Dự án K1</h3>
+  <p class="lead">Luật này chỉ có hiệu lực trong Dự án K1, thêm vào bản nháp rồi qua duyệt. Luật của công ty không bị sửa.</p>
+  ${fld('Luật nói gì (một câu, kiểm được đúng/sai)','fTitle',`<input type="text" id="fTitle" value="${esc(F.title)}" placeholder="Ví dụ: Ghi chú dán cạnh ABS 1 mm cho mọi cạnh lộ">`)}
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+   ${fld('Mức','fSev',`<select id="fSev"><option value="E"${F.sev==='E'?' selected':''}>Lỗi (chặn bàn giao)</option><option value="W"${F.sev==='W'?' selected':''}>Cảnh báo</option></select>`)}
+   ${fld('Nguồn yêu cầu','fSrc',`<select id="fSrc">${['Yêu cầu khách K1','Hợp đồng K1','Quyết định nội bộ'].map(s=>`<option${F.src===s?' selected':''}>${s}</option>`).join('')}</select>`)}
+  </div>
+  <div class="fld"><span class="lb">Cách kiểm (AI không quyết đúng/sai, nên luật phải kiểm được bằng một trong ba cách)</span>
+   ${[['tpl','Dùng mẫu luật có sẵn, chỉ chỉnh tham số','Nhanh nhất. Ví dụ đổi chiều cao chữ, tỉ lệ cho phép, tiền tố layer.'],['m','Mục kiểm tay: người kiểm tick ở bước ký duyệt','Dùng khi máy chưa kiểm được. Hiện trong gói bàn giao.'],['n','Cần luật mới: gửi yêu cầu cho lập trình viên viết code','Chưa chạy cho tới khi có code và có ca thử.']].map(([v,t,d])=>`<label class="opt"><input type="radio" name="fk" value="${v}"${F.kind===v?' checked':''}><span><b>${t}</b><br><span class="d">${d}</span></span></label>`).join('')}</div>
+  <div class="fld"><span class="lb">Phòng áp dụng</span>${chips('stages',Object.entries(STG),F.stages,true)}</div>
+  <div class="fld"><span class="lb">Vị trí</span>${chips('roles',Object.entries(ROLES),F.roles,true)}</div>
+  <div class="fld"><span class="lb">Task liên quan (“Chặn” = bước chặn bàn giao)</span>${chips('tasks',Object.entries(TASKS).map(([k,t])=>[k,(t.gate?'Chặn: ':'')+t.n]),F.tasks,true)}</div>
+  <p style="font-size:14px;color:var(--text2);margin:0 0 10px">Người duyệt: <b>${admL('PJ')}</b>. Luật chưa duyệt thì chưa chạy.</p>
+  ${F.err?`<div class="impact" style="background:var(--err-bg);color:var(--err-fg)" role="alert">${F.err}</div>`:''}
+  <div class="ft"><button class="btn-s" id="frNo">Huỷ</button><button class="btn-p" id="frYes">Thêm vào bản nháp</button></div>`;
+ $('#fTitle').oninput=e=>F.title=e.target.value;$('#fSev').onchange=e=>F.sev=e.target.value;$('#fSrc').onchange=e=>F.src=e.target.value;
+ $$('#mRuleBody [name=fk]').forEach(r=>r.onchange=()=>F.kind=r.value);
+ $$('#mRuleBody [data-chip]').forEach(b=>b.onclick=()=>{const k=b.dataset.chip,v=b.dataset.v,a=F[k],i=a.indexOf(v);if(i>=0)a.splice(i,1);else a.push(v);F[k]=byOrd(k,a);renderRuleForm();const nb=$(`#mRuleBody [data-chip="${k}"][data-v="${v}"]`);if(nb)nb.focus()});
+ $('#frNo').onclick=()=>$('#mRule').classList.remove('on');
+ $('#frYes').onclick=()=>{
+  if(!F.title.trim())F.err='Hãy viết luật nói gì.';else if(!F.stages.length||!F.roles.length||!F.tasks.length)F.err='Chọn ít nhất một phòng, một vị trí và một task để luật có người nhận và có chỗ chặn.';else F.err='';
+  if(F.err){renderRuleForm();return}
+  const n=RULES.filter(r=>r.proj).length+1,id='PJ-K1-0'+n;
+  const r=mk([id,F.title.trim(),F.sev,F.src,'p',F.kind==='tpl'?'r':F.kind,null,F.stages.join(''),'',F.roles.join(','),F.tasks.join(','),null]);r.isNew=true;RULES.push(r);
+  $('#mRule').classList.remove('on');RS.scope='k1';renderRules();openRule(id);toast('Đã thêm '+id+' vào bản nháp. Chưa áp dụng cho ai.')}}
+function openExcForm(r){
+ $('#mRuleBody').innerHTML=`<h3 id="mrT">Thêm ngoại lệ cho ${r.id}</h3>
+  <p class="lead">Ngoại lệ chỉ có hiệu lực trong Dự án K1 và <b>tự hết hạn</b>. Luật gốc của công ty giữ nguyên.</p>
+  <p style="margin:0 0 12px"><b>${esc(r.title)}</b></p>
+  ${fld('Cho phép gì','xTxt',`<input type="text" id="xTxt" placeholder="Ví dụ: Cho phép tỉ lệ 1:25 cho mặt đứng tủ bếp">`)}
+  ${fld('Giải trình (bắt buộc, tối thiểu 10 ký tự)','xWhy',`<input type="text" id="xWhy" placeholder="Vì sao cần nới lỏng, để admin quyết">`)}
+  ${fld('Hiệu lực đến (yyyy-mm-dd)','xUntil',`<input type="text" id="xUntil" value="2026-11-30" inputmode="numeric">`)}
+  <p style="font-size:14px;color:var(--text2)">Nới lỏng luật phải có giải trình rõ ràng và được <b>${adm(r)}</b> phê duyệt. Chưa duyệt thì luật gốc vẫn chạy.</p>
+  <div id="xErr"></div>
+  <div class="ft"><button class="btn-s" id="xNo">Huỷ</button><button class="btn-p" id="xYes">Thêm vào bản nháp</button></div>`;
+ $('#mRule').classList.add('on');$('#xTxt').focus();
+ $('#xNo').onclick=()=>$('#mRule').classList.remove('on');
+ $('#xYes').onclick=()=>{
+  const t=$('#xTxt').value.trim(),w=$('#xWhy').value.trim(),m=/^(\d{4})-(\d{2})-(\d{2})$/.exec($('#xUntil').value.trim());
+  if(!t||w.length<10||!m){$('#xErr').innerHTML=`<div class="impact" style="background:var(--err-bg);color:var(--err-fg)" role="alert">${!t?'Hãy ghi cho phép gì.':w.length<10?'Cần giải trình rõ ràng (tối thiểu 10 ký tự) để admin quyết.':'Ngày hết hạn theo dạng yyyy-mm-dd, ví dụ 2026-11-30.'}</div>`;return}
+  r.exc={txt:t,why:w,until:`${m[3]}/${m[2]}/${m[1]}`,by:adm(r),isNew:true};
+  $('#mRule').classList.remove('on');renderRules();renderDrawer();toast('Đã thêm ngoại lệ vào bản nháp (bản mẫu)')}}
+
+/* ----- CSV ----- */
+function exportCsv(){
+ const rows=[['Mã','Luật','Mức','Nguồn','Chuẩn','Tình trạng','Phòng','Vị trí','Phụ trách','Task']];
+ RULES.filter(inScope).forEach(r=>rows.push([r.id,r.title,SEV[r.sev][1],srcL(r.src),STD_L[r.std],KIND[r.kind][1]+(r.on?'':' (tắt)'),nm(r.stages,STG),nm(r.roles,ROLES),adm(r),nm(r.tasks,TASKS)]));
+ const txt='﻿'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\r\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/csv;charset=utf-8'}));a.download='luat-ap-dung-'+(RS.scope==='k1'?'K1':'cong-ty')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+ toast('Đã tải bản kê luật (bản mẫu)')}
+
+/* ----- nối sự kiện ----- */
+$('#fRole').innerHTML='<option value="">Tất cả</option>'+Object.entries(ROLES).map(([k,l])=>`<option value="${k}">${l}</option>`).join('');
+$('#fTask').innerHTML='<option value="">Tất cả</option>'+Object.entries(TASKS).map(([k,t])=>`<option value="${k}">${STG[t.s]} · ${t.n}</option>`).join('');
+$('#rq').oninput=e=>{RS.q=e.target.value;renderRules()};
+$('#fRole').onchange=e=>{RS.role=e.target.value;renderRules()};
+$('#fTask').onchange=e=>{RS.task=e.target.value;renderRules()};
+$('#fKind').onchange=e=>{RS.kind=e.target.value;renderRules()};
+$('#fGroup').onchange=e=>{RS.group=e.target.value;renderRules()};
+$$('#scopeSeg button').forEach(b=>b.onclick=()=>{RS.scope=b.dataset.v;renderRules()});
+$('#viewRole').onchange=e=>{RS.view=e.target.value;renderRules();renderDrawer()};
+$('#admGrp').onchange=e=>{RS.adm=e.target.value;renderRules();renderDrawer()};
+$('#csvBtn').onclick=exportCsv;
+$('#addRuleBtn').onclick=()=>{if(RS.view==='pd'){toast('Thợ vẽ chỉ xem. Nhờ trưởng phòng thêm luật cho dự án.');return}openRuleForm()};
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;
+ const open=$$('.modal-bg.on');if(open.length){open.forEach(m=>m.classList.remove('on'));return}
+ if(RS.open)closeRule()});
+
+/* ---------- init ---------- */
+setStage('design');
+if(q.get('stage'))setStage(q.get('stage'));
+if(q.get('go'))go(q.get('go'));
+</script>
+</body>
+</html>

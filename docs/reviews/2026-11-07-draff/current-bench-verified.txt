@@ -1,0 +1,19 @@
+Người trả lời: bench.reference:answer
+Tác vụ                   | Kết quả | Thời gian (s) | Token | Chi phí (USD)
+-------------------------+---------+---------------+-------+--------------
+B01-dem-loi-e-furniture  | ĐÚNG    | 0.055         | 0     | 0.0000       
+B02-vs-hygiene-bad       | ĐÚNG    | 0.031         | 0     | 0.0000       
+B03-layer-du-xref        | ĐÚNG    | 0.028         | 0     | 0.0000       
+B04-kich-thuoc-ghi-de    | ĐÚNG    | 0.020         | 0     | 0.0000       
+B05-hygiene-ok-sach      | ĐÚNG    | 0.023         | 0     | 0.0000       
+B06-ho-so-cong-ty        | ĐÚNG    | 0.041         | 0     | 0.0000       
+B07-records-capped       | ĐÚNG    | 0.020         | 0     | 0.0000       
+B08-ghi-chu-ban-giao     | ĐÚNG    | 0.029         | 0     | 0.0000       
+B09-an-danh-khong-lo-ten | ĐÚNG    | 0.030         | 0     | 0.0000       
+B10-luat-bo-qua          | ĐÚNG    | 0.054         | 0     | 0.0000       
+B11-giai-thich-vs06      | ĐÚNG    | 0.008         | 0     | 0.0000       
+B12-tom-tat-mo-hinh      | ĐÚNG    | 0.021         | 0     | 0.0000       
+-------------------------+---------+---------------+-------+--------------
+TỔNG                     | 12/12   | 0.361         | 0     | 0.0000       
+Tỉ lệ đúng: 100.0%
+

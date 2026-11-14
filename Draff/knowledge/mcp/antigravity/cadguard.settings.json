@@ -1,0 +1,11 @@
+{
+  "toolPermission": "request-review",
+  "agentMode": "",
+  "allowNonWorkspaceAccess": false,
+  "enableTerminalSandbox": true,
+  "permissions": {
+    "allow": ["mcp(cad-guard/*)", "mcp(cad-guard-ho-so/*)"],
+    "ask": [],
+    "deny": ["read_file(*)", "write_file(*)", "command(*)", "read_url(*)", "execute_url(*)"]
+  }
+}

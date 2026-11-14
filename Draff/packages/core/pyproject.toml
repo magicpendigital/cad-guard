@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cadguard"
+version = "0.1.0"
+description = "cad-guard: kiểm tra và chuẩn hoá bản vẽ nội thất theo luật tất định (lõi, chạy cục bộ, không cần LLM)"
+requires-python = ">=3.10,<3.15"
+dependencies = [
+  "ezdxf>=1.3",
+  "pydantic>=2.5",
+  "pyyaml>=6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+# Máy chủ MCP stdio (`python -m cadguard mcp`); SDK chính thức, giấy phép MIT (xem docs/licenses.md).
+agent = ["mcp>=1.10,<2"]
+# Kho khoá hệ điều hành cho `cadguard keys` (tuỳ chọn; MIT, xem docs/licenses.md). Không có thì dùng biến môi trường.
+keyring = ["keyring>=25,<26"]
+# Studio (`cadguard studio`) gọi Anthropic qua thư viện chuẩn như trợ lý (assistant/api_engines.py): không cần
+# SDK `anthropic`, nên không có extras `llm` (xem docs/licenses.md mục SDK anthropic).
+
+[project.scripts]
+cadguard = "cadguard.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["cadguard*"]
+
+[tool.setuptools.package-data]
+# Giao diện cục bộ `cadguard app`: tệp tĩnh + cấu hình phòng.
+"cadguard.app" = ["departments.json", "static/*.html", "static/*.css", "static/*.js"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Test "slow" (tệp DXF tổng hợp >= 100 MB) không chạy mặc định; chạy bằng: python scripts/test.py -m slow
+addopts = "-q -m \"not slow\""
+markers = ["slow: test hiệu năng tệp rất lớn, chỉ chạy khi gọi -m slow"]

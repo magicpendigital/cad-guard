@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>CAD Guard Studio v1.0 — Kiểm toán 2D, Diff ChangeSet, 3D &amp; Bàn giao Nội thất</title>
+<meta name="description" content="Unified CAD Guard Studio v1.0: Kiểm toán bản vẽ DXF nội thất tất định, xem trước Diff ChangeSet, dựng 3D &amp; công thái học, và ghi chú bàn giao liên phòng ban."/>
+<meta property="og:title" content="CAD Guard Studio v1.0 — Kiểm toán 2D, Diff ChangeSet, 3D &amp; Bàn giao Nội thất"/>
+<meta property="og:description" content="Unified CAD Guard Studio v1.0: Kiểm toán bản vẽ DXF nội thất tất định, xem trước Diff ChangeSet, dựng 3D &amp; công thái học, và ghi chú bàn giao liên phòng ban."/>
+<link rel="stylesheet" href="/app.css"/>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Bỏ qua tới nội dung chính</a>
+<div class="app">
+
+<!-- ============ SINGLE COMPACT TOP NAVIGATION BAR (1-ROW HEADER) ============ -->
+<header class="topbar">
+  <!-- Góc Trái: Logo + Dự án + Chuẩn + Phòng ban -->
+  <div class="tb-left">
+    <div class="brand" id="brandHomeBtn" title="CAD Guard Unified Studio v1.0">
+      <span class="logo"><svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V7l8-4z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      <span class="brand-txt">CAD Guard</span>
+      <span class="pill ok sm">v1.0</span>
+    </div>
+
+    <!-- Bộ chọn Dự án -->
+    <div class="pick">
+      <button class="chip proj-chip" id="projBtn" aria-haspopup="listbox" aria-expanded="false" title="Chọn dự án">
+        <svg class="i" viewBox="0 0 24 24"><path d="M3 7v11a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+        <b id="projName">Dự án K1</b>
+        <svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="menu proj-menu" id="projMenu" role="listbox" aria-label="Chọn dự án" hidden></div>
+    </div>
+
+    <!-- Badge Chuẩn + Hồ sơ công ty -->
+    <button class="chip std-chip" id="topStdChip" type="button" title="Xem bộ luật áp dụng của chuẩn và hồ sơ công ty">
+      <svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+      <span id="topStdLabel">furniture-v0.1.0 + Company Profile</span>
+    </button>
+
+    <!-- Bộ chọn Phòng ban -->
+    <div class="pick">
+      <button class="chip" id="deptBtn" aria-haspopup="listbox" aria-expanded="false" title="Đổi phòng ban làm việc">
+        <svg class="i" viewBox="0 0 24 24"><path d="M3 21h18M5 21V8l7-5 7 5v13M9 21v-6h6v6"/></svg>
+        <span>Phòng: <b id="deptName">Thiết kế</b></span>
+        <svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="menu" id="deptMenu" role="listbox" aria-label="Chọn phòng" hidden></div>
+    </div>
+  </div>
+
+  <!-- Chính Giữa: 4-Mode Workspace Switcher -->
+  <nav class="mode-switcher" id="studioModeBar" role="tablist" aria-label="Chế độ làm việc Unified Studio">
+    <button role="tab" type="button" class="mode-btn" data-smode="audit" aria-selected="true">
+      <span class="m-ic">🔍</span><span>1. Kiểm toán 2D (Audit)</span>
+    </button>
+    <button role="tab" type="button" class="mode-btn" data-smode="diff" aria-selected="false">
+      <span class="m-ic">⚡</span><span>2. Duyệt Sửa Đổi (Diff &amp; ChangeSet)</span>
+    </button>
+    <button role="tab" type="button" class="mode-btn" data-smode="scene" aria-selected="false">
+      <span class="m-ic">🧊</span><span>3. Không gian 3D &amp; Cụm (3D Scene)</span>
+    </button>
+    <button role="tab" type="button" class="mode-btn" data-smode="review" aria-selected="false">
+      <span class="m-ic">📌</span><span>4. Bàn giao &amp; Ghi chú (Review)</span>
+    </button>
+  </nav>
+
+  <!-- Góc Phải: AI Engine + AutoCAD Sync + Visual QA + Chia sẻ + Cài đặt -->
+  <div class="tb-right">
+    <div class="pick">
+      <button class="chip" id="engineBtn" aria-haspopup="listbox" aria-expanded="false" title="Chọn mô hình AI">
+        <svg class="i" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="3"/><path d="M9 11v2M15 11v2M12 2v4"/></svg>
+        <b id="engineName">Gemini 2.5 Flash</b>
+        <svg class="i" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="menu" id="engineMenu" role="listbox" aria-label="Chọn cách dùng trợ lý" hidden></div>
+    </div>
+
+    <button class="chip plugin-chip" id="pluginChip" title="Đồng bộ AutoCAD Live Sync qua MCP">
+      <span class="dot ok"></span><span>AutoCAD: <b id="pluginStatTxt">Live Sync</b></span>
+    </button>
+
+    <button class="btn-s btn-xs" id="qaSnapBtn" type="button" title="Chụp trạng thái kiểm tra Visual QA &amp; hợp đồng dữ liệu">
+      📸 Visual QA Check
+    </button>
+
+    <button class="btn-s btn-xs" id="shareTailscaleBtn" type="button" title="Chia sẻ phiên duyệt bản vẽ nội bộ qua Tailscale / LAN">
+      🔗 Chia sẻ (Tailscale)
+    </button>
+
+    <!-- Nút Cài đặt mở nhanh Luật áp dụng, Tổng quan, Việc của tôi, Kết nối AI & CAD -->
+    <div class="pick">
+      <button class="btn-s btn-xs" id="settingsMenuBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="Mở Cài đặt, Luật áp dụng, Tổng quan &amp; Kết nối">
+        ⚙️ Cài đặt
+      </button>
+      <div class="menu settings-menu" id="settingsMenu" role="menu" hidden>
+        <button role="menuitem" type="button" data-go="work">
+          <svg class="i" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+          <span><b>Unified Studio (4-Panel)</b><br><span class="d">Không gian làm việc chính 2D / Diff / 3D / Review</span></span>
+        </button>
+        <button role="menuitem" type="button" data-go="rules">
+          <svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <span><b>Luật áp dụng (58 Luật)</b><br><span class="d">Danh mục luật furniture-v0 &amp; design-hygiene-v0</span></span>
+        </button>
+        <button role="menuitem" type="button" data-go="overview">
+          <svg class="i" viewBox="0 0 24 24"><path d="M4 19h16M7 16V9M12 16V5M17 16v-4"/></svg>
+          <span><b>Tổng quan Dự án</b><br><span class="d">Tiến độ các phòng ban &amp; thống kê lỗi phổ biến</span></span>
+        </button>
+        <button role="menuitem" type="button" data-go="home">
+          <svg class="i" viewBox="0 0 24 24"><path d="M3 11l9-8 9 8v10H3z"/></svg>
+          <span><b>Việc của tôi &amp; Bàn giao</b><br><span class="d">Hàng đợi bản vẽ nhận từ phòng trước</span></span>
+        </button>
+        <button role="menuitem" type="button" data-go="connect">
+          <svg class="i" viewBox="0 0 24 24"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 01-10 0V7zM12 16v5"/></svg>
+          <span><b>Kết nối AI &amp; Plugin AutoCAD</b><br><span class="d">Cấu hình CLI, API Key &amp; MCP Companion</span></span>
+        </button>
+        <div class="menu-sep"></div>
+        <button role="menuitem" type="button" id="newProjTopBtn">
+          <svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+          <span><b>+ Tạo dự án / Mở thư mục mới</b><br><span class="d">Quét thư mục máy tính hoặc Google Drive</span></span>
+        </button>
+      </div>
+    </div>
+
+    <button class="iconbtn" id="themeBtn" aria-label="Đổi giao diện sáng/tối" title="Sáng / tối">
+      <svg class="i" id="themeIc" viewBox="0 0 24 24"></svg>
+    </button>
+  </div>
+</header>
+
+<!-- ============ UNIFIED CAD GUARD STUDIO v1.0 (MÀN HÌNH CHÍNH MẶC ĐỊNH) ============ -->
+<main class="screen on" id="s-work" aria-label="Không gian làm việc Unified CAD Guard Studio">
+
+  <!-- PANEL 2: LEFT INSPECTOR & AUDIT TREE (310px, 3 khu vực rõ ràng) -->
+  <aside class="col left" aria-label="Cây kiểm toán bản vẽ, danh sách lỗi và bộ lọc layer">
+
+    <!-- KHU VỰC A: BẢN VẼ & THỐNG KÊ NHANH (FILES & TELEMETRY) -->
+    <div class="left-sec sec-files">
+      <div class="col-h">
+        <span id="leftProjHdr">BẢN VẼ DỰ ÁN</span>
+        <div class="hdr-acts">
+          <button class="f-link" type="button" id="sideUploadDxfBtn" title="Tải nhanh 1 tệp DXF từ máy tính">+ Tải DXF</button>
+          <span>·</span>
+          <button class="f-link" type="button" id="sideNewProjBtn" title="Mở thư mục dự án hoặc Google Drive">Mở thư mục</button>
+        </div>
+      </div>
+
+      <!-- 4 Mini-badges Thống kê nhanh -->
+      <div class="telemetry-grid" id="leftTelemetry">
+        <div class="tel-badge"><b id="statEnts">10,001</b><span>Đối tượng</span></div>
+        <div class="tel-badge"><b id="statLayers">47</b><span>Layers</span></div>
+        <div class="tel-badge err"><b id="statErrs">5</b><span>Lỗi cần xử lý</span></div>
+        <div class="tel-badge info"><b id="statClusters">1</b><span>Cụm 3D</span></div>
+      </div>
+
+      <!-- Danh sách tệp DXF -->
+      <div class="files-scroll">
+        <div class="files" id="files"></div>
+        <div class="col-h sub-col-h"><span>THƯ MỤC DỰ ÁN</span><span class="cnt" id="wsCount">7</span></div>
+        <div class="files" id="wsFiles"></div>
+      </div>
+
+      <!-- Nút hành động nhanh tệp -->
+      <div class="file-quick-btns">
+        <button class="btn-s btn-xs" id="scanAll" type="button" title="Quét toàn bộ tệp DXF trong thư mục">
+          <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Quét thư mục
+        </button>
+        <button class="btn-s btn-xs" id="reportHtmlBtn" type="button" title="Xuất báo cáo thẩm định HTML">
+          <svg class="i" viewBox="0 0 24 24"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/></svg>Báo cáo HTML
+        </button>
+        <button class="btn-s btn-xs" id="stdLink" type="button" title="Xem chi tiết chuẩn và luật">
+          Luật (<span id="stdName">furniture-v0.1.0</span>)
+        </button>
+      </div>
+      <div hidden><span id="stdRules"></span></div>
+      <input type="file" id="singleDxfInput" accept=".dxf,.DXF" hidden/>
+    </div>
+
+    <!-- KHU VỰC B: DANH SÁCH LỖI & VI PHẠM CHUẨN (TRỰC TIẾP Ở CỘT TRÁI!) -->
+    <div class="left-sec sec-findings">
+      <div class="col-h">
+        <span>DANH SÁCH LỖI &amp; VI PHẠM</span>
+        <span class="cnt hot" id="cntF">6</span>
+      </div>
+
+      <!-- Thanh lọc nhanh theo mức độ / nhóm -->
+      <div class="find-filter-pills" id="leftFindFilters" role="group" aria-label="Bộ lọc lỗi nhanh">
+        <button type="button" class="ff-pill on" data-lflt="all">Tất cả (<span id="fltAllCnt">6</span>)</button>
+        <button type="button" class="ff-pill" data-lflt="err">Nghiêm trọng</button>
+        <button type="button" class="ff-pill" data-lflt="hygiene">Vệ sinh CAD</button>
+        <button type="button" class="ff-pill" data-lflt="furniture">Nội thất</button>
+        <button type="button" class="ff-pill" data-lflt="fixable">Sửa tự động được</button>
+      </div>
+
+      <!-- Bộ lọc Lớp 1 / Lớp 2 AI (giữ tương thích) -->
+      <div class="tier-bar compact" id="tierBar" role="group" aria-label="Lọc theo Lớp kiểm tra">
+        <button class="tier-btn" data-tier="all" aria-pressed="true">Mọi lớp</button>
+        <button class="tier-btn" data-tier="code" aria-pressed="false">Lớp 1 · Code</button>
+        <button class="tier-btn ai-pill" data-tier="ai" aria-pressed="false">✨ Lớp 2 · AI</button>
+      </div>
+
+      <!-- Danh sách thẻ lỗi hiển thị trực tiếp ở cột trái -->
+      <div class="left-finds-list" id="finds" aria-live="polite"></div>
+    </div>
+
+    <!-- KHU VỰC C: BẬT/TẮT LAYER & CỤM KHÔNG GIAN (LAYER & CLUSTER SWITCHER) -->
+    <div class="left-sec sec-layers">
+      <div class="col-h">
+        <span>BỘ LỌC LAYER &amp; CỤM</span>
+        <button class="f-link" type="button" id="resetLayersBtn">Hiện tất cả</button>
+      </div>
+      <div class="layer-chips" id="layerChipsBar" aria-label="Bật tắt nhanh các Layer chính">
+        <button type="button" class="lyr-chip on" data-layer="A-WALL"><span class="ldot wall"></span>A-WALL</button>
+        <button type="button" class="lyr-chip on" data-layer="E-FURNITURE"><span class="ldot furn"></span>E-FURNITURE</button>
+        <button type="button" class="lyr-chip on" data-layer="DIM"><span class="ldot dim"></span>DIM</button>
+        <button type="button" class="lyr-chip on" data-layer="TEXT"><span class="ldot txt"></span>TEXT</button>
+        <button type="button" class="lyr-chip on" data-layer="DEFPOINTS"><span class="ldot def"></span>DEFPOINTS</button>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- PANEL 3: CENTER MULTI-MODE VIEWPORT (KHUNG NHÌN TRUNG TÂM ĐA CHẾ ĐỘ) -->
+  <section class="center" id="main" aria-label="Khung nhìn trung tâm đa chế độ">
+
+    <!-- Thanh công cụ nổi phía trên Viewport -->
+    <div class="cv-tools">
+      <div class="cv-file-meta">
+        <strong id="cvTitle">tu-bep-A.dxf</strong>
+        <span class="pill neu sm" id="viewTag">Mặt đứng · 1:20</span>
+        <span class="pill info sm" id="activeModePill">Chế độ 1: Kiểm toán 2D</span>
+      </div>
+
+      <!-- Thanh so sánh Trước / Sau khi ở chế độ Diff hoặc có đề xuất -->
+      <span class="cmp-label" id="cmpLabel">So sánh Diff:</span>
+      <div class="seg" id="cmp" role="group" aria-label="So sánh trước và sau">
+        <button data-v="before" aria-pressed="false" title="Bản gốc trước khi sửa (Đỏ)">Trước (Gốc)</button>
+        <button data-v="after" aria-pressed="true" title="Sau khi áp dụng ChangeSet (Xanh lá)">Sau (ChangeSet)</button>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="cv-act-group">
+        <button class="btn-p btn-sm" id="scanNowBtn" title="Chạy kiểm toán 2 lớp: Luật tất định + AI">
+          <svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>Quét bản vẽ
+        </button>
+        <button class="btn-s btn-sm" id="runAiBtn" title="Chạy riêng Lớp 2: AI phân tích sâu kích thước chuỗi &amp; khe hở phụ kiện">
+          ✨ AI phân tích sâu
+        </button>
+        <button class="btn-s btn-sm" id="exportGlbBtn" title="Xuất mô hình 3D tất định sang tệp .GLB">
+          <svg class="i" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>Xuất .GLB
+        </button>
+        <button class="btn-s btn-sm" id="syncCadBtn" title="Khoanh vùng &amp; Zoom trực tiếp tới vị trí lỗi trên AutoCAD">
+          📍 Zoom AutoCAD
+        </button>
+
+        <!-- Chuyển nhanh 2D / 3D phụ trợ -->
+        <div class="seg" id="canvasModeSeg" role="group" aria-label="Chế độ hiển thị khung vẽ">
+          <button data-mode="2d" aria-pressed="true">2D</button>
+          <button data-mode="3d" aria-pressed="false">🧊 3D <span class="cnt" id="gapBadge">1</span></button>
+        </div>
+
+        <div class="seg zoom-seg" role="group" aria-label="Thu phóng bản vẽ">
+          <button id="zoomOutBtn" title="Thu nhỏ">−</button>
+          <button id="zoomResetBtn" title="Đặt lại tỉ lệ 100%">100%</button>
+          <button id="zoomInBtn" title="Phóng to">+</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Thanh chọn Trang / Artboard (Multi-Sheet & Cluster Selector) -->
+    <div class="artboard-bar" id="artboardBar" role="tablist" aria-label="Danh sách các trang bản vẽ (Artboards)"></div>
+
+    <!-- Banner Chế độ 2: Duyệt Sửa Đổi (Diff & ChangeSet Preview) -->
+    <div class="mode-banner diff-banner" id="diffModeBanner" hidden>
+      <div class="mb-left">
+        <span class="pill warn sm">⚡ Chế độ Diff Trước / Sau</span>
+        <span>Đang đối chiếu trực tiếp trên bản vẽ: <b class="diff-red">Trước khi sửa (Đỏ/Vàng)</b> vs <b class="diff-green">Sau khi áp dụng ChangeSet (Xanh lá nét đứt)</b>.</span>
+      </div>
+      <div class="mb-right">
+        <button class="btn-s btn-xs" type="button" id="diffToggleBeforeBtn">Xem Trước (Đỏ)</button>
+        <button class="btn-s btn-xs" type="button" id="diffToggleAfterBtn">Xem Sau (Xanh lá)</button>
+        <button class="btn-p btn-xs" type="button" id="diffApplyNowBtn">✅ Áp dụng ra tệp _v2.dxf</button>
+      </div>
+    </div>
+
+    <!-- Banner Chế độ 4: Bàn giao & Ghi chú (Review Canvas Pin Mode) -->
+    <div class="mode-banner review-banner" id="reviewModeBanner" hidden>
+      <div class="mb-left">
+        <span class="pill info sm">📌 Chế độ Ghi chú Bàn giao (Review Canvas)</span>
+        <span><b>Click trực tiếp lên bất kỳ vị trí nào trên bản vẽ 2D</b> để ghim ghi chú bàn giao giữa Thiết kế — Kỹ thuật — Sản xuất.</span>
+      </div>
+      <div class="mb-right">
+        <input type="text" id="quickPinInput" class="pin-inp" placeholder="Nội dung ghim (VD: Kiểm tra lại khe hở bản lề Blum 2.5mm)..."/>
+        <button class="btn-p btn-xs" type="button" id="addCenterPinBtn">+ Ghim lên tâm bản vẽ</button>
+      </div>
+    </div>
+
+    <!-- KHUNG VẼ 2D / DIFF / REVIEW CANVAS -->
+    <div class="sheet" id="sheet"></div>
+
+    <!-- KHUNG VẼ 3D STUDIO (Chế độ 3: Không gian 3D & Cụm) -->
+    <div class="studio3d-wrap" id="studio3dWrap" style="display:none">
+      <div class="st3d-toolbar">
+        <span class="pill info sm">cg.scene/1</span>
+        <span id="st3dSummary" style="font-size:12.5px;color:var(--text2)">Đang tải mô hình 3D…</span>
+        <span class="pill warn sm" id="st3dGapsPill">0 phần thiếu</span>
+
+        <div class="seg st3d-modes" id="st3dModeGroup" role="group" aria-label="Chế độ xem kết cấu bên trong">
+          <button type="button" data-st3d-mode="solid" title="Hiển thị khối hoàn thiện bên ngoài">📦 Vỏ ngoài</button>
+          <button type="button" data-st3d-mode="xray" class="active" title="Nhìn xuyên thấu lớp vỏ để kiểm tra đợt chia, vách ngăn và kết cấu bên trong">👁️ Nhìn xuyên</button>
+          <button type="button" data-st3d-mode="open" title="Mở cánh cửa tủ 90° &amp; kéo ngăn kéo để kiểm tra công năng sử dụng">🚪 Mở cánh</button>
+          <button type="button" data-st3d-mode="exploded" title="Bóc tách rời các tấm ván để xem chi tiết lắp ghép">💥 Bóc tách</button>
+        </div>
+
+        <div class="seg st3d-views" id="st3dViewsGroup" role="group" aria-label="Góc nhìn kỹ thuật">
+          <button type="button" data-cam-view="front">📐 Đứng</button>
+          <button type="button" data-cam-view="top">📏 Bằng</button>
+          <button type="button" data-cam-view="side">📐 Cạnh</button>
+          <button type="button" data-cam-view="iso" class="active">🧊 Iso</button>
+        </div>
+
+        <div class="spacer"></div>
+        <div class="seg" id="st3dMouseModeSeg" role="group" aria-label="Chế độ chuột 3D">
+          <button type="button" id="st3dOrbitToolBtn" class="active" title="Chuột trái để xoay góc nhìn 3D">🔄 Xoay</button>
+          <button type="button" id="st3dPanToolBtn" title="Chuột trái để kéo dịch chuyển sang khu vực / cụm khác">✋ Kéo dịch</button>
+        </div>
+        <button class="btn-s btn-xs" id="st3dWireBtn" type="button">Khung dây: Bật</button>
+        <button class="btn-s btn-xs" id="st3dResetCamBtn" type="button">🎯 Đặt lại</button>
+        <button class="btn-s btn-xs" id="toggle3dInspectorBtn" type="button">📋 Bảng Cụm &amp; Công thái học</button>
+      </div>
+
+      <div class="st3d-body-split">
+        <div class="st3d-stage">
+          <canvas id="studio3dCanvas" width="900" height="520"></canvas>
+          <div class="st3d-overlay" id="st3dOverlay">
+            <div id="st3dSelectedInfo">Kéo chuột trái: Xoay 3D (có quán tính mượt) · Nút ✋ Kéo dịch (hoặc Shift + Chuột trái): Di chuyển giữa các cụm · Lăn chuột: Zoom cận cảnh.</div>
+            <div class="st3d-tips" id="st3dActionTips">💡 Đang bật chế độ <b>👁️ Nhìn xuyên</b> để thấy rõ vách ngăn, đợt kệ 18mm và kết cấu bên trong sản phẩm.</div>
+          </div>
+        </div>
+        <!-- Bảng Cụm 3D, Phần thiếu (Gaps) & Công thái học ngay cạnh 3D Canvas -->
+        <aside class="st3d-side-inspector" id="st3dSideInspector">
+          <div class="st3d-side-hdr">
+            <b>🧊 Cụm 3D, Bù thiếu &amp; Công thái học</b>
+            <label class="consent-chk"><input type="checkbox" id="studioAiConsent" checked/><span>Gửi ngữ cảnh AI</span></label>
+          </div>
+          <div class="st3d-side-body" id="studioPaneBody"></div>
+        </aside>
+      </div>
+    </div>
+
+    <!-- Thanh điều khiển Zoom & Focus nổi trên góc dưới bên phải Canvas -->
+    <div class="canvas-hud" id="canvasHud" role="toolbar" aria-label="Điều khiển thu phóng và định vị nhanh">
+      <button type="button" id="hudZoomInBtn" title="Phóng to (+)">＋</button>
+      <button type="button" id="hudZoomOutBtn" title="Thu nhỏ (−)">－</button>
+      <button type="button" id="hudZoomResetBtn" class="hud-pct" title="Đặt lại tỉ lệ 100%">100%</button>
+      <button type="button" id="hudZoomFitBtn" title="Căn vừa khung nhìn">🔍 Vừa khung</button>
+      <button type="button" id="hudFocusErrorBtn" class="hud-focus-err" title="Tự động phóng to vào vị trí lỗi đang chọn">🎯 Focus lỗi</button>
+    </div>
+
+    <!-- Thanh trạng thái chân Viewport -->
+    <div class="cv-status">
+      <span class="lock"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>Tệp gốc chỉ đọc</span>
+      <span>Mọi thay đổi đều chạy khô (ChangeSet) và ghi ra <b>tệp mới</b> có kiểm chứng <code>validate_output</code>.</span>
+      <span class="spacer"></span>
+      <span class="meta" id="cvInfo"></span>
+    </div>
+  </section>
+
+  <!-- PANEL 4: SPLIT-VERTICAL RIGHT PANEL (360px, 2 TẦNG HIỂN THỊ ĐỒNG THỜI) -->
+  <aside class="col right split-right" aria-label="Bảng duyệt ChangeSet, Ghi chú bàn giao và Trợ lý AI">
+
+    <!-- NỬA TRÊN (45% CHIỀU CAO): BẢNG ĐIỀU KHIỂN CHANGESET & GHI CHÚ BÀN GIAO -->
+    <div class="right-top-half">
+      <div class="rt-header" role="tablist" aria-label="Bảng điều khiển phía trên">
+        <button role="tab" type="button" class="rt-tab on" data-rt="chg" id="rtTabChg" aria-selected="true">
+          ⚡ Duyệt ChangeSet <span class="cnt" id="cntC">2</span>
+        </button>
+        <button role="tab" type="button" class="rt-tab" data-rt="rev" id="rtTabRev" aria-selected="false">
+          📌 Ghi chú Bàn giao <span class="cnt" id="cntR">2</span>
+        </button>
+      </div>
+
+      <!-- Khung 1: Danh sách thao tác ChangeSet đang chờ duyệt -->
+      <div class="rt-pane on" id="rtPaneChg">
+        <div class="rt-scroll" id="chgList"></div>
+        <div class="cs-foot" id="chgFoot"></div>
+      </div>
+
+      <!-- Khung 2: Danh sách Ghi chú bàn giao (Review Notes) -->
+      <div class="rt-pane" id="rtPaneRev">
+        <div class="rt-scroll" id="reviewNotesList"></div>
+        <div class="cs-foot" id="reviewNotesFoot">
+          <div class="rv-quick-row">
+            <input type="text" id="rvNoteInput" placeholder="Nhập ghi chú bàn giao cho Kỹ thuật / SX..."/>
+            <button type="button" class="btn-p btn-xs" id="rvAddBtn">+ Lưu</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NỬA DƯỚI (55% CHIỀU CAO): TRỢ LÝ AI CAD GUARD & 4 CHIP KỸ NĂNG CHUẨN -->
+    <div class="right-bottom-half" id="p-chat">
+      <div class="chat-head">
+        <svg class="i" viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="3"/><path d="M9 11v2M15 11v2M12 2v4"/></svg>
+        <span>Trợ lý AI: <b id="chatEng">Gemini 2.5 Flash</b> · Ngữ cảnh trang đang mở</span>
+        <span class="spacer"></span>
+        <button type="button" class="f-link" id="clearChatBtn" title="Làm mới hội thoại">Làm mới</button>
+      </div>
+
+      <!-- Nhật ký hội thoại AI -->
+      <div class="chat-log" id="log" aria-live="polite"></div>
+
+      <!-- 4 Chip Kỹ năng chuẩn hoá (Standard Skill Chips) -->
+      <div class="skill-chips-bar" id="skillChipsBar" aria-label="4 Kỹ năng chuẩn hoá">
+        <button type="button" class="sk-chip" data-skill-act="survey">🔍 Khảo sát bản vẽ</button>
+        <button type="button" class="sk-chip primary" data-skill-act="propose">🛠️ Sửa các lỗi tự sửa được (Tạo ChangeSet)</button>
+        <button type="button" class="sk-chip" data-skill-act="aideep">📐 AI phân tích sâu sản xuất &amp; 3D</button>
+        <button type="button" class="sk-chip" data-skill-act="handover">📋 Soạn gói bàn giao cho Kỹ thuật</button>
+      </div>
+
+      <!-- Các gợi ý động theo ngữ cảnh -->
+      <div class="sug" id="sug" aria-label="Gợi ý câu hỏi theo ngữ cảnh" hidden></div>
+
+      <!-- Khung nhập câu hỏi -->
+      <form class="composer" id="form">
+        <input id="inp" type="text" placeholder="Hỏi trợ lý hoặc ra lệnh: đổi chữ 3.0 sang 2.5, kiểm khe hở cánh..." aria-label="Nhập câu hỏi hoặc yêu cầu cho trợ lý"/>
+        <button class="send" type="submit" aria-label="Gửi">
+          <svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7-7-1z"/></svg>
+        </button>
+      </form>
+      <div class="hint">Phát hiện lỗi 100% bằng bộ luật tất định (Lớp 1) + AI phân tích sâu (Lớp 2). Trợ lý không bao giờ tự ghi đè bản gốc.</div>
+    </div>
+
+  </aside>
+</main>
+
+<!-- ============ CÁC MÀN HÌNH QUẢN TRỊ MỞ QUA NÚT ⚙️ CÀI ĐẶT (GIỮ ĐẦY ĐỦ TÍNH NĂNG) ============ -->
+
+<!-- MÀN HÌNH: VIỆC CỦA TÔI -->
+<main class="screen" id="s-home" aria-label="Việc của tôi">
+  <div class="page"><div class="page-in">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
+      <h1 id="homeH" style="margin:0">Phòng Thiết kế</h1>
+      <button class="btn-p btn-sm" type="button" data-go="work">← Quay lại Unified Studio (4-Panel)</button>
+    </div>
+    <p class="lead" id="homeP"></p>
+    <div class="pipe" id="pipe" aria-label="Chuỗi bàn giao giữa các phòng"></div>
+
+    <div class="card" style="padding:14px 18px;margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;background:var(--accent-bg);border-color:var(--accent-bd)">
+      <div>
+        <div style="font-weight:700;font-size:15px;color:var(--accent)">Mở Dự án từ Google Drive hoặc Thư mục máy tính</div>
+        <div style="font-size:13.5px;color:var(--text2);margin-top:2px">Chọn thư mục dự án trên máy tính hoặc kết nối Google Drive để CAD Guard tự động quét danh sách tệp <code>.dxf</code> theo 4 phòng ban.</div>
+      </div>
+      <button class="btn-p" id="homeNewProjBtn" type="button">+ Chọn thư mục dự án (Drive / Máy tính)</button>
+    </div>
+
+    <form class="ask-bar" id="askForm">
+      <svg class="i" viewBox="0 0 24 24" style="color:var(--accent)"><rect x="4" y="6" width="16" height="12" rx="3"/><path d="M9 11v2M15 11v2M12 2v4"/></svg>
+      <input id="askIn" type="text" placeholder="Nhờ trợ lý kiểm hoặc hỏi về bản vẽ, ví dụ: quét bản sảnh A xem còn gì trước khi giao Kỹ thuật"/>
+      <button class="btn-p" type="submit">Mở với trợ lý</button>
+    </form>
+
+    <div id="homeList"></div>
+  </div></div>
+</main>
+
+<!-- MÀN HÌNH: TỔNG QUAN -->
+<main class="screen" id="s-overview" aria-label="Tổng quan">
+  <div class="page"><div class="page-in">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
+      <h1 style="margin:0">Tổng quan dự án K1</h1>
+      <button class="btn-p btn-sm" type="button" data-go="work">← Quay lại Unified Studio (4-Panel)</button>
+    </div>
+    <p class="lead">Tình hình kiểm và bàn giao giữa các phòng trong tuần này.</p>
+    <div class="kpis">
+      <div class="card kpi"><div class="l">Bản vẽ đã đạt chuẩn</div><div class="v">18 <span style="font-size:16px;color:var(--text3);font-weight:500">/ 24</span></div><div class="s">75% đạt ngay hoặc sau 1 vòng sửa</div></div>
+      <div class="card kpi"><div class="l">Lỗi chặn trước khi qua phòng sau</div><div class="v">14</div><div class="s">Không lọt xuống xưởng</div></div>
+      <div class="card kpi"><div class="l">Thay đổi tự động đã duyệt</div><div class="v">31</div><div class="s">Layer, chiều cao chữ, đường bao</div></div>
+    </div>
+    <h2>Theo phòng</h2>
+    <div class="card" style="padding:4px 18px">
+      <table class="tbl">
+        <thead><tr><th>Phòng</th><th>Đang xử lý</th><th>Sẵn sàng giao</th><th>Vướng thường gặp</th></tr></thead>
+        <tbody>
+          <tr><td><b>Thiết kế</b></td><td>3 bản</td><td>1 bản</td><td>Layer dư từ xref, nhiều kiểu chữ, khoảng lùi hành lang</td></tr>
+          <tr><td><b>Kỹ thuật</b></td><td>4 bản</td><td>2 bản</td><td>Thẻ vị trí thiếu trong bảng kê, khe hở cánh &lt; 2mm</td></tr>
+          <tr><td><b>Thiết kế 3D</b></td><td>2 mô hình</td><td>1 mô hình</td><td>Đơn vị m/mm, mặt chưa gán vật liệu, hướng vân gỗ</td></tr>
+          <tr><td><b>Lập trình sản xuất</b></td><td>2 bản</td><td>2 bản</td><td>Đường bao hở, chưa trừ hao dán cạnh ABS 1mm</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h2>Lỗi gặp nhiều nhất tuần này</h2>
+    <div class="card"><div class="bars" id="bars"></div></div>
+  </div></div>
+</main>
+
+<!-- MÀN HÌNH: LUẬT ÁP DỤNG -->
+<main class="screen" id="s-rules" aria-label="Luật áp dụng">
+  <div class="page"><div class="page-in wide">
+    <div class="rh">
+      <div>
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+          <h1 style="margin:0">Luật áp dụng</h1>
+          <button class="btn-s btn-sm" type="button" data-go="work">← Quay lại Unified Studio</button>
+        </div>
+        <p class="lead">Toàn bộ các điều cần kiểm trên bản vẽ và mô hình. Mỗi luật gắn với <b>phòng</b>, <b>vị trí công việc</b>, <b>bước làm việc (task)</b> và <b>Admin nhóm luật</b> phụ trách. Ngoài luật chung của công ty, mỗi dự án có thể có <b>luật riêng</b> và cho phép điều chỉnh trạng thái <b>Áp dụng / Tắt</b>.</p>
+      </div>
+      <div class="rh-act">
+        <div class="role-box">
+          <label for="viewRole">Đang xem với vai trò</label>
+          <select class="sel" id="viewRole" aria-label="Đang xem với vai trò"></select>
+        </div>
+        <button class="btn-s" id="csvBtn"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>Tải bảng CSV</button>
+        <button class="btn-p" id="addRuleBtn">+ Thêm luật cho dự án K1</button>
+      </div>
+    </div>
+
+    <div class="srcline" id="srcline" style="display:flex;gap:12px;flex-wrap:wrap;font-size:12.5px;color:var(--text2);margin-bottom:10px"></div>
+    <div class="covs" id="covs" aria-label="Độ phủ theo phòng"></div>
+    <div id="gapNote"></div>
+
+    <div class="tb">
+      <div class="grow"><input type="search" id="rq" placeholder="Tìm mã luật hoặc nội dung, ví dụ: bảng kê, đường bao, chiều cao chữ…" aria-label="Tìm luật"/></div>
+      <div class="tbp"><span class="lbl">Phạm vi</span>
+        <div class="seg" id="scopeSeg" role="group" aria-label="Phạm vi luật">
+          <button data-v="all" aria-pressed="true">Tất cả</button>
+          <button data-v="co" aria-pressed="false">Chuẩn công ty</button>
+          <button data-v="k1" aria-pressed="false">Riêng dự án K1</button>
+        </div>
+      </div>
+      <label class="tbp"><span class="lbl">Vị trí</span><select class="sel" id="fRole" aria-label="Lọc theo vị trí"></select></label>
+      <label class="tbp"><span class="lbl">Task</span><select class="sel" id="fTask" aria-label="Lọc theo bước công việc"></select></label>
+      <label class="tbp"><span class="lbl">Tình trạng</span><select class="sel" id="fKind" aria-label="Lọc theo tình trạng"><option value="">Tất cả</option><option value="on">Đang áp dụng</option><option value="off">Đang tắt</option><option value="r">Đang chạy tự động</option><option value="n">Chưa cài code</option><option value="m">Kiểm bằng mắt</option></select></label>
+      <label class="tbp"><span class="lbl">Nhóm theo</span><select class="sel" id="fGroup" aria-label="Nhóm bảng theo"><option value="stage">Phòng</option><option value="prefix">Nhóm luật (SH / LY / TX / PR…)</option><option value="role">Vị trí phụ trách</option><option value="task">Bước công việc (task)</option><option value="">Không nhóm</option></select></label>
+    </div>
+
+    <div class="draftbar" id="draftbar"></div>
+
+    <div class="r-work">
+      <div class="card" style="padding:0;overflow:hidden">
+        <table class="rt" aria-label="Danh sách luật">
+          <thead><tr>
+            <th style="width:94px">Mã</th>
+            <th>Nội dung kiểm</th>
+            <th style="width:128px">Phòng</th>
+            <th style="width:185px">Phụ trách</th>
+            <th style="width:200px">Task kiểm</th>
+            <th style="width:146px">Tình trạng</th>
+          </tr></thead>
+          <tbody id="rbody"></tbody>
+        </table>
+        <div class="tfoot" id="rfoot"></div>
+      </div>
+      <aside class="r-drawer" id="drawer" aria-label="Chi tiết và chỉnh sửa luật"></aside>
+    </div>
+    <ul class="hist" id="vhist" style="margin-top:16px;padding-left:18px;font-size:12.5px;color:var(--text2)"></ul>
+  </div></div>
+</main>
+
+<!-- MÀN HÌNH: KẾT NỐI AI & AUTOCAD -->
+<main class="screen" id="s-connect" aria-label="Kết nối AI và AutoCAD">
+  <div class="page"><div class="page-in">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
+      <h1 style="margin:0">Kết nối Trợ lý AI &amp; Plugin AutoCAD</h1>
+      <button class="btn-p btn-sm" type="button" data-go="work">← Quay lại Unified Studio (4-Panel)</button>
+    </div>
+    <p class="lead">Tích hợp trực tiếp với <b>AutoCAD / BricsCAD / ZWCAD</b> qua giao thức MCP và các công cụ Coding Agent sẵn có.</p>
+
+    <h2>1. Kết nối Plugin AutoCAD &amp; MCP Server</h2>
+    <div class="card" style="margin-bottom:18px">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+        <div>
+          <div style="font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:8px">
+            <span>AutoCAD Companion Plugin (LISP / .NET Bridge)</span>
+            <span class="pill ok">Đang lắng nghe cổng 5179</span>
+          </div>
+          <p style="margin:6px 0 0;color:var(--text2);font-size:14px">Cho phép bấm vào bất kỳ lỗi nào trên giao diện web để tự động <code>ZOOM OBJECT</code> tới đúng toạ độ hoặc Handle đối tượng đang mở trong AutoCAD, kèm bảng <b>CAD Guard Dockable Palette (Khung Chat &amp; Danh sách lỗi ngay trong AutoCAD)</b>.</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <a class="btn-p btn-sm" href="/api/plugin/download/lsp" download="cadguard_companion.lsp" style="text-decoration:none">⬇ Tải Plugin AutoLISP (.lsp)</a>
+          <button class="btn-s btn-sm" id="openCadGuideBtn" type="button">📖 Hướng dẫn nạp vào AutoCAD</button>
+          <button class="btn-s btn-sm" id="testMcpBtn" type="button">Kiểm tra kết nối AutoCAD</button>
+        </div>
+      </div>
+    </div>
+
+    <h2>2. Dùng công cụ dòng lệnh đã cài trên máy (CLI)</h2>
+    <div class="grid2" id="cliCards"></div>
+
+    <h2>3. Dùng khoá API của công ty</h2>
+    <div class="grid2" id="apiCards"></div>
+
+    <h2>4. Quyền của trợ lý (Kiến trúc Bảo mật)</h2>
+    <div class="card"><div class="perm">
+      <div class="r"><span>Đọc tệp ngoài thư mục bản vẽ, chạy lệnh máy, mở mạng</span><span class="pill err"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Không có quyền</span></div>
+      <div class="r"><span>Ghi đè hoặc xoá bản vẽ gốc (.dxf / .dwg)</span><span class="pill err"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>Không bao giờ</span></div>
+      <div class="r"><span>Quét Lớp 1 (Luật tất định) + Lớp 2 (AI phân tích sâu kích thước &amp; khe hở)</span><span class="pill ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Được phép</span></div>
+      <div class="r"><span>Đề xuất sửa đổi (chạy thử, không ghi đĩa)</span><span class="pill ok"><svg class="i" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></svg>Được phép</span></div>
+      <div class="r"><span>Ghi tệp mới (<code>_v2.dxf</code>)</span><span class="pill warn">Chỉ khi bạn bấm Duyệt</span></div>
+    </div></div>
+  </div></div>
+</main>
+
+</div>
+
+<!-- Modal xác nhận bỏ bản v2 -->
+<div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+  <div class="modal">
+    <h3 id="mTitle"></h3>
+    <p id="mText"></p>
+    <div class="ft">
+      <button class="btn-s" id="mNo">Không</button>
+      <button class="btn-p" id="mYes">Đồng ý</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal thêm / sửa luật dự án & gửi duyệt bản nháp -->
+<div class="modal-bg" id="mRule" role="dialog" aria-modal="true" aria-labelledby="mrT">
+  <div class="modal wide" id="mRuleBody"></div>
+</div>
+<div class="modal-bg" id="mDraft" role="dialog" aria-modal="true" aria-labelledby="mdT">
+  <div class="modal wide" id="mDraftBody"></div>
+</div>
+
+<!-- Modal Tạo dự án mới & Chọn thư mục (Google Drive / Máy tính) -->
+<div class="modal-bg" id="mProj" role="dialog" aria-modal="true" aria-labelledby="mpT">
+  <div class="modal wide" id="mProjBody"></div>
+</div>
+
+<!-- Modal Visual QA & Chia sẻ Tailscale -->
+<div class="modal-bg" id="mQaShare" role="dialog" aria-modal="true" aria-labelledby="qaShareTitle">
+  <div class="modal wide" id="mQaShareBody"></div>
+</div>
+
+<!-- Modal Hướng dẫn tích hợp Plugin AutoCAD -->
+<div class="modal-bg" id="mCadGuide" role="dialog" aria-modal="true" aria-labelledby="cgTitle">
+  <div class="modal wide" style="max-width:740px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px">
+      <h3 id="cgTitle" style="margin:0">Hướng dẫn tích hợp Plugin CAD Guard &amp; Khung Chat ngay trong AutoCAD</h3>
+      <button class="iconbtn" id="closeCadGuideBtn" type="button" aria-label="Đóng">✕</button>
+    </div>
+    <p class="lead" style="margin-bottom:14px">Giải pháp cho các bản vẽ kỹ thuật lớn, phức tạp: Xem bản vẽ mượt mà 100% trong AutoCAD kết hợp <b>Khung Chat AI &amp; Danh sách lỗi tương tự hệt CAD Guard Web</b> ngay cạnh vùng vẽ Model/Layout.</p>
+    <div class="ft" style="margin-top:16px">
+      <a class="btn-s" href="/api/plugin/download/lsp" download="cadguard_companion.lsp" style="text-decoration:none">⬇ Tải lại tệp .LSP</a>
+      <button class="btn-s" id="guideTestSyncBtn" type="button">📍 Gửi thử lệnh Zoom tới AutoCAD</button>
+      <button class="btn-p" id="doneCadGuideBtn" type="button">Đã hiểu &amp; Đóng</button>
+    </div>
+  </div>
+</div>
+
+<!-- Input ẩn phục vụ chọn cả thư mục hoặc nhiều tệp DXF từ máy tính -->
+<input type="file" id="folderInput" webkitdirectory directory multiple hidden/>
+<input type="file" id="dxfFilesInput" accept=".dxf,.DXF" multiple hidden/>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

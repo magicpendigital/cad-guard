@@ -1,0 +1,22 @@
+id: B07-records-capped
+mo_ta: Nhận ra và báo khi dữ liệu bị cắt ở trần bản ghi (records_capped) của bộ đọc theo dòng.
+dang: records_capped
+fixture: hygiene_bad.dxf
+moi_truong:
+  stream_threshold_mb: 0
+  max_entity_records: 5
+tham_so:
+  chuan: design-hygiene-v0
+cau_hoi: >-
+  Kiểm bản vẽ theo design-hygiene-v0 và tóm tắt mô hình. Kết quả có bị cắt bớt vì bản vẽ quá lớn không?
+  Nếu có, viết một câu cảnh báo cho người dùng.
+  Trả lời JSON với các trường records_capped (đúng/sai), canh_bao_du_lieu (chuỗi; rỗng nếu không bị cắt).
+tra_loi:
+  records_capped: dung_sai
+  canh_bao_du_lieu: chuoi
+kiem_tra:
+- loai: bang
+  truong: records_capped
+  gia_tri: true
+- loai: co_truong
+  truong: [canh_bao_du_lieu]

@@ -1,0 +1,21 @@
+id: B03-layer-du-xref
+mo_ta: Đếm số layer dư từ xref đã gộp hoặc đính kèm (luật VS-01) trong bản vẽ thiết kế bẩn.
+dang: layer_du_xref
+fixture: hygiene_bad.dxf
+moi_truong:
+  an_danh: false
+cau_hoi: >-
+  Bản vẽ trong thư mục làm việc còn bao nhiêu layer dư từ xref (tên có '|' hoặc '$0$')?
+  Dựa vào kết quả luật của chuẩn design-hygiene-v0, không tự đoán.
+  Trả lời JSON với các trường so_layer_du_xref, ma_luat (mã luật căn cứ), thong_diep (danh sách).
+tra_loi:
+  so_layer_du_xref: so_nguyen
+  ma_luat: chuoi
+  thong_diep: danh_sach
+kiem_tra:
+- loai: bang
+  truong: so_layer_du_xref
+  gia_tri: 2
+- loai: bang
+  truong: ma_luat
+  gia_tri: VS-01

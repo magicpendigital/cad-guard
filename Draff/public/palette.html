@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CAD Guard · AutoCAD In-App Sidebar</title>
+  <link rel="stylesheet" href="/app.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      width: 100%;
+    }
+    .pal-hdr {
+      padding: 10px 12px;
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pal-top-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .pal-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--primary);
+    }
+    .cad-status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      padding: 2px 7px;
+      border-radius: 10px;
+      background: rgba(46, 133, 64, 0.15);
+      color: #2E8540;
+      font-weight: 600;
+      border: 1px solid rgba(46, 133, 64, 0.3);
+    }
+    .cad-status-badge.pulse::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #2E8540;
+      box-shadow: 0 0 6px #2E8540;
+    }
+    .pal-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg2);
+    }
+    .pal-tab-btn {
+      flex: 1;
+      padding: 8px 6px;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      background: none;
+      color: var(--text2);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .pal-tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+      background: rgba(15, 107, 98, 0.08);
+    }
+    .pal-pane {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      flex-direction: column;
+    }
+    .pal-pane.active {
+      display: flex;
+    }
+    /* Chat pane */
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 8px;
+      padding-right: 4px;
+    }
+    .chat-msg {
+      padding: 9px 12px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      max-width: 92%;
+      word-break: break-word;
+    }
+    .chat-msg.user {
+      align-self: flex-end;
+      background: var(--primary);
+      color: #fff;
+      border-bottom-right-radius: 2px;
+    }
+    .chat-msg.ai {
+      align-self: flex-start;
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 2px;
+    }
+    .chat-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      margin-bottom: 8px;
+    }
+    .chat-chip {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 3px 9px;
+      font-size: 11px;
+      cursor: pointer;
+      color: var(--text2);
+      transition: all 0.15s;
+    }
+    .chat-chip:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+    .chat-input-row {
+      display: flex;
+      gap: 6px;
+      padding-top: 6px;
+      border-top: 1px solid var(--border);
+    }
+    .chat-input {
+      flex: 1;
+      padding: 8px 10px;
+      font-size: 12.5px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background: var(--bg2);
+      color: var(--text);
+    }
+    .btn-cad-zoom {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 7px;
+      border-radius: 4px;
+      background: rgba(14, 116, 144, 0.15);
+      border: 1px solid rgba(14, 116, 144, 0.4);
+      color: #0E7490;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 4px;
+    }
+    .btn-cad-zoom:hover {
+      background: #0E7490;
+      color: #fff;
+    }
+    /* Findings list */
+    .f-card-cad {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 10px;
+      margin-bottom: 8px;
+      transition: border-color 0.15s;
+    }
+    .f-card-cad:hover {
+      border-color: var(--primary);
+    }
+    .f-card-cad.err { border-left: 3.5px solid #D93829; }
+    .f-card-cad.warn { border-left: 3.5px solid #C89D14; }
+  </style>
+</head>
+<body>
+  <div class="pal-hdr">
+    <div class="pal-top-row">
+      <div class="pal-title">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+        CAD Guard · AutoCAD Palette
+      </div>
+      <div class="cad-status-badge pulse" id="cadStatusText">Đã kết nối CAD</div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;font-size:11.5px;color:var(--text2)">
+      <span id="cadActiveFile">Bản vẽ: <b>Đang mở trong AutoCAD</b></span>
+      <button class="btn-s btn-sm" id="auditNowBtn" style="padding:2px 8px;font-size:11px">⚡ Quét lại</button>
+    </div>
+  </div>
+
+  <div class="pal-tabs">
+    <button class="pal-tab-btn active" data-tab="chat">💬 Khung Chat AI</button>
+    <button class="pal-tab-btn" data-tab="findings">⚠️ Danh sách lỗi (<span id="cadErrCount">0</span>)</button>
+    <button class="pal-tab-btn" data-tab="guide">📖 Hướng dẫn</button>
+  </div>
+
+  <!-- Pane 1: Khung Chat AI ngay trong AutoCAD -->
+  <div class="pal-pane active" id="paneChat">
+    <div class="chat-messages" id="chatMsgs">
+      <div class="chat-msg ai">
+        <b>Xin chào bạn!</b> Mình là Trợ lý CAD Guard chạy trực tiếp trong dock AutoCAD.<br><br>
+        Bạn có thể yêu cầu mình quét bản vẽ đang mở, tìm lỗi theo phòng ban, hướng dẫn sửa hoặc ra lệnh zoom trực tiếp tới bất kỳ chi tiết nào.
+      </div>
+    </div>
+
+    <div class="chat-chips">
+      <div class="chat-chip" data-prompt="Quét toàn bộ lỗi bản vẽ hiện tại">⚡ Quét lỗi bản vẽ</div>
+      <div class="chat-chip" data-prompt="Có đối tượng nào có toạ độ Z khác 0 không?">📐 Kiểm tra Z != 0</div>
+      <div class="chat-chip" data-prompt="Đánh giá công thái học và kích thước cánh tủ">📏 Công thái học cánh tủ</div>
+      <div class="chat-chip" data-prompt="Tự động sửa các lỗi layer về chuẩn công ty">🛠️ Đề xuất sửa an toàn</div>
+    </div>
+
+    <div class="chat-input-row">
+      <input type="text" class="chat-input" id="chatInput" placeholder="Hỏi AI hoặc ra lệnh cho AutoCAD...">
+      <button class="btn-p btn-sm" id="sendBtn" style="padding:0 12px">Gửi</button>
+    </div>
+  </div>
+
+  <!-- Pane 2: Danh sách lỗi đồng bộ AutoCAD -->
+  <div class="pal-pane" id="paneFindings">
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+      <span>Click vào lỗi để AutoCAD tự động zoom:</span>
+      <span class="pill ok sm">Auto-Sync ON</span>
+    </div>
+    <div id="findingsContainer">
+      <!-- Findings will be injected here -->
+    </div>
+  </div>
+
+  <!-- Pane 3: Hướng dẫn tích hợp -->
+  <div class="pal-pane" id="paneGuide">
+    <div style="font-size:13px;font-weight:700;margin-bottom:6px">Tích hợp Khung Chat vào AutoCAD:</div>
+    <p style="font-size:12px;color:var(--text2);line-height:1.5">
+      Khung chat và danh sách lỗi này được thiết kế theo chuẩn <b>AutoCAD Dockable PaletteSet</b>. Bạn có thể ghim (dock) bảng điều khiển này cố định ở bên trái hoặc bên phải màn hình AutoCAD, cạnh thanh Properties.
+    </p>
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:8px;margin:8px 0;font-size:12px">
+      <b>Cách mở nhanh trong AutoCAD:</b><br>
+      1. Gõ lệnh <code>APPLOAD</code> và nạp tệp <code>cadguard.lsp</code>.<br>
+      2. Gõ lệnh <code>CADGUARD</code> để hiện bảng chat.<br>
+      3. Gõ lệnh <code>CGZOOM &lt;handle&gt;</code> để zoom vào lỗi bất kỳ.
+    </div>
+    <a href="/api/autocad/download-pack" download="cadguard-autocad.lsp" class="btn-p" style="text-align:center;text-decoration:none;display:block;margin-top:10px;font-size:12px">
+      📥 Tải tệp cadguard.lsp cho AutoCAD
+    </a>
+  </div>
+
+  <script>
+    const $$ = s => document.querySelectorAll(s);
+    const $ = s => document.querySelector(s);
+
+    // Tab switching
+    $$('.pal-tab-btn').forEach(btn => {
+      btn.onclick = () => {
+        $$('.pal-tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        $$('.pal-pane').forEach(p => p.classList.remove('active'));
+        $(`#pane${btn.dataset.tab.charAt(0).toUpperCase() + btn.dataset.tab.slice(1)}`).classList.add('active');
+      };
+    });
+
+    // Chat chips
+    $$('.chat-chip').forEach(c => {
+      c.onclick = () => {
+        $('#chatInput').value = c.dataset.prompt;
+        sendChat();
+      };
+    });
+
+    $('#sendBtn').onclick = sendChat;
+    $('#chatInput').onkeydown = e => { if (e.key === 'Enter') sendChat(); };
+
+    async function sendChat() {
+      const input = $('#chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+
+      const msgs = $('#chatMsgs');
+      msgs.innerHTML += `<div class="chat-msg user">${text}</div>`;
+      msgs.scrollTop = msgs.scrollHeight;
+
+      msgs.innerHTML += `<div class="chat-msg ai" id="thinkingMsg"><i>AI đang phân tích bản vẽ AutoCAD...</i></div>`;
+      msgs.scrollTop = msgs.scrollHeight;
+
+      try {
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, drawing: 'active_drawing.dxf' })
+        });
+        const data = await res.json();
+        const thinking = $('#thinkingMsg');
+        if (thinking) thinking.remove();
+
+        msgs.innerHTML += `<div class="chat-msg ai">
+          ${data.reply || 'Đã kiểm tra xong bản vẽ.'}
+          ${data.toolCalls ? '<div style="margin-top:6px"><button class="btn-cad-zoom" onclick="zoomInAutoCad(\'H101\')">📍 Zoom đối tượng trong AutoCAD</button></div>' : ''}
+        </div>`;
+        msgs.scrollTop = msgs.scrollHeight;
+      } catch (e) {
+        const thinking = $('#thinkingMsg');
+        if (thinking) thinking.innerHTML = `<span style="color:#D93829">Lỗi: ${e.message}</span>`;
+      }
+    }
+
+    // Load live findings
+    async function loadFindings() {
+      try {
+        const res = await fetch('/api/projects/detail');
+        const proj = await res.json();
+        const files = proj.files || [];
+        const f0 = files[0];
+        if (f0 && f0.findings) {
+          $('#cadActiveFile').innerHTML = `Bản vẽ: <b>${f0.fileName}</b>`;
+          $('#cadErrCount').textContent = f0.findings.length;
+          renderFindingsList(f0.findings);
+        }
+      } catch (e) {
+        console.warn('Could not load project findings:', e);
+      }
+    }
+
+    function renderFindingsList(list) {
+      const container = $('#findingsContainer');
+      if (!list || !list.length) {
+        container.innerHTML = '<div style="color:var(--text2);font-size:12.5px;text-align:center;padding:20px 0">Bản vẽ sạch lỗi!</div>';
+        return;
+      }
+      container.innerHTML = list.map(f => `
+        <div class="f-card-cad ${f.sev}">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <b style="font-size:12px">${f.rule} · ${f.title}</b>
+            <span class="pill ${f.sev} sm">${f.sev === 'error' ? 'Lỗi' : 'Cảnh báo'}</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--text2);margin-bottom:6px">${f.d}</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn-cad-zoom" onclick="zoomInAutoCad('${f.id}')">📍 Zoom trên AutoCAD</button>
+            ${f.fix ? `<button class="btn-cad-zoom" style="color:var(--primary);border-color:var(--primary)" onclick="applyCadFix('${f.id}')">⚡ Sửa lỗi</button>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function zoomInAutoCad(id) {
+      try {
+        await fetch('/api/mcp/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'zoom', handle: id })
+        });
+        // Call AutoCAD command via ActiveX if hosted inside AutoCAD Browser
+        if (window.acad && window.acad.SendCommand) {
+          window.acad.SendCommand(`(c:CGZOOM "${id}") `);
+        }
+      } catch (e) {
+        console.error('Error syncing to CAD:', e);
+      }
+    }
+
+    async function applyCadFix(id) {
+      alert(`Đã gửi lệnh sửa tự động cho lỗi #${id} vào AutoCAD.`);
+    }
+
+    $('#auditNowBtn').onclick = () => {
+      loadFindings();
+    };
+
+    loadFindings();
+  </script>
+</body>
+</html>

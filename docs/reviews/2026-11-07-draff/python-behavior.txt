@@ -1,0 +1,23 @@
+{
+  "handover_unresolved_E_note": {
+    "ready": true,
+    "counts": {
+      "E": 0,
+      "W": 0,
+      "I": 0
+    },
+    "unresolved_notes": 2
+  },
+  "scene_export_state": {
+    "initial_modules": 1,
+    "supplemented_preview_modules": 3,
+    "glb_mesh_count": 3,
+    "initial_boxes": 6,
+    "supplemented_boxes": 8,
+    "workspace_snapshot_modules": 1,
+    "glb_sha256": "1a8d0bdbbb29ee425ff2c13977b53594b0a01b6d1676b4e5008fad69766ff33b",
+    "supplemented_preview_glb_sha256": "035c2135ae5be1ab8d388ed30efbc3f2604c4fae04c01a328423427a89f297f6",
+    "export_matches_supplemented_preview": false
+  }
+}
+

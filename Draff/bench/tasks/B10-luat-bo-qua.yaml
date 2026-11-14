@@ -1,0 +1,22 @@
+id: B10-luat-bo-qua
+mo_ta: Nêu rõ luật nào bị bỏ qua (thiếu dữ liệu) khi kiểm một bản vẽ khâu cuối theo chuẩn vệ sinh.
+dang: luat_bo_qua
+fixture: ok_sheet.dxf
+tham_so:
+  chuan: design-hygiene-v0
+cau_hoi: >-
+  Kiểm bản vẽ theo design-hygiene-v0. Luật nào bị bỏ qua, vì sao, và bao nhiêu luật đã thật sự chạy?
+  Trả lời JSON với các trường luat_bo_qua (danh sách mã), ly_do (danh sách), so_luat_da_chay.
+tra_loi:
+  luat_bo_qua: danh_sach
+  ly_do: danh_sach
+  so_luat_da_chay: so_nguyen
+kiem_tra:
+- loai: tap
+  truong: luat_bo_qua
+  gia_tri: [VS-03, VS-04]
+- loai: bang
+  truong: so_luat_da_chay
+  gia_tri: 5
+- loai: co_truong
+  truong: [ly_do]

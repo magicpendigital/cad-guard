@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "cad-guard": {
+      "type": "stdio",
+      "command": "<PYTHON>",
+      "args": ["-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>"]
+    },
+    "cad-guard-ho-so": {
+      "type": "stdio",
+      "command": "<PYTHON>",
+      "args": ["-m", "cadguard", "mcp", "--workspace", "<THU_MUC_LAM_VIEC>", "--profile", "<HO_SO_CONG_TY>"]
+    }
+  }
+}

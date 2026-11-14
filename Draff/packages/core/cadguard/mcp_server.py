@@ -1,0 +1,403 @@
+"""Máy chủ MCP stdio cho trợ lý AI ở máy khách: bọc các hàm trong `cadguard.agent.tools`.
+
+Chạy: `python -m cadguard mcp --workspace <thư mục>`.
+
+- Mặc định CHỈ ĐỌC: 6 công cụ (list_drawings, audit, explain_rule, get_model_summary, query_model, diff).
+- `--allow-propose` (mặc định TẮT) thêm `propose_changeset`: chạy khô và ghi changeset JSON vào
+  `<thư mục làm việc>/.cadguard/changesets/`; không bao giờ ghi DXF.
+- KHÔNG có `apply_changeset` qua MCP: áp dụng (ghi tệp mới) chỉ do người dùng qua `cadguard apply`, sau khi xem trước
+  và xác nhận. Lý do: trợ lý không được tự quyết sửa bản vẽ sản xuất (docs/changeset.md mục 5).
+
+- SDK `mcp` chỉ được import khi chạy lệnh này (extras `[agent]`); thiếu SDK thì báo ra stderr, thoát mã 2.
+- stdout chỉ dành cho JSON-RPC: trước khi phục vụ, fd 1 và `sys.stdout` được chuyển sang stderr;
+  luồng giao thức ghi vào bản sao riêng của stdout gốc.
+- Mặc định ẩn danh Bậc 1 (mã phiên thay tên tệp/layer/khối/kiểu chữ); `--no-anonymize` tắt và cảnh báo ra stderr.
+- `--profile <tệp>`: hồ sơ công ty áp cho audit/explain_rule khi gọi đúng chuẩn của hồ sơ; kết quả ghi tên/phiên bản
+  hồ sơ (không đường dẫn). Hồ sơ sai, hoặc ngưỡng --stream-threshold-mb là NaN/vô cực: báo stderr, thoát mã 2.
+- Lỗi công cụ trả về là câu tiếng Việt chung, không chứa đường dẫn tuyệt đối hay nội dung ngoại lệ nội bộ.
+"""
+
+import argparse
+import json
+import os
+import re
+import sys
+from io import TextIOWrapper
+from pathlib import Path
+
+from .agent import tools
+from .agent.anonymize import Anonymizer
+from .agent.workspace import PathDenied, Workspace
+from .dxf_stream import DEFAULT_MAX_ENTITY_RECORDS
+from .reader_select import DEFAULT_STREAM_THRESHOLD_MB, check_threshold
+from .standard import ProfileError, find_standards_dir, load_profile
+
+SERVER_NAME = "cad-guard"
+DEFAULT_STANDARD = "furniture-v0"
+TOOL_NAMES = ("list_drawings", "audit", "explain_rule", "get_model_summary", "query_model", "diff")
+PROPOSE_TOOL = "propose_changeset"  # chỉ có khi --allow-propose
+
+INSTALL_HINT = (
+    "Thiếu SDK MCP cho Python (gói `mcp`), nên chưa chạy được máy chủ MCP của cad-guard.\n"
+    "Cài một trong hai cách:\n"
+    "  pip install cadguard[agent]\n"
+    "  python scripts/test.py --extras agent      (trong repo cad-guard, venv dùng chung)\n"
+)
+PATH_DENIED_MSG = "Đường dẫn không được phép: chỉ nhận tệp .dxf nằm trong thư mục làm việc, viết dạng tương đối."
+GENERIC_ERROR_MSG = "Không thể thực hiện yêu cầu; hãy kiểm tra dữ liệu và đường dẫn."
+
+INSTRUCTIONS = (
+    "Công cụ CHỈ ĐỌC của cad-guard để kiểm tra bản vẽ nội thất DXF theo luật tất định: list_drawings, audit, "
+    "explain_rule, get_model_summary, query_model, diff (so hai bản vẽ, vd. bản gốc và tệp mới sau khi người dùng áp dụng). "
+    "Đường dẫn luôn tương đối với thư mục làm việc của máy chủ; có thể dùng mã tệp do list_drawings trả về. "
+    "Khi bật ẩn danh, tên tệp/layer/khối/kiểu chữ là mã phiên (L_…, B_…, F_…), dùng lại được trong cùng phiên. "
+    "Kết luận đúng/sai lấy từ kết quả luật, không tự suy đoán. "
+    "Nếu kết quả có records_capped = true: bản vẽ rất lớn, danh sách đối tượng đã bị cắt ở trần bộ nhớ, "
+    "nên số đối tượng/phát hiện có thể thiếu; hãy nói rõ điều này với người dùng. "
+    "Không có công cụ áp dụng sửa: nếu máy chủ bật propose_changeset, trợ lý chỉ ĐỀ XUẤT changeset (xem trước); "
+    "người dùng tự áp dụng bằng `cadguard apply`, kết quả ghi ra tệp mới."
+)
+
+
+def add_arguments(p: argparse.ArgumentParser) -> None:
+    """Khai báo cờ của lệnh `mcp` (dùng chung cho cli.py; parser tạo với add_help=False)."""
+    p._optionals.title = "tuỳ chọn"
+    p.add_argument("-h", "--help", action="help", help="in hướng dẫn này rồi thoát")
+    p.add_argument(
+        "--workspace",
+        required=True,
+        metavar="THƯ_MỤC",
+        help="BẮT BUỘC. Thư mục làm việc chứa DXF; máy chủ chỉ đọc tệp .dxf nằm trong thư mục này "
+        "(không mặc định thư mục hiện tại để tránh lộ nhầm thư mục khác).",
+    )
+    p.add_argument(
+        "--no-anonymize",
+        action="store_true",
+        help="TẮT ẩn danh Bậc 1 (mặc định BẬT): trợ lý AI sẽ thấy tên tệp/layer/khối thật. Chỉ dùng khi khách đã đồng ý.",
+    )
+    p.add_argument(
+        "--standard",
+        default=None,
+        metavar="TÊN",
+        help=f"chuẩn mặc định cho audit/explain_rule (mặc định: chuẩn ghi trong --profile, nếu không có thì {DEFAULT_STANDARD}); "
+        "công cụ vẫn nhận tham số standard riêng (vd. design-hygiene-v0).",
+    )
+    p.add_argument(
+        "--profile",
+        default=None,
+        metavar="TỆP",
+        help="hồ sơ công ty (YAML cg.company-profile/1) ghi đè ngưỡng/mẫu layer/tắt luật; áp cho audit/explain_rule "
+        "khi gọi đúng chuẩn của hồ sơ. Hồ sơ sai thì không khởi động (mã 2).",
+    )
+    p.add_argument(
+        "--stream-threshold-mb",
+        type=float,
+        default=DEFAULT_STREAM_THRESHOLD_MB,
+        metavar="MB",
+        help=f"ngưỡng MB để đọc DXF theo dòng (ít bộ nhớ) thay cho ezdxf (mặc định {DEFAULT_STREAM_THRESHOLD_MB:g}, "
+        "như `cadguard audit --reader auto`); 0 = luôn đọc theo dòng, số âm = luôn dùng ezdxf. DXF nhị phân luôn dùng ezdxf.",
+    )
+    p.add_argument(
+        "--allow-propose",
+        action="store_true",
+        help="BẬT công cụ propose_changeset (mặc định TẮT): trợ lý được chạy khô thao tác sửa và ghi changeset JSON "
+        "vào <thư mục làm việc>/.cadguard/changesets/. Không bao giờ ghi DXF; áp dụng chỉ do người qua `cadguard apply`.",
+    )
+    p.add_argument(
+        "--max-entity-records",
+        type=_non_negative_int,
+        default=DEFAULT_MAX_ENTITY_RECORDS,
+        metavar="N",
+        help=f"trần số đối tượng giữ trong bộ nhớ khi đọc theo dòng (mặc định {DEFAULT_MAX_ENTITY_RECORDS}); "
+        "quá trần thì danh sách đối tượng bị cắt và kết quả công cụ có records_capped = true.",
+    )
+
+
+def _non_negative_int(text: str) -> int:
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError("phải là số nguyên không âm") from None
+    if value < 0:
+        raise argparse.ArgumentTypeError("phải là số nguyên không âm")
+    return value
+
+
+def _err(msg: str) -> None:
+    print(msg, file=sys.stderr, flush=True)
+
+
+def _import_sdk():
+    """Import SDK lười. Trả None nếu thiếu."""
+    try:
+        from mcp.server.fastmcp import FastMCP  # noqa: F401
+        from mcp.server.stdio import stdio_server  # noqa: F401
+        from mcp.types import CallToolResult, TextContent, ToolAnnotations  # noqa: F401
+    except ImportError:
+        return None
+    import mcp
+
+    return mcp
+
+
+def build_server(ctx: tools.ToolContext, default_standard: str = "furniture-v0", allow_propose: bool = False):
+    """Tạo FastMCP: 6 công cụ chỉ đọc, thêm propose_changeset khi `allow_propose`. Không bao giờ có apply. Cần SDK."""
+    from typing import Annotated
+
+    from mcp.server.fastmcp import FastMCP
+    from mcp.types import CallToolResult, TextContent, ToolAnnotations
+    from pydantic import BaseModel, ConfigDict, Field
+
+    server = FastMCP(SERVER_NAME, instructions=INSTRUCTIONS, log_level="WARNING")
+    read_only = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+
+    def call(fn, *args, **kwargs) -> CallToolResult:
+        try:
+            data = fn(ctx, *args, **kwargs)
+        except tools.ToolError as exc:  # thông điệp đã an toàn (tiếng Việt, không đường dẫn)
+            return CallToolResult(content=[TextContent(type="text", text=str(exc))], isError=True)
+        except PathDenied:
+            return CallToolResult(content=[TextContent(type="text", text=PATH_DENIED_MSG)], isError=True)
+        except Exception:  # noqa: BLE001 — không lộ chi tiết nội bộ
+            return CallToolResult(content=[TextContent(type="text", text=GENERIC_ERROR_MSG)], isError=True)
+        text = json.dumps(data, ensure_ascii=False)
+        return CallToolResult(content=[TextContent(type="text", text=text)], structuredContent=data)
+
+    FileArg = Annotated[
+        str,
+        Field(description="Tệp .dxf: đường dẫn tương đối trong thư mục làm việc (vd. 'a/b.dxf') hoặc mã tệp từ list_drawings."),
+    ]
+    available = sorted(
+        p.stem for p in Path(ctx.standards_dir).glob("*.yaml") if re.fullmatch(r"[a-z0-9][a-z0-9.\-]*", p.stem) and not p.stem.startswith("company-profile")
+    )
+    profile_note = (
+        f" Hồ sơ công ty '{ctx.profile.name}' {ctx.profile.version} được áp khi chuẩn là {ctx.profile.standard}."
+        if ctx.profile is not None
+        else ""
+    )
+    StandardArg = Annotated[
+        str,
+        Field(
+            description=f"Tên chuẩn (mặc định {default_standard}); có: {', '.join(available) or default_standard}.{profile_note}",
+            pattern=r"^[a-z0-9][a-z0-9.\-]*$",
+        ),
+    ]
+    StrOrList = str | list[str] | None
+
+    class QueryFilter(BaseModel):
+        """Bộ lọc đối tượng; các khoá kết hợp theo AND, danh sách trong một khoá theo OR."""
+
+        model_config = ConfigDict(extra="forbid")
+        layer: StrOrList = Field(None, description="Tên layer hoặc mã layer (L_…); một giá trị hoặc danh sách.")
+        type: StrOrList = Field(None, description="Loại đối tượng DXF, vd. LINE, LWPOLYLINE, TEXT, INSERT, DIMENSION.")
+        space: StrOrList = Field(None, description="Không gian: 'Model' hoặc tên/mã layout (Y_…).")
+
+    @server.tool(
+        name="list_drawings",
+        description=f"Liệt kê tệp DXF trong thư mục làm việc (tối đa {ctx.max_drawings} mục; 'truncated' báo bị cắt). "
+        "Trả mã tệp (id) dùng cho các công cụ khác, và kích thước.",
+        annotations=read_only,
+        structured_output=False,
+    )
+    def list_drawings(
+        dir: Annotated[str, Field(description="Thư mục con tương đối trong thư mục làm việc; '.' là gốc.")] = ".",
+    ) -> CallToolResult:
+        return call(tools.list_drawings, dir)
+
+    @server.tool(
+        name="audit",
+        description="Kiểm tra một bản vẽ theo chuẩn bằng luật tất định (vd. furniture-v0, hoặc design-hygiene-v0 cho vệ sinh bản vẽ). "
+        "'profile' ghi tên/phiên bản hồ sơ công ty đã áp (null nếu không áp). Trả số lỗi theo mức (E/W/I), "
+        f"luật đã chạy/bỏ qua và tối đa {ctx.max_findings} phát hiện. 'records_capped' = true nghĩa là danh sách đối tượng "
+        "bị cắt ở trần bộ nhớ (tệp rất lớn), phát hiện có thể thiếu.",
+        annotations=read_only,
+        structured_output=False,
+    )
+    def audit(file: FileArg, standard: StandardArg = default_standard) -> CallToolResult:
+        return call(tools.audit, file, standard)
+
+    @server.tool(
+        name="explain_rule",
+        description="Giải thích một mã luật (vd. LY-01): tiêu đề, mức độ, loại, nguồn, tham số chung và đoạn mô tả trong chuẩn.",
+        annotations=read_only,
+        structured_output=False,
+    )
+    def explain_rule(
+        rule_id: Annotated[str, Field(description="Mã luật, vd. 'LY-01'.", min_length=1, max_length=32)],
+        standard: StandardArg = default_standard,
+    ) -> CallToolResult:
+        return call(tools.explain_rule, rule_id, standard)
+
+    @server.tool(
+        name="get_model_summary",
+        description="Tóm tắt Drawing Model của một bản vẽ: số layer/khối, đối tượng theo loại và không gian, "
+        "layout, kiểu chữ, đơn vị, phiên bản DXF (JSON tối đa 16 KB). 'records_capped' = true: số đếm đối tượng bị cắt ở trần bộ nhớ.",
+        annotations=read_only,
+        structured_output=False,
+    )
+    def get_model_summary(file: FileArg) -> CallToolResult:
+        return call(tools.get_model_summary, file)
+
+    @server.tool(
+        name="query_model",
+        description=f"Lọc đối tượng trong bản vẽ theo layer/loại/không gian, có phân trang: mỗi trang tối đa "
+        f"{tools.MAX_QUERY_RECORDS} mục và {tools.MAX_QUERY_BYTES // 1024} KB; còn nữa thì 'next_cursor' khác null, "
+        "gửi lại nguyên bộ lọc cùng cursor để lấy trang sau. 'records_capped' = true: total_matched bị cắt ở trần bộ nhớ.",
+        annotations=read_only,
+        structured_output=False,
+    )
+    def query_model(
+        file: FileArg,
+        filter: Annotated[QueryFilter | None, Field(description="Bộ lọc; bỏ trống = mọi đối tượng.")] = None,
+        limit: Annotated[
+            int, Field(ge=1, le=tools.MAX_QUERY_RECORDS, description=f"Số mục tối đa mỗi trang (1–{tools.MAX_QUERY_RECORDS}).")
+        ] = 100,
+        cursor: Annotated[str | None, Field(description="Giá trị 'next_cursor' của trang trước; bỏ trống ở trang đầu.")] = None,
+    ) -> CallToolResult:
+        flt = filter.model_dump(exclude_none=True) if filter is not None else {}
+        return call(tools.query_model, file, flt, limit, cursor)
+
+    @server.tool(
+        name="diff",
+        description="So hai bản vẽ DXF trong thư mục làm việc theo handle (như git diff): đối tượng thêm/xoá/đổi "
+        "(thuộc tính nào), định nghĩa layer/kiểu chữ/kiểu kích thước/khối thêm/xoá, tóm tắt số liệu. Đã ẩn danh; "
+        "chữ trong bản vẽ bị che. JSON tối đa 64 KB, 'truncated' báo danh sách bị cắt (số tổng trong 'summary' luôn đủ).",
+        annotations=read_only,
+        structured_output=False,
+    )
+    def diff(
+        a: Annotated[str, Field(description="Tệp trước (thường là bản gốc): đường dẫn tương đối hoặc mã tệp.")],
+        b: Annotated[str, Field(description="Tệp sau (vd. tệp .cg-<mã>.dxf do người dùng áp dụng).")],
+        max_items: Annotated[int, Field(ge=1, le=500, description="Số mục tối đa mỗi danh sách (1–500).")] = 100,
+    ) -> CallToolResult:
+        return call(tools.diff, a, b, max_items)
+
+    if allow_propose:
+        from .changeset.ops import OP_HELP
+
+        propose_ann = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False)
+        ops_doc = "; ".join(f"{k}: {v}" for k, v in OP_HELP.items())
+
+        @server.tool(
+            name="propose_changeset",
+            description="ĐỀ XUẤT sửa bản vẽ bằng từ vựng thao tác cố định, CHẠY KHÔ trên bản sao trong bộ nhớ: kiểm schema, "
+            "đếm đối tượng bị ảnh hưởng, dự báo luật hết/xuất hiện (rules_regressed phải = 0), trả xem trước. Lưu changeset "
+            "JSON vào thư mục phiên; KHÔNG ghi DXF và KHÔNG áp dụng — người dùng tự áp bằng `cadguard apply <changeset_id>`. "
+            "Không có thao tác xoá đối tượng hình học. Tên layer/kiểu chữ dùng mã phiên (L_…, S_…, D_…, Y_…) như các công cụ khác. "
+            f"Thao tác: {ops_doc}. Bộ lọc 'filter': {{layers, exclude_layers, types, spaces}} (AND giữa khoá, OR trong danh sách).",
+            annotations=propose_ann,
+            structured_output=False,
+        )
+        def propose_changeset(
+            file: FileArg,
+            ops: Annotated[list[dict], Field(description="Danh sách thao tác, mỗi mục có 'op' và tham số; tối đa 50.", min_length=1, max_length=50)],
+            standard: Annotated[str, Field(description="Chuẩn dùng để dự báo luật (mặc định design-hygiene-v0).",
+                                           pattern=r"^[a-z0-9][a-z0-9.\-]*$")] = "design-hygiene-v0",
+            protected_layers: Annotated[list[str] | None, Field(description="Layer bảo vệ thêm (tên/mã L_…); thao tác chạm bị từ chối.")] = None,
+        ) -> CallToolResult:
+            return call(tools.propose_changeset, file, ops, standard, protected_layers)
+
+    return server
+
+
+def _protocol_stdout() -> TextIOWrapper:
+    """Giữ riêng stdout gốc cho JSON-RPC; mọi ghi khác vào stdout (Python hay mã C) đi sang stderr."""
+    sys.stdout.flush()
+    try:
+        saved = os.dup(sys.stdout.fileno())
+        os.dup2(sys.stderr.fileno(), sys.stdout.fileno())
+        raw = os.fdopen(saved, "wb")
+    except (OSError, ValueError, AttributeError):  # stdout không có fd thật (vd. bị nhúng): dùng buffer hiện có
+        raw = sys.stdout.buffer
+    sys.stdout = sys.stderr
+    return TextIOWrapper(raw, encoding="utf-8", newline="\n", write_through=True)
+
+
+def serve(server) -> None:
+    import anyio
+    from mcp.server.stdio import stdio_server
+
+    out = _protocol_stdout()
+    stdin = TextIOWrapper(sys.stdin.buffer, encoding="utf-8", errors="replace")
+
+    async def run() -> None:
+        async with stdio_server(stdin=anyio.wrap_file(stdin), stdout=anyio.wrap_file(out)) as (read, write):
+            low = server._mcp_server  # SDK 1.x: máy chủ cấp thấp của FastMCP
+            await low.run(read, write, low.create_initialization_options())
+
+    anyio.run(run)
+
+
+def run_from_args(args: argparse.Namespace) -> int:
+    """Điểm vào của `python -m cadguard mcp`."""
+    try:
+        check_threshold(args.stream_threshold_mb)
+    except ValueError as exc:
+        _err(f"--stream-threshold-mb: {exc}")
+        return 2
+    try:
+        workspace = Workspace(Path(args.workspace))
+    except PathDenied:
+        _err("Thư mục làm việc (--workspace) không tồn tại hoặc không phải thư mục.")
+        return 2
+    try:
+        standards_dir = find_standards_dir(Path(__file__).resolve())
+    except FileNotFoundError as exc:
+        _err(str(exc))
+        return 2
+    profile = None
+    if getattr(args, "profile", None):
+        try:
+            profile = load_profile(args.profile)
+        except ProfileError as exc:  # thông điệp chỉ nêu tên tệp, không đường dẫn đầy đủ
+            _err(f"Không khởi động máy chủ MCP: {exc}")
+            return 2
+    standard = args.standard or (profile.standard if profile else DEFAULT_STANDARD)
+    if profile is not None and profile.standard != standard:
+        _err(
+            f"Không khởi động máy chủ MCP: hồ sơ '{profile.name}' viết cho chuẩn '{profile.standard}', "
+            f"không dùng được với chuẩn '{standard}' (--standard)."
+        )
+        return 2
+    anonymize = not args.no_anonymize
+    ctx = tools.ToolContext(
+        workspace,
+        Anonymizer(enabled=anonymize),
+        standards_dir,
+        stream_threshold_mb=args.stream_threshold_mb,
+        max_entity_records=args.max_entity_records,
+        profile=profile,
+    )
+    try:
+        tools._standard(ctx, standard)
+    except tools.ToolError:
+        _err(f"Không dùng được chuẩn '{standard}'.")
+        return 2
+    except ProfileError as exc:  # vd. hồ sơ ghi đè luật/tham số không có trong chuẩn
+        _err(f"Không khởi động máy chủ MCP: hồ sơ công ty '{profile.name}' sai: {exc}")
+        return 2
+    except FileNotFoundError:
+        _err(f"Không dùng được chuẩn '{standard}'.")
+        return 2
+    if _import_sdk() is None:
+        _err(INSTALL_HINT)
+        return 2
+    if profile is not None:
+        _err(f"cad-guard MCP: áp hồ sơ công ty '{profile.name}' phiên bản {profile.version} cho chuẩn {standard}.")
+    if not anonymize:
+        _err(
+            "CẢNH BÁO: đã TẮT ẩn danh (--no-anonymize). Trợ lý AI sẽ thấy tên tệp, layer, khối và kiểu chữ thật "
+            "(ngoài Bậc 1). Chỉ dùng khi khách đã đồng ý bằng văn bản."
+        )
+    allow_propose = bool(getattr(args, "allow_propose", False))
+    server = build_server(ctx, standard, allow_propose=allow_propose)
+    mode = "chỉ đọc + đề xuất changeset (không áp dụng)" if allow_propose else "chỉ đọc"
+    _err(f"cad-guard MCP: đang phục vụ qua stdio ({mode}). Dừng bằng cách đóng stdin hoặc Ctrl+C.")
+    try:
+        serve(server)
+    except KeyboardInterrupt:
+        pass
+    return 0
+
+
+__all__ = ["PROPOSE_TOOL", "TOOL_NAMES", "add_arguments", "build_server", "run_from_args"]

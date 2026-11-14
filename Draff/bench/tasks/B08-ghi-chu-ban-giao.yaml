@@ -1,0 +1,57 @@
+id: B08-ghi-chu-ban-giao
+mo_ta: Soạn ghi chú bàn giao Thiết kế → Kỹ thuật có đủ trường bắt buộc từ kết quả audit, tách cảnh báo đã được chấp nhận.
+dang: ghi_chu_ban_giao
+fixture: hygiene_bad.dxf
+tham_so:
+  chuan: design-hygiene-v0
+  tu_phong: Thiết kế
+  den_phong: Kỹ thuật
+  chap_nhan: [VS-02, VS-05]
+cau_hoi: >-
+  Soạn ghi chú bàn giao bản vẽ từ phòng Thiết kế sang phòng Kỹ thuật theo chuẩn design-hygiene-v0.
+  Phòng Kỹ thuật đã chấp nhận các cảnh báo VS-02 và VS-05. Bản vẽ có sẵn sàng bàn giao không?
+  Trả lời JSON với các trường tu_phong, den_phong, nguoi_nhan, ban_ve, chuan, phien_ban_chuan, so_loi_e, ma_loi_e,
+  canh_bao_chap_nhan, canh_bao_con_lai, luat_bo_qua, records_capped, san_sang_ban_giao, viec_can_lam.
+tra_loi:
+  tu_phong: chuoi
+  den_phong: chuoi
+  nguoi_nhan: chuoi
+  ban_ve: chuoi
+  chuan: chuoi
+  phien_ban_chuan: chuoi
+  so_loi_e: so_nguyen
+  ma_loi_e: danh_sach
+  canh_bao_chap_nhan: danh_sach
+  canh_bao_con_lai: danh_sach
+  luat_bo_qua: danh_sach
+  records_capped: dung_sai
+  san_sang_ban_giao: dung_sai
+  viec_can_lam: danh_sach
+kiem_tra:
+- loai: co_truong
+  truong: [tu_phong, den_phong, nguoi_nhan, ban_ve, chuan, phien_ban_chuan, so_loi_e, ma_loi_e, canh_bao_chap_nhan,
+           canh_bao_con_lai, luat_bo_qua, records_capped, san_sang_ban_giao, viec_can_lam]
+- loai: bang
+  truong: tu_phong
+  gia_tri: Thiết kế
+- loai: bang
+  truong: den_phong
+  gia_tri: Kỹ thuật
+- loai: bang
+  truong: chuan
+  gia_tri: design-hygiene-v0
+- loai: bang
+  truong: so_loi_e
+  gia_tri: 1
+- loai: tap
+  truong: ma_loi_e
+  gia_tri: [VS-06]
+- loai: tap
+  truong: canh_bao_chap_nhan
+  gia_tri: [VS-02, VS-05]
+- loai: tap
+  truong: canh_bao_con_lai
+  gia_tri: [VS-01, VS-03, VS-04, VS-07]
+- loai: bang
+  truong: san_sang_ban_giao
+  gia_tri: false

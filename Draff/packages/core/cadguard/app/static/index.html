@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="vi" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CAD Guard Studio — Kiểm tra, Chuẩn hoá &amp; Dựng 3D Bản vẽ Nội thất</title>
+<link rel="stylesheet" href="/app.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<svg id="svgns" hidden aria-hidden="true"></svg>
+<a class="skip" href="#main">Bỏ qua tới nội dung chính</a>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand"><span class="logo" data-icon="shield"></span>CAD Guard <span class="pill info sm">v1.0 Studio</span></div>
+    <span class="chip" id="profileChip" title="Hồ sơ công ty đang áp"><span data-icon="doc"></span>Chuẩn: <b id="profileName">…</b></span>
+    <label class="chip sel-chip" for="deptSel"><span data-icon="building"></span>Phòng:
+      <select id="deptSel" aria-label="Chọn phòng"></select>
+    </label>
+
+    <div class="mode-bar" role="tablist" aria-label="Chế độ làm việc Studio" id="modeTabs">
+      <button role="tab" type="button" data-mode="audit" aria-selected="true" title="Chế độ 1: Kiểm toán 2D tất định">1. Kiểm toán 2D (Audit)</button>
+      <button role="tab" type="button" data-mode="diff" aria-selected="false" tabindex="-1" title="Chế độ 2: Duyệt sửa đổi &amp; ChangeSet">2. Duyệt Sửa Đổi (Diff)</button>
+      <button role="tab" type="button" data-mode="scene" aria-selected="false" tabindex="-1" title="Chế độ 3: Không gian 3D &amp; Cụm hình chiếu">3. Không gian 3D &amp; Cụm</button>
+      <button role="tab" type="button" data-mode="review" aria-selected="false" tabindex="-1" title="Chế độ 4: Bàn giao &amp; Ghi chú">4. Bàn giao &amp; Ghi chú</button>
+    </div>
+
+    <div class="spacer"></div>
+    <span class="chip" id="dataChip" title="Trợ lý thấy gì"><span data-icon="lock"></span><b id="dataMode">…</b></span>
+    <button class="btn-s btn-xs" id="qaSnapBtn" type="button" title="Chụp trạng thái kiểm tra và xuất biên bản Visual QA"><span data-icon="check"></span>Visual QA Check</button>
+    <nav class="nav" role="tablist" aria-label="Màn hình">
+      <button role="tab" id="tab-work" aria-selected="true" aria-controls="s-work" data-go="work"><span data-icon="pen"></span>Studio</button>
+      <button role="tab" id="tab-rules" aria-selected="false" aria-controls="s-rules" data-go="rules" tabindex="-1"><span data-icon="list"></span>Luật áp dụng</button>
+      <button role="tab" id="tab-connect" aria-selected="false" aria-controls="s-connect" data-go="connect" tabindex="-1"><span data-icon="plug"></span>Cài đặt AI</button>
+    </nav>
+    <button class="iconbtn" id="themeBtn" type="button" aria-label="Đổi giao diện sáng/tối" title="Sáng / tối"><span data-icon="moon"></span></button>
+  </header>
+
+  <div class="banner warn" id="anonBanner" hidden role="alert"></div>
+  <div class="banner err" id="tokenBanner" hidden role="alert">Thiếu hoặc sai mã phiên. Mở đúng địa chỉ (có <code>?t=…</code>) mà lệnh <code>cadguard app</code> in ra trong terminal.</div>
+
+  <!-- ============ BẢN VẼ & UNIFIED STUDIO v1.0 (4-PANEL) ============ -->
+  <main class="screen on" id="s-work" role="tabpanel" aria-labelledby="tab-work">
+    <!-- PANEL 2: CỘT TRÁI (3 PHẦN: THỐNG KÊ & TỆP + DANH SÁCH LỖI + BỘ LỌC LAYER) -->
+    <aside class="col left" aria-label="Bản vẽ, danh sách lỗi và bộ lọc Layer">
+      <!-- Phần A: Bản vẽ & Thống kê nhanh -->
+      <div class="left-sec left-sec-files">
+        <div class="col-h" id="wsName">A. Bản vẽ &amp; Thống kê nhanh</div>
+        <div class="stat-strip" id="quickStats" aria-label="Thống kê nhanh">
+          <button type="button" class="stat-pill err" data-sev="E" id="fltE">Nghiêm trọng: <b id="statE">0</b></button>
+          <button type="button" class="stat-pill warn" data-sev="W" id="fltW">Cảnh báo: <b id="statW">0</b></button>
+          <button type="button" class="stat-pill info" data-sev="I" id="fltI">Gợi ý: <b id="statI">0</b></button>
+          <button type="button" class="stat-pill neu on" data-sev="" id="fltAll">Tất cả (<span id="cntF">–</span>)</button>
+        </div>
+        <div class="files" id="files" role="list"></div>
+        <div class="left-bar-act">
+          <button class="btn-s btn-xs wfull" type="button" id="scanAll"><span data-icon="search"></span>Quét cả thư mục</button>
+          <button class="f-link" type="button" id="stdLink">Luật (<span id="stdName">–</span> · <span id="stdProfile">–</span>)</button>
+        </div>
+        <div class="handoff" id="handoff" hidden></div>
+      </div>
+
+      <!-- Phần B: Danh sách Lỗi & Vi phạm Chuẩn -->
+      <div class="left-sec left-sec-finds">
+        <div class="col-h">B. Danh sách Lỗi &amp; Vi phạm Chuẩn</div>
+        <div class="pane on" id="p-finds" role="tabpanel"><div class="list" id="finds" aria-live="polite"></div></div>
+      </div>
+
+      <!-- Phần C: Bộ lọc Layer & Cụm -->
+      <div class="left-sec left-sec-layers">
+        <div class="col-h">C. Bộ lọc Layer &amp; Cụm</div>
+        <div class="pad12">
+          <label class="tbp wfull" for="layerFilterSel"><span class="muted">Layer:</span>
+            <select id="layerFilterSel" class="sel sel-sm wfull" aria-label="Lọc theo Layer"><option value="">Hiện tất cả Layer (A-WALL, E-FURNITURE, DIM…)</option></select>
+          </label>
+        </div>
+      </div>
+    </aside>
+
+    <!-- PANEL 3: KHUNG GIỮA (VIEWPORT ĐA CHẾ ĐỘ 2D / DIFF / 3D / REVIEW) -->
+    <section class="center" id="main" aria-label="Bản vẽ đang mở" tabindex="-1">
+      <div class="cv-tools">
+        <strong id="cvTitle">Chọn một bản vẽ ở cột trái</strong>
+        <span class="pill neu" id="cvInfo" hidden></span>
+        <span class="pill info sm" id="stageModeLabel">Chế độ 1: Kiểm lỗi 2D</span>
+        <div class="spacer"></div>
+        <div class="zoom-bar" id="zoom2dBar">
+          <button class="btn-s btn-xs" type="button" id="zoomOutBtn" title="Thu nhỏ">−</button>
+          <span class="zoom-lbl" id="zoomPct">100%</span>
+          <button class="btn-s btn-xs" type="button" id="zoomInBtn" title="Phóng to">+</button>
+          <button class="btn-s btn-xs" type="button" id="zoomFitBtn" title="Vừa khung nhìn">Vừa khung</button>
+          <button class="btn-s btn-xs" type="button" id="zoomErrBtn" title="Phóng tới vùng lỗi">Focus lỗi</button>
+        </div>
+        <div class="zoom-bar" id="tools3dBar" hidden>
+          <button class="btn-s btn-xs" type="button" data-cam="iso">Góc Iso</button>
+          <button class="btn-s btn-xs" type="button" data-cam="front">Mặt đứng</button>
+          <button class="btn-s btn-xs" type="button" data-cam="top">Mặt bằng</button>
+          <button class="btn-s btn-xs" type="button" data-cam="side">Mặt bên</button>
+          <button class="btn-s btn-xs" type="button" id="xray3dBtn">Nhìn xuyên: Tắt</button>
+          <button class="btn-p btn-xs" type="button" id="dlGlbBtn">Tải .GLB</button>
+        </div>
+      </div>
+
+      <!-- Khung nhìn trực quan đa chế độ (2D Canvas / Diff / 3D Scene / Review Pins) -->
+      <div class="stage-wrap" id="stageWrap">
+        <div class="stage-bar">
+          <div class="cluster-bar" id="clusterBar" aria-label="Cụm hình chiếu (Artboards)"></div>
+          <div class="spacer"></div>
+          <div class="seg" role="tablist" aria-label="Phần của bản vẽ" id="centerTabs">
+            <button role="tab" type="button" data-p="finds" aria-selected="true" aria-controls="p-finds">Canvas 2D</button>
+            <button role="tab" type="button" data-p="chg" aria-selected="false" aria-controls="p-chg" tabindex="-1">Đề xuất sửa</button>
+            <button role="tab" type="button" data-p="hist" aria-selected="false" aria-controls="p-hist" tabindex="-1">Lịch sử <span class="cnt" id="cntC">0</span></button>
+            <button role="tab" type="button" data-p="sum" aria-selected="false" aria-controls="p-sum" tabindex="-1">Tóm tắt</button>
+          </div>
+        </div>
+        <div class="viewport-box" id="viewportBox">
+          <svg id="cadCanvas" class="cad-svg" viewBox="0 0 1000 520" role="img" aria-label="Khung nhìn bản vẽ kỹ thuật và 3D"></svg>
+          <div class="vp-overlay" id="vpOverlay" hidden></div>
+        </div>
+      </div>
+
+      <div class="pane" id="p-hist" role="tabpanel"><div class="list" id="histList"></div></div>
+      <div class="pane" id="p-sum" role="tabpanel"><div class="list" id="sumList"></div></div>
+      <div class="pane" id="p-scene" role="tabpanel"><div class="list" id="sceneList"></div></div>
+
+      <div class="cv-status">
+        <span class="lock"><span data-icon="lock"></span>Tệp gốc chỉ đọc</span>
+        <span>Mọi thay đổi ghi ra <b>tệp mới</b>, có xem trước, xác nhận và hoàn tác.</span>
+        <span class="spacer"></span>
+        <span class="muted" id="cursorCoords">Toạ độ: –</span>
+      </div>
+    </section>
+
+    <!-- PANEL 4: CỘT PHẢI CHIA ĐÔI DỌC (TRÊN: DUYỆT CHANGESET & GHI CHÚ BÀN GIAO | DƯỚI: TRỢ LÝ AI & 4 SKILL CHIPS) -->
+    <aside class="col right" aria-label="Duyệt ChangeSet, Ghi chú bàn giao và Trợ lý AI">
+      <!-- Nửa trên (45%): Duyệt ChangeSet & Ghi chú bàn giao -->
+      <div class="right-top-half">
+        <div class="col-h">Duyệt ChangeSet &amp; Ghi chú Bàn giao</div>
+        <div class="pane on" id="p-chg" role="tabpanel"><div class="list" id="chgList"></div><div class="cs-foot" id="chgFoot" hidden></div></div>
+        <div class="pane" id="p-review" role="tabpanel"><div class="list" id="reviewList"></div></div>
+      </div>
+
+      <!-- Nửa dưới (55%): Trợ lý AI & 4 Skill Chips -->
+      <div class="right-bottom-half">
+        <div class="chat-top">
+          <div class="rowflex">
+            <label class="lbl" for="engineSel">Trợ lý AI</label>
+            <span class="spacer"></span>
+            <span class="pill info sm" id="rightModeBadge">Audit &amp; AI</span>
+          </div>
+          <select id="engineSel" class="sel wfull"></select>
+          <div class="eng-card" id="engCard"></div>
+          <div class="row-model" id="modelRow" hidden>
+            <label class="lbl" for="modelIn">Mô hình</label>
+            <input id="modelIn" class="num-in" type="text" autocomplete="off" spellcheck="false" placeholder="tên mô hình">
+          </div>
+          <label class="sw"><input type="checkbox" id="allowPropose"><span>Cho phép trợ lý đề xuất sửa <small>(chỉ đề xuất; áp dụng do bạn bấm)</small></span></label>
+        </div>
+        <div class="chat-head" id="chatHead"></div>
+
+        <!-- 4 Quick Skill Chips ánh xạ trực tiếp từ knowledge/skills/ -->
+        <div class="skill-chips" id="skillChips" aria-label="Kỹ năng chuẩn hoá nhanh">
+          <button type="button" class="skill-chip" data-skill="khao-sat-ban-ve" title="Skill: khao-sat-ban-ve">Khảo sát bản vẽ</button>
+          <button type="button" class="skill-chip" data-skill="don-ban-ve" title="Skill: don-ban-ve">Sửa các lỗi tự sửa được (Tạo ChangeSet)</button>
+          <button type="button" class="skill-chip" data-skill="kiem-va-giai-thich-loi" title="Skill: kiem-va-giai-thich-loi">AI phân tích sâu sản xuất &amp; 3D</button>
+          <button type="button" class="skill-chip" data-skill="ghi-chu-ban-giao" title="Skill: ghi-chu-ban-giao">Soạn gói bàn giao cho Kỹ thuật</button>
+        </div>
+
+        <div class="chat-log" id="log" aria-live="polite"></div>
+        <div class="cost" id="costLine" aria-live="polite"></div>
+        <form class="composer" id="form">
+          <textarea id="inp" rows="2" placeholder="Hỏi về bản vẽ, ví dụ: bản này có lỗi E nào, sửa thế nào?" aria-label="Nhập câu hỏi cho trợ lý"></textarea>
+          <div class="composer-act">
+            <button class="btn-p" type="submit" id="sendBtn"><span data-icon="send"></span>Gửi</button>
+            <button class="btn-s" type="button" id="stopBtn" hidden><span data-icon="stop"></span>Dừng</button>
+            <button class="btn-s btn-sm" type="button" id="clearBtn" title="Xoá lịch sử trò chuyện trong trang">Mới</button>
+          </div>
+        </form>
+        <div class="hint">Trợ lý giải thích và đề xuất. Đúng/sai do bộ luật kiểm tất định quyết định.</div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ============ LUẬT ÁP DỤNG ============ -->
+  <main class="screen" id="s-rules" role="tabpanel" aria-labelledby="tab-rules"><div class="page"><div class="page-in wide">
+    <div class="rh">
+      <div><h1>Luật áp dụng</h1>
+        <p class="lead">Danh sách luật của chuẩn đang chọn, tham số mặc định của chuẩn và tham số đang áp theo hồ sơ công ty. Màn này <b>chỉ đọc</b>: đổi luật hoặc ngưỡng là tạo phiên bản chuẩn mới hoặc sửa hồ sơ công ty (YAML), không sửa trong trình duyệt.</p></div>
+      <div class="rh-act">
+        <label for="ruleStd">Chuẩn</label>
+        <select class="sel" id="ruleStd"></select>
+      </div>
+    </div>
+    <div class="srcline" id="srcline"></div>
+    <div class="covs" id="covs"></div>
+    <div class="tb">
+      <div class="grow"><input type="search" id="rq" placeholder="Tìm mã hoặc nội dung luật…" aria-label="Tìm luật"></div>
+      <label class="tbp"><span class="lbl">Tình trạng</span><select class="sel" id="fKind" aria-label="Lọc theo tình trạng">
+        <option value="">Tất cả</option><option value="run">Đang chạy</option><option value="off">Tắt bởi hồ sơ</option><option value="changed">Tham số đã chỉnh</option><option value="todo">Chưa cài code</option></select></label>
+    </div>
+    <div class="card flush">
+      <table class="rt"><thead><tr><th class="w-code">Mã</th><th>Luật</th><th class="w-sev">Mức</th><th class="w-state">Tình trạng</th><th class="w-params">Tham số (mặc định → đang áp)</th></tr></thead><tbody id="rbody"></tbody></table>
+      <div class="tfoot" id="rfoot"></div>
+    </div>
+  </div></div></main>
+
+  <!-- ============ KẾT NỐI AI ============ -->
+  <main class="screen" id="s-connect" role="tabpanel" aria-labelledby="tab-connect"><div class="page"><div class="page-in">
+    <h1>Kết nối AI</h1>
+    <p class="lead">Hai cách dùng trợ lý trong cad-guard. Cả hai dùng cùng bộ công cụ kiểm bản vẽ; trợ lý không có công cụ đọc tệp, shell hay web, và không có công cụ áp dụng sửa.</p>
+    <div class="callout"><span data-icon="info"></span><div><b>Khoá API không bao giờ nhập trong trình duyệt.</b> Đặt khoá trong terminal bằng <code>cadguard keys set &lt;nhà cung cấp&gt;</code> (lưu trong kho khoá của hệ điều hành) hoặc biến môi trường, rồi bấm <b>Kiểm lại</b>. Với CLI, đăng nhập là của chính CLI đó; cad-guard không đọc, không lưu token.</div></div>
+    <div class="rowflex"><button class="btn-s" type="button" id="refreshEngines"><span data-icon="refresh"></span>Kiểm lại</button><span class="muted" id="refreshNote"></span></div>
+    <h2>Dùng hạn mức tài khoản (CLI)</h2>
+    <p class="lead small">CLI bạn đã cài và tự đăng nhập. Chi phí tính vào gói/tài khoản của bạn; số tiền cad-guard hiện là <b>ước tính</b>, với gói thuê bao không phải tiền bị trừ.</p>
+    <div class="grid2" id="cliCards"></div>
+    <h2>Dùng API (khoá của bạn)</h2>
+    <p class="lead small">Gọi thẳng nhà cung cấp bằng khoá của bạn; tính cước theo token. Ollama chạy trên máy, dữ liệu không rời máy.</p>
+    <div class="grid2" id="apiCards"></div>
+    <h2>Dữ liệu đi đâu</h2>
+    <div class="card" id="dataCard"></div>
+    <h2>Trợ lý được và không được làm gì</h2>
+    <div class="card perm flush"><table><tbody>
+      <tr><td>Đọc tệp ngoài thư mục làm việc, chạy lệnh shell, truy cập web</td><td><span class="pill err">Không có công cụ</span></td></tr>
+      <tr><td>Ghi đè hoặc xoá bản vẽ gốc</td><td><span class="pill err">Không bao giờ</span></td></tr>
+      <tr><td>Quét, đọc kết quả luật, giải thích luật</td><td><span class="pill ok">Có</span></td></tr>
+      <tr><td>Đề xuất changeset (chạy khô, không ghi bản vẽ)</td><td><span class="pill warn">Chỉ khi bạn bật công tắc</span></td></tr>
+      <tr><td>Áp dụng changeset ra tệp mới</td><td><span class="pill warn">Chỉ bạn, bấm xác nhận</span></td></tr>
+    </tbody></table></div>
+  </div></div></main>
+</div>
+
+<div class="modal-bg" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle" aria-describedby="mText">
+  <div class="modal">
+    <h3 id="mTitle"></h3>
+    <div id="mText"></div>
+    <div class="ft"><button class="btn-s" type="button" id="mNo">Huỷ</button><button class="btn-p" type="button" id="mYes">Đồng ý</button></div>
+  </div>
+</div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="false" aria-labelledby="drTitle">
+  <div class="dr-h"><h2 id="drTitle"></h2><span class="spacer"></span><button class="iconbtn" type="button" id="drClose" aria-label="Đóng"><span data-icon="x"></span></button></div>
+  <div class="dr-b" id="drBody"></div>
+</aside>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

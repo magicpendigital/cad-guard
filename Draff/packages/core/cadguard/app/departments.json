@@ -1,0 +1,28 @@
+{
+  "schema": "cg.app-departments/1",
+  "note": "Phòng trong chuỗi sản xuất và chuẩn mặc định của từng phòng. Đổi chuẩn ở đây (tên tệp trong standards/, không đuôi .yaml).",
+  "default": "thiet-ke",
+  "departments": [
+    {
+      "id": "thiet-ke",
+      "name": "Thiết kế",
+      "standard": "design-hygiene-v0",
+      "description": "Vệ sinh và nhất quán bản vẽ trước khi giao Kỹ thuật.",
+      "next": "ky-thuat"
+    },
+    {
+      "id": "ky-thuat",
+      "name": "Kỹ thuật",
+      "standard": "furniture-v0",
+      "description": "Bản vẽ triển khai: khung tên, layer, chữ, kích thước, chi tiết.",
+      "next": "lap-trinh-san-xuat"
+    },
+    {
+      "id": "lap-trinh-san-xuat",
+      "name": "Lập trình sản xuất",
+      "standard": "furniture-v0",
+      "description": "Kiểm trước khi xuất cho máy và xưởng.",
+      "next": null
+    }
+  ]
+}

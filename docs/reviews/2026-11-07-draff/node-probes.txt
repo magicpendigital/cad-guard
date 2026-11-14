@@ -1,0 +1,27 @@
+{
+  "method": "Isolated module execution with Node built-in TS stripping; type-only imports removed. Not a production build or browser QA.",
+  "invalid_input": {
+    "units": 4,
+    "entities": 0,
+    "findings": 0,
+    "sheets": 1
+  },
+  "simultaneous_z_and_wrong_units": {
+    "rules": [
+      "LY-01",
+      "DH-10"
+    ],
+    "units_check_missing": true
+  },
+  "unsupported_changeset_without_source": {
+    "preview_ok": true,
+    "validation_ok": true,
+    "output_bytes": 32,
+    "output_text": "999\nCAD-GUARD CLEANED DXF\n0\nEOF\n"
+  },
+  "original_synthetic_entity_count": 1,
+  "scene_schema": "cg.scene/1"
+}
+
+(node:32136) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
